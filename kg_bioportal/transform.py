@@ -5,12 +5,10 @@ from typing import List
 
 from kg_bioportal.transform_utils.ontology import OntologyTransform
 from kg_bioportal.transform_utils.ontology.ontology_transform import ONTOLOGIES
-from kg_bioportal.transform_utils.reactome.reactome import ReactomeTransform
 
 DATA_SOURCES = {
     'ChebiTransform': OntologyTransform,
-    'EnvoTransform' : OntologyTransform,
-    'ReactomeTransform': ReactomeTransform
+    'EnvoTransform' : OntologyTransform
 }
 
 def transform(input_dir: str, output_dir: str, sources: List[str] = None) -> None:

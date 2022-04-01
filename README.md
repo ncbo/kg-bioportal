@@ -14,7 +14,7 @@ The [download.yaml](download.yaml) contains all the URLs for source data. In thi
 
 ### Transform
 
-The [transform_utils](kg_bioportal/transform_utils) serve as a passthrough, allowing paths for sources to be stored. 
+The [transform_utils](kg_bioportal/transform_utils) serve as a passthrough, allowing paths for sources to be stored.
 
 ### Merge
 
