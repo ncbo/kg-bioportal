@@ -3,8 +3,8 @@ import gzip
 import shutil
 from typing import Optional
 
-from project_name.transform_utils.transform import Transform
-from project_name.utils.robot_utils import convert_to_json
+from kg_bioportal.transform_utils.transform import Transform
+from kg_bioportal.utils.robot_utils import convert_to_json
 #from kgx import PandasTransformer, ObographJsonTransformer  # type: ignore
 from kgx.cli.cli_utils import transform
 

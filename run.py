@@ -3,10 +3,10 @@
 import os
 
 import click
-from project_name import download as kg_download
-from project_name import transform as kg_transform
-from project_name.merge_utils.merge_kg import load_and_merge
-from project_name.transform import DATA_SOURCES
+from kg_bioportal import download as kg_download
+from kg_bioportal import transform as kg_transform
+from kg_bioportal.merge_utils.merge_kg import load_and_merge
+from kg_bioportal.transform import DATA_SOURCES
 
 
 @click.group()
@@ -48,7 +48,7 @@ def download(*args, **kwargs) -> None:
 @click.option("sources", "-s", default=None, multiple=True,
               type=click.Choice(DATA_SOURCES.keys()))
 def transform(*args, **kwargs) -> None:
-    """Calls scripts in project_name/transform/[source name]/ to transform each source
+    """Calls scripts in kg_bioportal/transform/[source name]/ to transform each source
     into nodes and edges.
 
     Args:

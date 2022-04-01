@@ -3,7 +3,7 @@
 import os
 from typing import Optional
 
-from project_name.transform_utils.transform import Transform
+from kg_bioportal.transform_utils.transform import Transform
 from koza.cli_runner import transform_source #type: ignore
 
 
@@ -26,7 +26,7 @@ REACTOME_HEADERS = {
     'ChEBI2Reactome': 'CHEBI_ID\tREACT_PE_ID\tREACT_NAME\tREACT_PATH_ID\tURL\tEVENT_NAME\tEVIDENCE\tSPECIES\n',
 }
 
-TRANSLATION_TABLE = "./project_name/transform_utils/translation_table.yaml"
+TRANSLATION_TABLE = "./kg_bioportal/transform_utils/translation_table.yaml"
 
 class ReactomeTransform(Transform):
     """ This transform handles the Reactome CHEBI to pathway file:
@@ -59,7 +59,7 @@ class ReactomeTransform(Transform):
         Need to append a header to it first for Koza to work properly.
         """
         print(f"Parsing {data_file}")
-        config = os.path.join("project_name/transform_utils/reactome/", REACTOME_CONFIGS[source])
+        config = os.path.join("kg_bioportal/transform_utils/reactome/", REACTOME_CONFIGS[source])
         output = self.output_dir
 
         # Write header, unless it's already there

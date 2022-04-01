@@ -1,4 +1,4 @@
-from project_name.__version__ import __version__
+from kg_bioportal.__version__ import __version__
 from validate_version_code import validate_version_code
 
 
