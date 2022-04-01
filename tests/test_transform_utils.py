@@ -1,6 +1,6 @@
 import unittest
 from parameterized import parameterized
-from project_name.utils.transform_utils import guess_bl_category, collapse_uniprot_curie
+from kg_bioportal.utils.transform_utils import guess_bl_category, collapse_uniprot_curie
 
 
 class TestTransformUtils(unittest.TestCase):

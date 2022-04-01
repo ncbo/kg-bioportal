@@ -20,7 +20,7 @@ def find_version(*file_paths):
     raise RuntimeError('Unable to find version string.')
 
 
-__version__ = find_version('project_name', '__version__.py')
+__version__ = find_version('kg_bioportal', '__version__.py')
 
 test_deps = [
     'pytest',
@@ -36,13 +36,13 @@ extras = {
 }
 
 setup(
-    name='project_name',
+    name='kg_bioportal',
     version=__version__,
-    description='KG hub for project_name',
-    long_description='long_description',
-    url='https://github.com/Knowledge-Graph-Hub/project_name',
-    author='Harshad Hegde',
-    author_email='hhegde@lbl.gov',
+    description='BioPortal, as a Knowledge Graph',
+    long_description='BioPortal, as a Knowledge Graph',
+    url='https://github.com/Knowledge-Graph-Hub/kg_bioportal',
+    author='J. Harry Caufield',
+    author_email='jhc@lbl.gov',
     python_requires='>=3.7',
 
     # choose your license
