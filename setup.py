@@ -38,11 +38,11 @@ extras = {
 setup(
     name='kg_bioportal',
     version=__version__,
-    description='KG hub for kg_bioportal',
-    long_description='long_description',
+    description='BioPortal, as a Knowledge Graph',
+    long_description='BioPortal, as a Knowledge Graph',
     url='https://github.com/Knowledge-Graph-Hub/kg_bioportal',
-    author='Harshad Hegde',
-    author_email='hhegde@lbl.gov',
+    author='J. Harry Caufield',
+    author_email='jhc@lbl.gov',
     python_requires='>=3.7',
 
     # choose your license
