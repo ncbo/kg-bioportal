@@ -1,33 +1,23 @@
-Download-Transform-Merge Template
-================================================
-KG hub template for tools to generate knowledge graphs for projects
+# KG-Bioportal
 
-Documentation
-------------------------------------------------
+[Bioportal](https://bioportal.bioontology.org/), as a Knowledge Graph.
 
-This template could be used for data ingestion for varied sources.
+## Data Sources
 
-**Components**
+In this graph pipeline, source data is primarily derived from [Bioportal-to-KGX](https://github.com/ncbo/BioPortal-to-KGX), starting from a 4store dump of the BioPortal ontologies.
 
-- Download: The [download.yaml](download.yaml) contains all the URLs for the source data.
-- Transform: The [transform_utils](project_name/transform_utils) contains the code relevant to trnsformations of the raw data into nodes and edges (tsv format)
-- Merge: Implementation of the 'merge' function from [KGX](https://github.com/biolink/kgx) using [merge.yaml](merge.yaml) as a source file.
+## Components
 
-**Utilities**
+### Download
 
-The code for these are found in the [utils](project_name/utils) folder.
+The [download.yaml](download.yaml) contains all the URLs for source data. In this KG project, sources are pre-processed and this component is used for data transfer only.
 
-- [ROBOT](https://github.com/ontodev/robot) for transforming ontology.OWL to ontology.JSON
+### Transform
 
-**Examples Included**
+The [transform_utils](kg_bioportal/transform_utils) serve as a passthrough, allowing paths for sources to be stored. 
 
-Thes examples have download links and transform codes from other projects.
+### Merge
 
-- Ontology: Sampled from [kg-covid-19](https://github.com/Knowledge-Graph-Hub/kg-covid-19). Code located [here](project_name/transform_utils/ontology)
-- Example Transform: Sampled from [kg-covid-19](https://github.com/Knowledge-Graph-Hub/kg-covid-19). Code located [here](project_name/transform_utils/drug_central).
+Implementation of the 'merge' function from [KGX](https://github.com/biolink/kgx) using [merge.yaml](merge.yaml) as a source file.
 
-The [merge.yaml](merge.yaml) shows merging of the various KGs. In this example we have ENVO, CHEBI, NCBITaxon and the Traits KGs merged.
-
-**Implementation**
-
-[Use this template](https://github.com/Knowledge-Graph-Hub/kg-dtm-template/generate) to generate a template in the desired repository and then refactor the string `project_name` in the project to the desired project name. 
+To enable flexibility in assembling the KG, the merge file is assembled on the fly.
