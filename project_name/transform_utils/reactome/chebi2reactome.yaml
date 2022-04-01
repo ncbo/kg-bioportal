@@ -1,0 +1,40 @@
+name: 'chebi2reactome'
+
+format: 'csv'
+
+delimiter: '\t'
+
+files:
+  - './data/raw/ChEBI2Reactome_PE_Pathway.txt'
+
+metadata: './project_name/transform_utils/reactome/metadata.yaml'
+
+header: 'infer'
+
+columns:
+  - 'CHEBI_ID'
+  - 'REACT_PE_ID'
+  - 'REACT_NAME'
+  - 'REACT_PATH_ID'
+  - 'URL'
+  - 'EVENT_NAME'
+  - 'EVIDENCE'
+  - 'SPECIES'
+
+node_properties:
+  - 'id'
+  - 'category'
+  - 'source'
+  - 'description'
+
+edge_properties:
+  - 'id'
+  - 'subject'
+  - 'predicate'
+  - 'object'
+  - 'category'
+  - 'relation'
+  - 'source'
+  - 'provided_by'
+
+transform_mode: 'flat'

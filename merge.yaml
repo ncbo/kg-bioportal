@@ -1,0 +1,48 @@
+---
+configuration:
+  output_directory: data/merged
+  checkpoint: false
+
+merged_graph:
+  name: project_name graph
+  source:
+    chebi:
+      name: "CHEBI"
+      input:
+        format: tsv
+        filename:
+          - data/transformed/ontologies/chebi_nodes.tsv
+          - data/transformed/ontologies/chebi_edges.tsv
+    envo:
+      name: "ENVO"
+      input:
+        format: tsv
+        filename:
+          - data/transformed/ontologies/envo_nodes.tsv
+          - data/transformed/ontologies/envo_edges.tsv
+    chebi_to_reactome:
+      name: "CHEBI to Reactome Pathways"
+      input:
+        format: tsv
+        filename:
+          - data/transformed/reactome/chebi2reactome_nodes.tsv
+          - data/transformed/reactome/chebi2reactome_edges.tsv
+  operations:
+    - name: kgx.graph_operations.summarize_graph.generate_graph_stats
+      args:
+        graph_name: project_name graph
+        filename: merged_graph_stats.yaml
+        node_facet_properties:
+          - provided_by
+        edge_facet_properties:
+          - provided_by
+          - source
+  destination:
+    merged-kg-tsv:
+      format: tsv
+      compression: tar.gz
+      filename: merged-kg
+    merged-kg-nt:
+      format: nt
+      compression: gz
+      filename: project_name.nt.gz

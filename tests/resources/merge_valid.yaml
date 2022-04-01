@@ -1,0 +1,12 @@
+---
+merged_graph:
+  source:
+    DATA-NAME:
+      input:
+        format: tsv
+        filename:
+          - data/transformed/DATA_NAME/nodes.tsv
+          - data/transformed/DATA_NAME/edges.tsv
+  destination:
+    type: tsv
+    filename: merged-kg

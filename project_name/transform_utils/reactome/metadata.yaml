@@ -1,0 +1,10 @@
+name: 'reactome'
+
+dataset_description:
+  ingest_title: 'reactome'
+  ingest_url: 'https://reactome.org/download-data'
+  description: 'Reactome mapping files'
+  rights: 'https://reactome.org/license'
+
+source_files:
+  - 'chebi2reactome.yaml'
