@@ -5,8 +5,7 @@ from typing import Optional
 
 from kg_bioportal.transform_utils.transform import Transform
 from kg_bioportal.utils.robot_utils import convert_to_json
-#from kgx import PandasTransformer, ObographJsonTransformer  # type: ignore
-from kgx.cli.cli_utils import transform
+from kgx.cli.cli_utils import transform # type: ignore
 
 
 ONTOLOGIES = {
