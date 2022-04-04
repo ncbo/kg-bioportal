@@ -26,6 +26,6 @@ jobs:
           coverage report
           coverage xml
       - name: run mypy
-        run: mypy --strict-optional kg_idg
+        run: mypy --strict-optional kg_bioportal
       - name: run yamllint
         run: yamllint -d relaxed merge.yaml download.yaml
