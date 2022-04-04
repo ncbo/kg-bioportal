@@ -1,0 +1,31 @@
+name: run tests
+on: [push]
+jobs:
+  run-make:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: actions/setup-python@v2
+        name: setup python
+        with:
+          python-version: 3.7
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+          pip install .[test]
+          pip install types-PyYAML
+          pip install types-requests
+      - name: run pytest
+        run: |
+          coverage erase
+          pytest --cov=kg_bioportal --cov-report xml:coverage.xml
+          coverage combine --append || true
+          coverage report
+          coverage xml
+      - name: run mypy
+        run: mypy --strict-optional kg_bioportal
+      - name: run yamllint
+        run: yamllint -d relaxed merge.yaml download.yaml

@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import os
+from xml.etree.ElementInclude import include
 
 import click
 from kg_bioportal import download as kg_download
 from kg_bioportal import transform as kg_transform
-from kg_bioportal.merge_utils.merge_kg import load_and_merge
+from kg_bioportal.merge_utils.merge_kg import load_and_merge, update_merge_config
 from kg_bioportal.transform import DATA_SOURCES
 
 
@@ -70,17 +71,35 @@ def transform(*args, **kwargs) -> None:
 @cli.command()
 @click.option('yaml', '-y', default="merge.yaml", type=click.Path(exists=True))
 @click.option('processes', '-p', default=1, type=int)
-def merge(yaml: str, processes: int) -> None:
+@click.option("--merge_all",
+                is_flag=True,
+                help="""Update the merge config file to include *all* ontologies.""")
+@click.option("--include_only",
+                callback=lambda _,__,x: x.split(',') if x else [],
+                help="""One or more ontologies to merge, and only these,
+                     comma-delimited and named by their short BioPortal ID, e.g., SEPIO.""")
+@click.option("--exclude",
+                callback=lambda _,__,x: x.split(',') if x else [],
+                help="""One or more ontologies to exclude from merging,
+                     comma-delimited and named by their short BioPortal ID, e.g., SEPIO.
+                     Will select all other ontologies for merging.""")
+def merge(yaml: str, processes: int, merge_all=False, include_only=[], exclude=[]) -> None:
     """Use KGX to load subgraphs to create a merged graph.
 
     Args:
         yaml: A string pointing to a KGX compatible config YAML.
         processes: Number of processes to use.
+        merge_all: Update merge config to include *all* ontologies.
+        include_only: Update merge config to include the specified ontologies.
+        exclude: Update merge config to include all ontologies *except* those specified.
 
     Returns:
         None.
 
     """
+
+    if merge_all or len(include_only) > 0 or len(exclude) > 0:
+        update_merge_config(yaml, merge_all, include_only, exclude)
 
     load_and_merge(yaml, processes)
 
