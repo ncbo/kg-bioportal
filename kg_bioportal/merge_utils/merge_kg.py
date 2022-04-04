@@ -20,6 +20,23 @@ def parse_load_config(yaml_file: str) -> Dict:
         config = yaml.load(YML, Loader=yaml.FullLoader)
     return config
 
+def update_merge_config(yaml_file: str, merge_all: bool, include_only: list, exclude: list) -> None:
+    """Update the merge config YAML with
+    values from runtime params.
+
+    Args:
+        yaml_file: A string pointing to a KGX compatible config YAML.
+        merge_all: Update merge config to include *all* ontologies.
+        include_only: Update merge config to include the specified ontologies.
+        exclude: Update merge config to include all ontologies *except* those specified.
+
+    Returns:
+        None
+
+    """
+
+    pass
+
 
 def load_and_merge(yaml_file: str, processes: int = 1) -> nx.MultiDiGraph:
     """Load and merge sources defined in the config YAML.
