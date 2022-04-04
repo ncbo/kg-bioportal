@@ -1,10 +1,9 @@
-from unittest import TestCase, skip
+from unittest import TestCase, skipIf, mock
+import unittest
 from click.testing import CliRunner
-from unittest import mock
 
 from run import merge
 import os
-
 
 class TestRun(TestCase):
     """Tests merge function on current merge.yaml.
@@ -12,8 +11,8 @@ class TestRun(TestCase):
         merge file and output, but necessary
         to avoid issues with current merge config.
         
-        This is temporary - larger graphs will be
-        too big to run as a test through GH Actions
+        This should only run locally, as on a GH Action
+        it won't have access to the necessary data.
         """
     def setUp(self) -> None:
         self.runner = CliRunner()
@@ -21,6 +20,7 @@ class TestRun(TestCase):
         self.stats_path = 'merged_graph_stats.yaml'
         self.output_out_path = 'data/merged/merged-kg.tar.gz' 
 
+    @unittest.skipIf(os.getenv('GITHUB_ACTIONS'), "Merge test only runs when data is available.")
     def test_current_merge(self):
         result = self.runner.invoke(catch_exceptions=False,
                                         cli=merge,
