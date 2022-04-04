@@ -27,6 +27,55 @@ merged_graph:
         filename:
           - ../BioPortal-to-KGX/transformed/ontologies/AD-DROP/AD-DROP_1_nodes.tsv
           - ../BioPortal-to-KGX/transformed/ontologies/AD-DROP/AD-DROP_1_edges.tsv
+    s4:
+      name: "ADCAD"
+      input:
+        format: tsv
+        filename:
+          - ../BioPortal-to-KGX/transformed/ontologies/ADCAD/ADCAD_1_nodes.tsv
+          - ../BioPortal-to-KGX/transformed/ontologies/ADCAD/ADCAD_1_edges.tsv
+    s5:
+      name: "ADHER_INTCARE_EN"
+      input:
+        format: tsv
+        filename:
+          - ../BioPortal-to-KGX/transformed/ontologies/ADHER_INTCARE_EN/ADHER_INTCARE_EN_1_nodes.tsv
+          - ../BioPortal-to-KGX/transformed/ontologies/ADHER_INTCARE_EN/ADHER_INTCARE_EN_1_edges.tsv
+    s6:
+      name: "ADHER_INTCARE_SP"
+      input:
+        format: tsv
+        filename:
+          - ../BioPortal-to-KGX/transformed/ontologies/ADHER_INTCARE_SP/ADHER_INTCARE_SP_6_nodes.tsv
+          - ../BioPortal-to-KGX/transformed/ontologies/ADHER_INTCARE_SP/ADHER_INTCARE_SP_6_edges.tsv
+    s7:
+      name: "ADMO"
+      input:
+        format: tsv
+        filename:
+          - ../BioPortal-to-KGX/transformed/ontologies/ADMO/ADMO_4_nodes.tsv
+          - ../BioPortal-to-KGX/transformed/ontologies/ADMO/ADMO_4_edges.tsv
+    s8:
+      name: "ADO"
+      input:
+        format: tsv
+        filename:
+          - ../BioPortal-to-KGX/transformed/ontologies/ADO/ADO_3_nodes.tsv
+          - ../BioPortal-to-KGX/transformed/ontologies/ADO/ADO_3_edges.tsv
+    s9:
+      name: "ADW"
+      input:
+        format: tsv
+        filename:
+          - ../BioPortal-to-KGX/transformed/ontologies/ADW/ADW_2_nodes.tsv
+          - ../BioPortal-to-KGX/transformed/ontologies/ADW/ADW_2_edges.tsv
+    s10:
+      name: "NERO"
+      input:
+        format: tsv
+        filename:
+          - ../BioPortal-to-KGX/transformed/ontologies/NERO/NERO_1_nodes.tsv
+          - ../BioPortal-to-KGX/transformed/ontologies/NERO/NERO_1_edges.tsv
   operations:
     - name: kgx.graph_operations.summarize_graph.generate_graph_stats
       args:
