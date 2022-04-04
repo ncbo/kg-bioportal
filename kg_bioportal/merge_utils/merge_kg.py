@@ -2,8 +2,8 @@ import importlib
 import logging
 from typing import Dict, List
 import yaml
-import networkx as nx
-from kgx.cli.cli_utils import merge
+import networkx as nx # type: ignore
+from kgx.cli.cli_utils import merge # type: ignore
 
 
 def parse_load_config(yaml_file: str) -> Dict:
