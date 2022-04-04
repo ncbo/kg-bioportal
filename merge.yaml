@@ -13,6 +13,20 @@ merged_graph:
         filename:
           - ../BioPortal-to-KGX/transformed/ontologies/ABA-AMB/ABA-AMB_1_nodes.tsv
           - ../BioPortal-to-KGX/transformed/ontologies/ABA-AMB/ABA-AMB_1_edges.tsv
+    s2:
+      name: "ACGT-MO"
+      input:
+        format: tsv
+        filename:
+          - ../BioPortal-to-KGX/transformed/ontologies/ACGT-MO/ACGT-MO_2_nodes.tsv
+          - ../BioPortal-to-KGX/transformed/ontologies/ACGT-MO/ACGT-MO_2_edges.tsv
+    s3:
+      name: "AD-DROP"
+      input:
+        format: tsv
+        filename:
+          - ../BioPortal-to-KGX/transformed/ontologies/AD-DROP/AD-DROP_1_nodes.tsv
+          - ../BioPortal-to-KGX/transformed/ontologies/AD-DROP/AD-DROP_1_edges.tsv
   operations:
     - name: kgx.graph_operations.summarize_graph.generate_graph_stats
       args:
