@@ -8,7 +8,7 @@ pipeline {
     // No scheduled builds for now
     //triggers{
     //    cron('H H 1 1-12 *')
-    }
+    //}
     environment {
         BUILDSTARTDATE = sh(script: "echo `date +%Y%m%d`", returnStdout: true).trim()
         S3BUCKETNAME = 'kg-hub-public-data'
