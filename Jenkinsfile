@@ -2,17 +2,18 @@ pipeline {
     agent {
         docker {
             reuseNode false
-            image 'name-of-docker-image-goes-here'
+            image 'caufieldjh/ubuntu20-python-3-8-5-dev:4-with-dbs-v6'
         }
     }
-    triggers{
-        cron('H H 1 1-12 *')
+    // No scheduled builds for now
+    //triggers{
+    //    cron('H H 1 1-12 *')
     }
     environment {
         BUILDSTARTDATE = sh(script: "echo `date +%Y%m%d`", returnStdout: true).trim()
-        S3BUCKETNAME = 'bucket-name'
-        S3PROJECTDIR = 'directory-name-on-bucket' // no trailing slash
-        MERGEDKGNAME_BASE = "project_name"
+        S3BUCKETNAME = 'kg-hub-public-data'
+        S3PROJECTDIR = 'kg-bioportal' // no trailing slash
+        MERGEDKGNAME_BASE = "kg_bioportal"
         MERGEDKGNAME_GENERIC = "merged-kg"
     }
     options {
@@ -55,11 +56,11 @@ pipeline {
             }
         }
 
-        stage('Build project_name') {
+        stage('Build kg_bioportal') {
             steps {
                 dir('./gitrepo') {
                     git(
-                            url: 'https://github.com/Knowledge-Graph-Hub/project-name',
+                            url: 'https://github.com/Knowledge-Graph-Hub/kg-bioportal',
                             branch: env.BRANCH_NAME
                     )
                     sh '/usr/bin/python3.8 -m venv venv'
@@ -71,6 +72,9 @@ pipeline {
             }
         }
 
+        // the download step uses s3cmd instead of the standard kghub_downloader
+        // this is so we can access the private object
+
         stage('Download') {
             steps {
                 dir('./gitrepo') {
@@ -81,33 +85,29 @@ pipeline {
                         if (S3PROJECTDIR.replaceAll("\\s","") == '') {
                             error("Project name contains only whitespace. Will not continue.")
                         }
-
-                        def run_py_dl = sh(
-                            script: '. venv/bin/activate && python3.8 run.py download', returnStatus: true
-                        )
-                        if (run_py_dl == 0) {
-                            sh 'echo "Downloads complete."'
-                        }  else { // 'run.py download' failed
-                            currentBuild.result = "FAILED"
-                            sh 'echo "Downloads failed."'
+                        withCredentials([file(credentialsId: 's3cmd_kg_hub_push_configuration', variable: 'S3CMD_CFG')]) {
+                            sh '. venv/bin/activate && s3cmd -c $S3CMD_CFG get s3://$S3BUCKETNAME/frozen_incoming_data/bioportal_transformed/bioportal_transformed.tar.gz data/raw/bioportal_transformed.tar.gz'
                         }
+
                     }
                 }
             }
         }
 
+        // Transform step just moves and decompresses the raw sources
+        
         stage('Transform') {
-            steps {
-                dir('./gitrepo') {
-		            sh '. venv/bin/activate && env && python3.8 run.py transform'
-                }
-            }
+           steps {
+               dir('./gitrepo') {
+		           sh '. venv/bin/activate && env && mv data/raw/* data/merged/ && tar -xvzf data/merged/bioportal_transformed.tar.gz'
+               }
+           }
         }
 
         stage('Merge') {
             steps {
                 dir('./gitrepo') {
-                    sh '. venv/bin/activate && python3.8 run.py merge -y merge.yaml'
+                    sh '. venv/bin/activate && python3.8 run.py merge --merge_all'
                     sh 'cp merged_graph_stats.yaml merged_graph_stats_$BUILDSTARTDATE.yaml'
                     sh 'tar -rvfz data/merged/merged-kg.tar.gz merged_graph_stats_$BUILDSTARTDATE.yaml'
                 }
@@ -134,8 +134,8 @@ pipeline {
                             }
                         }
 
-                        if (env.BRANCH_NAME != 'master') {
-                            echo "Will not push if not on correct branch."
+                        if (env.BRANCH_NAME != 'main') {
+                            echo "Will not push if not on main branch."
                         } else {
                             withCredentials([
 					            file(credentialsId: 's3cmd_kg_hub_push_configuration', variable: 'S3CMD_CFG'),
@@ -145,22 +145,18 @@ pipeline {
                                  
                                 //
                                 // make $BUILDSTARTDATE/ directory and sync to s3 bucket
+                                // Don't create any index - none of this will be public
                                 //
                                 sh 'mkdir $BUILDSTARTDATE/'
-                                sh 'cp -p data/merged/${MERGEDKGNAME_BASE}.nt.gz $BUILDSTARTDATE/${MERGEDKGNAME_BASE}.nt.gz'
                                 sh 'cp -p data/merged/merged-kg.tar.gz $BUILDSTARTDATE/${MERGEDKGNAME_BASE}.tar.gz'
-                                // transformed data
-                                sh 'rm -fr data/transformed/.gitkeep'
-                                sh 'cp -pr data/transformed $BUILDSTARTDATE/'
-                                sh 'cp -pr data/raw $BUILDSTARTDATE/'
                                 sh 'cp Jenkinsfile $BUILDSTARTDATE/'
                                 // stats dir
                                 sh 'mkdir $BUILDSTARTDATE/stats/'
                                 sh 'cp -p *_stats.yaml $BUILDSTARTDATE/stats/'
 
-                                sh '. venv/bin/activate && s3cmd -c $S3CMD_CFG put -pr --acl-public --cf-invalidate $BUILDSTARTDATE s3://$S3BUCKETNAME/$S3PROJECTDIR/'
+                                sh '. venv/bin/activate && s3cmd -c $S3CMD_CFG put -pr $BUILDSTARTDATE s3://$S3BUCKETNAME/$S3PROJECTDIR/'
                                 sh '. venv/bin/activate && s3cmd -c $S3CMD_CFG rm -r s3://$S3BUCKETNAME/$S3PROJECTDIR/current/'
-                                sh '. venv/bin/activate && s3cmd -c $S3CMD_CFG put -pr --acl-public --cf-invalidate $BUILDSTARTDATE/* s3://$S3BUCKETNAME/$S3PROJECTDIR/current/'
+                                sh '. venv/bin/activate && s3cmd -c $S3CMD_CFG put -pr $BUILDSTARTDATE/* s3://$S3BUCKETNAME/$S3PROJECTDIR/current/'
 
                             }
 
