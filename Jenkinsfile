@@ -60,7 +60,7 @@ pipeline {
             steps {
                 dir('./gitrepo') {
                     git(
-                            url: 'https://github.com/Knowledge-Graph-Hub/kg-bioportal',
+                            url: 'https://github.com/ncbo/kg-bioportal',
                             branch: env.BRANCH_NAME
                     )
                     sh '/usr/bin/python3.8 -m venv venv'
