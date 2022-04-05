@@ -35,8 +35,8 @@ pipeline {
                 // print some info
                 dir('./gitrepo') {
                     sh 'env > env.txt'
-                    sh 'echo $BRANCH_NAME > branch.txt'
-                    sh 'echo "$BRANCH_NAME"'
+                    sh 'echo $GIT_BRANCH > branch.txt'
+                    sh 'echo "$GIT_BRANCH"'
                     sh 'cat env.txt'
                     sh 'cat branch.txt'
                     sh "echo $BUILDSTARTDATE > dow.txt"
@@ -61,7 +61,7 @@ pipeline {
                 dir('./gitrepo') {
                     git(
                             url: 'https://github.com/ncbo/kg-bioportal',
-                            branch: env.BRANCH_NAME
+                            branch: env.GIT_BRANCH
                     )
                     sh '/usr/bin/python3.8 -m venv venv'
                     sh '. venv/bin/activate'
@@ -134,7 +134,7 @@ pipeline {
                             }
                         }
 
-                        if (env.BRANCH_NAME != 'main') {
+                        if (env.GIT_BRANCH != 'main') {
                             echo "Will not push if not on main branch."
                         } else {
                             withCredentials([
