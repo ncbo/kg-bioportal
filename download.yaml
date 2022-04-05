@@ -3,7 +3,9 @@
 ---
 
 # **** Transformed BioPortal Ontologies ****
-# Note: this file is not publicly accessible.
+# Note: this file is not publicly accessible,
+# so this link is just a reminder, not what
+# is passed to the download function.
 -
   url: https://kg-hub.berkeleybop.io/frozen_incoming_data/bioportal_transformed/bioportal_transformed.tar.gz
   local_name: bioportal_transformed.tar.gz

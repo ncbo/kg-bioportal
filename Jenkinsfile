@@ -72,6 +72,9 @@ pipeline {
             }
         }
 
+        // the download step uses s3cmd instead of the standard kghub_downloader
+        // this is so we can access the private object
+
         stage('Download') {
             steps {
                 dir('./gitrepo') {
@@ -82,16 +85,10 @@ pipeline {
                         if (S3PROJECTDIR.replaceAll("\\s","") == '') {
                             error("Project name contains only whitespace. Will not continue.")
                         }
-
-                        def run_py_dl = sh(
-                            script: '. venv/bin/activate && python3.8 run.py download', returnStatus: true
-                        )
-                        if (run_py_dl == 0) {
-                            sh 'echo "Downloads complete."'
-                        }  else { // 'run.py download' failed
-                            currentBuild.result = "FAILED"
-                            sh 'echo "Downloads failed."'
+                        withCredentials([file(credentialsId: 's3cmd_kg_hub_push_configuration', variable: 'S3CMD_CFG')]) {
+                            sh '. venv/bin/activate && s3cmd -c $S3CMD_CFG get s3://$S3BUCKETNAME/frozen_incoming_data/bioportal_transformed/bioportal_transformed.tar.gz data/raw/bioportal_transformed.tar.gz'
                         }
+
                     }
                 }
             }
