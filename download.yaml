@@ -1,9 +1,14 @@
 # This file is a list of things to be downloaded using the command:
 #   run.py download
 ---
-#
+
+# **** Transformed BioPortal Ontologies ****
+-
+  url: https://kg-hub.berkeleybop.io/frozen_incoming_data/bioportal_transformed/bioportal_transformed.tar.gz
+  local_name: bioportal_transformed.tar.gz
+
 # **** ROBOT ****
-#
+
 -
   url: https://github.com/ontodev/robot/releases/download/v1.8.3/robot.jar
   local_name: robot.jar
