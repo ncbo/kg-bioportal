@@ -21,3 +21,7 @@ The [transform_utils](kg_bioportal/transform_utils) serve as a passthrough, allo
 Implementation of the 'merge' function from [KGX](https://github.com/biolink/kgx) using [merge.yaml](merge.yaml) as a source file.
 
 To enable flexibility in assembling the KG, the merge file is assembled on the fly.
+
+## Example
+
+`python run.py merge --merge_all`
