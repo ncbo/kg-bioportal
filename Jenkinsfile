@@ -61,7 +61,7 @@ pipeline {
                 dir('./gitrepo') {
                     git(
                             url: 'https://github.com/ncbo/kg-bioportal',
-                            branch: env.GIT_BRANCH
+                            branch: 'main'
                     )
                     sh '/usr/bin/python3.8 -m venv venv'
                     sh '. venv/bin/activate'
