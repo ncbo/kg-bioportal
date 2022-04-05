@@ -97,15 +97,15 @@ pipeline {
             }
         }
 
-        // Transform step doesn't do anything right now
+        // Transform step just moves and decompresses the raw sources
         
-        //stage('Transform') {
-        //    steps {
-        //        dir('./gitrepo') {
-		//            sh '. venv/bin/activate && env && python3.8 run.py transform'
-        //        }
-        //    }
-        //}
+        stage('Transform') {
+           steps {
+               dir('./gitrepo') {
+		           sh '. venv/bin/activate && env && mv data/raw/* data/merged/ && tar -xvzf data/merged/bioportal_transformed.tar.gz'
+               }
+           }
+        }
 
         stage('Merge') {
             steps {
