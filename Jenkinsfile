@@ -99,7 +99,7 @@ pipeline {
         stage('Transform') {
            steps {
                dir('./gitrepo') {
-		           sh '. venv/bin/activate && env && mkdir data/merged/ && mv data/raw/* data/merged/ && tar -xvzf data/merged/bioportal_transformed.tar.gz'
+		           sh '. venv/bin/activate && env && mv data/raw/* . && tar -xvzf bioportal_transformed.tar.gz'
                }
            }
         }
