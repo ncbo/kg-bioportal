@@ -100,13 +100,16 @@ pipeline {
            steps {
                dir('./gitrepo') {
 		           sh '. venv/bin/activate && env && mkdir ../BioPortal-to-KGX/ && mv data/raw/* ../BioPortal-to-KGX/ && tar -xvzf ../BioPortal-to-KGX/bioportal_transformed.tar.gz'
-               }
+                           sh 'du -a ../BioPortal-to-KGX/'
+		           sh 'pwd'
+	       }
            }
         }
 
         stage('Merge') {
             steps {
                 dir('./gitrepo') {
+		    sh 'pwd'
                     sh '. venv/bin/activate && python3.8 run.py merge --merge_all'
                     sh 'cp merged_graph_stats.yaml merged_graph_stats_$BUILDSTARTDATE.yaml'
                     sh 'tar -rvfz data/merged/merged-kg.tar.gz merged_graph_stats_$BUILDSTARTDATE.yaml'
