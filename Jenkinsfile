@@ -15,6 +15,9 @@ pipeline {
         S3PROJECTDIR = 'kg-bioportal' // no trailing slash
         MERGEDKGNAME_BASE = "kg_bioportal"
         MERGEDKGNAME_GENERIC = "merged-kg"
+
+        // Ontologies to merge in this run, if not using --merge_all flag
+        ONTOSET = 'BFO,STY,BIOLINK,CEPH,GNO,TMO,PSDO,MIXS,BIBFRAME,MEO,ISO-15926-2_2003,RCTONT,PEDTERM,PMA,OHD,AMINO-ACID,VODANAMFLCODE,CTCAE,SCHEMA,MIXSCV'
     }
     options {
         timestamps()
@@ -109,7 +112,7 @@ pipeline {
         stage('Merge') {
             steps {
                 dir('./gitrepo') {
-                    sh '. venv/bin/activate && python3.8 run.py merge --merge_all'
+                    sh '. venv/bin/activate && python3.8 run.py merge --include_only $ONTOSET'
                     sh 'cp merged_graph_stats.yaml merged_graph_stats_$BUILDSTARTDATE.yaml'
                     sh 'tar -rvfz data/merged/merged-kg.tar.gz merged_graph_stats_$BUILDSTARTDATE.yaml'
                 }
