@@ -139,7 +139,7 @@ pipeline {
                             }
                         }
 
-                        if (env.GIT_BRANCH != 'main') {
+                        if (env.GIT_BRANCH != 'origin/main') {
                             echo "Will not push if not on main branch."
                         } else {
                             withCredentials([
