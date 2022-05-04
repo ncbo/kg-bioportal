@@ -71,7 +71,8 @@ setup(
         'pandas',
         'networkx',
         'kghub-downloader',
-        'koza'
+        'koza',
+        'cat-merge'
     ],
     extras_require=extras,
 )
