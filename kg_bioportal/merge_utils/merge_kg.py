@@ -6,6 +6,8 @@ from kgx.cli.cli_utils import merge # type: ignore
 import os
 import copy
 
+from cat_merge.merge import merge as cat_merge_merge # type: ignore
+
 ONTO_DATA_PATH = "../BioPortal-to-KGX/transformed/ontologies/"
 
 def parse_load_config(yaml_file: str) -> Dict:
@@ -96,6 +98,44 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
         None
 
     """
-    print(merge_all)
-    pass
+    
+    nodepaths = []
+    edgepaths = []
+
+    # Need to know ontology names and filepaths
+    # Keys in onto_paths are short names, values are lists of filepaths.
+    onto_paths = {}
+    if len(include_only) > 0:
+        onto_dirs = [dirname for dirname in os.listdir(ONTO_DATA_PATH) if \
+            os.path.isdir(os.path.join(ONTO_DATA_PATH, dirname)) and dirname in include_only]
+    elif len(exclude) > 0:
+        onto_dirs = [dirname for dirname in os.listdir(ONTO_DATA_PATH) if \
+            os.path.isdir(os.path.join(ONTO_DATA_PATH, dirname)) and dirname not in exclude]
+    else:
+        onto_dirs = [dirname for dirname in os.listdir(ONTO_DATA_PATH) if \
+            os.path.isdir(os.path.join(ONTO_DATA_PATH, dirname))]
+    for dirname in onto_dirs:
+        this_path = os.path.join(ONTO_DATA_PATH,dirname)
+        onto_paths[dirname] = [os.path.join(this_path, filename) for filename in \
+            os.listdir(this_path) if os.path.isfile(os.path.join(this_path, filename)) and filename.endswith(".tsv")]
+
+    # Separate out node vs. edgelist
+    for onto_name in onto_paths:
+        for path in onto_paths[onto_name]:
+            if path.endswith("_nodes.tsv"):
+                nodepaths.append(path)
+            elif path.endswith("_edges.tsv"):
+                edgepaths.append(path)
+
+    # Default behavior is to merge all for now, but this could do something different later
+    if merge_all:
+        pass
+
+    cat_merge_merge(
+        name='kg-bioportal',
+        nodes=nodepaths,
+        edges=edgepaths,
+        output_dir='data/merged'
+    )
+
 
