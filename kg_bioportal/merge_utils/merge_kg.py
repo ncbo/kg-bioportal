@@ -83,3 +83,19 @@ def load_and_merge(yaml_file: str, processes: int = 1) -> nx.MultiDiGraph:
     """
     merged_graph = merge(yaml_file, processes=processes)
     return merged_graph
+
+def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> None:
+    """Load and merge sources with cat-merge.
+
+    Args:
+        merge_all: if True, merge all ontology node and edges.
+        include_only: list of paths to ontology node/edgefiles to include
+        exclude: list of paths to ontology node/edgefiles to exclude
+
+    Returns:
+        None
+
+    """
+    print(merge_all)
+    pass
+
