@@ -6,7 +6,7 @@ from xml.etree.ElementInclude import include
 import click
 from kg_bioportal import download as kg_download
 from kg_bioportal import transform as kg_transform
-from kg_bioportal.merge_utils.merge_kg import load_and_merge, update_merge_config
+from kg_bioportal.merge_utils.merge_kg import load_and_merge, update_merge_config, merge_with_cat_merge
 from kg_bioportal.transform import DATA_SOURCES
 
 
@@ -102,6 +102,35 @@ def merge(yaml: str, processes: int, merge_all=False, include_only=[], exclude=[
         update_merge_config(yaml, merge_all, include_only, exclude)
 
     load_and_merge(yaml, processes)
+
+@cli.command()
+@click.option("--merge_all",
+                is_flag=True,
+                help="""Include *all* ontologies.""")
+@click.option("--include_only",
+                callback=lambda _,__,x: x.split(',') if x else [],
+                help="""One or more ontologies to merge, and only these,
+                     comma-delimited and named by their short BioPortal ID, e.g., SEPIO.""")
+@click.option("--exclude",
+                callback=lambda _,__,x: x.split(',') if x else [],
+                help="""One or more ontologies to exclude from merging,
+                     comma-delimited and named by their short BioPortal ID, e.g., SEPIO.
+                     Will select all other ontologies for merging.""")
+def catmerge(merge_all=False, include_only=[], exclude=[]) -> None:
+    """Use cat-merge to create a merged graph.
+
+    Args:
+        merge_all: Include *all* ontologies.
+        include_only: Include only the specified ontologies.
+        exclude: Include all ontologies *except* those specified.
+
+    Returns:
+        None.
+
+    """
+
+    merge_with_cat_merge(merge_all, include_only, exclude)
+
 
 if __name__ == "__main__":
     cli()
