@@ -132,7 +132,7 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
         pass
 
     cat_merge_merge(
-        name='kg-bioportal',
+        name='merged-kg',
         nodes=nodepaths,
         edges=edgepaths,
         output_dir='data/merged'
