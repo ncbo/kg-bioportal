@@ -120,12 +120,21 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
             os.listdir(this_path) if os.path.isfile(os.path.join(this_path, filename)) and filename.endswith(".tsv")]
 
     # Separate out node vs. edgelist
+    # Do a check to verify that none of the files are empty, or the merge will fail
     for onto_name in onto_paths:
         for path in onto_paths[onto_name]:
             if path.endswith("_nodes.tsv"):
-                nodepaths.append(path)
+                num_lines = sum(1 for line in open(path))
+                if num_lines > 2:
+                    nodepaths.append(path)
+                else:
+                    print(f"Ignoring {path} as it contains no nodes.")
             elif path.endswith("_edges.tsv"):
-                edgepaths.append(path)
+                num_lines = sum(1 for line in open(path))
+                if num_lines > 2:
+                    edgepaths.append(path)
+                else:
+                    print(f"Ignoring {path} as it contains no edges.")
 
     # Default behavior is to merge all for now, but this could do something different later
     if merge_all:
