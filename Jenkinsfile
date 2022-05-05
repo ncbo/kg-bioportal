@@ -109,12 +109,13 @@ pipeline {
            }
         }
 
+        // Currently using cat-merge
         stage('Merge') {
             steps {
                 dir('./gitrepo') {
-                    sh '. venv/bin/activate && python3.8 run.py merge --include_only $ONTOSET'
-                    sh 'cp merged_graph_stats.yaml merged_graph_stats_$BUILDSTARTDATE.yaml'
-                    sh 'tar -rvfz data/merged/merged-kg.tar.gz merged_graph_stats_$BUILDSTARTDATE.yaml'
+                    sh '. venv/bin/activate && python3.8 run.py catmerge --include_only $ONTOSET'
+                    //sh 'cp merged_graph_stats.yaml merged_graph_stats_$BUILDSTARTDATE.yaml'
+                    //sh 'tar -rvfz data/merged/merged-kg.tar.gz merged_graph_stats_$BUILDSTARTDATE.yaml'
                 }
             }
         }
@@ -156,8 +157,8 @@ pipeline {
                                 sh 'cp -p data/merged/merged-kg.tar.gz $BUILDSTARTDATE/${MERGEDKGNAME_BASE}.tar.gz'
                                 sh 'cp Jenkinsfile $BUILDSTARTDATE/'
                                 // stats dir
-                                sh 'mkdir $BUILDSTARTDATE/stats/'
-                                sh 'cp -p *_stats.yaml $BUILDSTARTDATE/stats/'
+                                //sh 'mkdir $BUILDSTARTDATE/stats/'
+                                //sh 'cp -p *_stats.yaml $BUILDSTARTDATE/stats/'
 
                                 sh '. venv/bin/activate && s3cmd -c $S3CMD_CFG put -pr $BUILDSTARTDATE s3://$S3BUCKETNAME/$S3PROJECTDIR/'
                                 sh '. venv/bin/activate && s3cmd -c $S3CMD_CFG rm -r s3://$S3BUCKETNAME/$S3PROJECTDIR/current/'
