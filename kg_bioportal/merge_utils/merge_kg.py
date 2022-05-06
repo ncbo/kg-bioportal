@@ -121,20 +121,25 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
 
     # Separate out node vs. edgelist
     # Do a check to verify that none of the files are empty, or the merge will fail
+    ignore_paths = []
     for onto_name in onto_paths:
         for path in onto_paths[onto_name]:
             if path.endswith("_nodes.tsv"):
                 num_lines = sum(1 for line in open(path))
-                if num_lines > 2:
+                if num_lines > 2 and path not in ignore_paths:
                     nodepaths.append(path)
                 else:
-                    print(f"Ignoring {path} as it contains no nodes.")
+                    this_edgepath = (path.rpartition('_'))[0] + '_edges.tsv'
+                    ignore_paths.append(this_edgepath)
+                    print(f"Ignoring {path} as it contains no nodes. Will also ignore {this_edgepath}.")
             elif path.endswith("_edges.tsv"):
                 num_lines = sum(1 for line in open(path))
-                if num_lines > 2:
+                if num_lines > 2 and path not in ignore_paths:
                     edgepaths.append(path)
                 else:
-                    print(f"Ignoring {path} as it contains no edges.")
+                    this_nodepath = (path.rpartition('_'))[0] + '_nodes.tsv'
+                    ignore_paths.append(this_nodepath)
+                    print(f"Ignoring {path} as it contains no edges. Will also ignore {this_nodepath}.")
 
     # Default behavior is to merge all for now, but this could do something different later
     if merge_all:
