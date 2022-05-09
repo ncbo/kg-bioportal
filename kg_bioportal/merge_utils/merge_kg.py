@@ -130,21 +130,31 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
         print(f"Validating {onto_name}...")
         for path in onto_paths[onto_name]:
             if path.endswith("_nodes.tsv"):
-                nodedf = pd.read_csv(path, sep='\t', index_col='id')
+                this_edgepath = (path.rpartition('_'))[0] + '_edges.tsv'
+                try:
+                    nodedf = pd.read_csv(path, sep='\t', index_col='id')
+                except (KeyError, TypeError) as e:
+                    ignore_paths.append(this_edgepath)
+                    print(f"Ignoring {path} due to pandas parsing error. Will also ignore {this_edgepath}. Error: {e}")
+                    continue
                 num_lines = len(nodedf.index)
                 if num_lines > 1 and path not in ignore_paths:
                     nodepaths.append(path)
                 else:
-                    this_edgepath = (path.rpartition('_'))[0] + '_edges.tsv'
                     ignore_paths.append(this_edgepath)
                     print(f"Ignoring {path} as it contains no nodes or node ids. Will also ignore {this_edgepath}.")
             elif path.endswith("_edges.tsv"):
-                edgedf = pd.read_csv(path, sep='\t', index_col='id')
+                this_nodepath = (path.rpartition('_'))[0] + '_nodes.tsv'
+                try:
+                    edgedf = pd.read_csv(path, sep='\t', index_col='id')
+                except (KeyError, TypeError) as e:
+                    ignore_paths.append(this_nodepath)
+                    print(f"Ignoring {path} due to pandas parsing error. Will also ignore {this_nodepath}. Error: {e}")
+                    continue
                 num_lines = len(edgedf.index)
                 if num_lines > 1 and path not in ignore_paths:
                     edgepaths.append(path)
                 else:
-                    this_nodepath = (path.rpartition('_'))[0] + '_nodes.tsv'
                     ignore_paths.append(this_nodepath)
                     print(f"Ignoring {path} as it contains no edges or edge ids. Will also ignore {this_nodepath}.")
 
