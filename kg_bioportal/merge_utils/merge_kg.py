@@ -130,28 +130,18 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
         print(f"Validating {onto_name}...")
         for path in onto_paths[onto_name]:
             if path.endswith("_nodes.tsv"):
-                nodedf = pd.read_csv(path, sep='\t')
+                nodedf = pd.read_csv(path, sep='\t', index_col='id')
                 num_lines = len(nodedf.index)
-                if 'id' not in nodedf.columns:
-                    has_id_col = False
-                else:
-                    has_id_col = True
-                    nodedf.id.astype(str)
-                if num_lines > 1 and path not in ignore_paths and has_id_col:
+                if num_lines > 1 and path not in ignore_paths:
                     nodepaths.append(path)
                 else:
                     this_edgepath = (path.rpartition('_'))[0] + '_edges.tsv'
                     ignore_paths.append(this_edgepath)
                     print(f"Ignoring {path} as it contains no nodes or node ids. Will also ignore {this_edgepath}.")
             elif path.endswith("_edges.tsv"):
-                edgedf = pd.read_csv(path, sep='\t')
+                edgedf = pd.read_csv(path, sep='\t', index_col='id')
                 num_lines = len(edgedf.index)
-                if 'id' not in edgedf.columns:
-                    has_id_col = False
-                else:
-                    has_id_col = True
-                    edgedf.id.astype(str)
-                if num_lines > 1 and path not in ignore_paths and has_id_col:
+                if num_lines > 1 and path not in ignore_paths:
                     edgepaths.append(path)
                 else:
                     this_nodepath = (path.rpartition('_'))[0] + '_nodes.tsv'
