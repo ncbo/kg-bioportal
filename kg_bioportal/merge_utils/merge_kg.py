@@ -6,6 +6,8 @@ from kgx.cli.cli_utils import merge # type: ignore
 import os
 import copy
 
+import pandas as pd # type: ignore
+
 from cat_merge.merge import merge as cat_merge_merge # type: ignore
 
 ONTO_DATA_PATH = "../BioPortal-to-KGX/transformed/ontologies/"
@@ -122,35 +124,37 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
     # Separate out node vs. edgelist
     # Do a check to verify that none of the files are empty, or the merge will fail
     # also verify the header in each contains an 'id' field
+    # and validate the values in the 
     ignore_paths = []
     for onto_name in onto_paths:
+        print(f"Validating {onto_name}...")
         for path in onto_paths[onto_name]:
             if path.endswith("_nodes.tsv"):
-                with open(path) as this_nodefile:
-                    header = this_nodefile.readline()
-                    num_lines = sum(1 for line in this_nodefile)
-                    if 'id' not in header.split("\t"):
-                        has_id_col = False
-                    else:
-                        has_id_col = True
-                if num_lines > 2 and path not in ignore_paths and has_id_col:
+                this_edgepath = (path.rpartition('_'))[0] + '_edges.tsv'
+                try:
+                    nodedf = pd.read_csv(path, sep='\t', index_col='id')
+                except (KeyError, TypeError) as e:
+                    ignore_paths.append(this_edgepath)
+                    print(f"Ignoring {path} due to pandas parsing error. Will also ignore {this_edgepath}. Error: {e}")
+                    continue
+                num_lines = len(nodedf.index)
+                if num_lines > 1 and path not in ignore_paths:
                     nodepaths.append(path)
                 else:
-                    this_edgepath = (path.rpartition('_'))[0] + '_edges.tsv'
                     ignore_paths.append(this_edgepath)
                     print(f"Ignoring {path} as it contains no nodes or node ids. Will also ignore {this_edgepath}.")
             elif path.endswith("_edges.tsv"):
-                with open(path) as this_edgefile:
-                    header = this_edgefile.readline()
-                    num_lines = sum(1 for line in this_edgefile)
-                    if 'id' not in header.split("\t"):
-                        has_id_col = False
-                    else:
-                        has_id_col = True
-                if num_lines > 2 and path not in ignore_paths and has_id_col:
+                this_nodepath = (path.rpartition('_'))[0] + '_nodes.tsv'
+                try:
+                    edgedf = pd.read_csv(path, sep='\t', index_col='id')
+                except (KeyError, TypeError) as e:
+                    ignore_paths.append(this_nodepath)
+                    print(f"Ignoring {path} due to pandas parsing error. Will also ignore {this_nodepath}. Error: {e}")
+                    continue
+                num_lines = len(edgedf.index)
+                if num_lines > 1 and path not in ignore_paths:
                     edgepaths.append(path)
                 else:
-                    this_nodepath = (path.rpartition('_'))[0] + '_nodes.tsv'
                     ignore_paths.append(this_nodepath)
                     print(f"Ignoring {path} as it contains no edges or edge ids. Will also ignore {this_nodepath}.")
 
