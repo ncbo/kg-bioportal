@@ -133,7 +133,7 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
                 this_edgepath = (path.rpartition('_'))[0] + '_edges.tsv'
                 try:
                     nodedf = pd.read_csv(path, sep='\t', index_col='id')
-                except (KeyError, TypeError) as e:
+                except (KeyError, TypeError, pd.errors.ParserError) as e:
                     ignore_paths.append(this_edgepath)
                     print(f"Ignoring {path} due to pandas parsing error. Will also ignore {this_edgepath}. Error: {e}")
                     continue
@@ -147,7 +147,7 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
                 this_nodepath = (path.rpartition('_'))[0] + '_nodes.tsv'
                 try:
                     edgedf = pd.read_csv(path, sep='\t', index_col='id')
-                except (KeyError, TypeError) as e:
+                except (KeyError, TypeError, pd.errors.ParserError) as e:
                     ignore_paths.append(this_nodepath)
                     print(f"Ignoring {path} due to pandas parsing error. Will also ignore {this_nodepath}. Error: {e}")
                     continue
