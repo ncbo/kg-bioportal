@@ -103,7 +103,7 @@ pipeline {
            steps {
                dir('./gitrepo') {
 		           sh '. venv/bin/activate && env && mv data/raw/* ../ && tar -xvzf ../bioportal_transformed.tar.gz -C ../'
-                           sh 'du -a ../BioPortal-to-KGX/'
+                           sh 'du -a ../'
 		           sh 'pwd'
 	       }
            }
