@@ -60,7 +60,7 @@ setup(
         'tqdm',
         'wget',
         'compress_json',
-        'click',
+        'click==8.0.4',
         'pyyaml',
         'kgx==1.5.7',
         'sphinx',
