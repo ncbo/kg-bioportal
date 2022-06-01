@@ -72,7 +72,7 @@ setup(
         'networkx',
         'kghub-downloader',
         'koza',
-        'cat-merge'
+        'cat-merge==0.1.7'
     ],
     extras_require=extras,
 )
