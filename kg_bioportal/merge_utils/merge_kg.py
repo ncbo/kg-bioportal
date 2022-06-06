@@ -10,7 +10,7 @@ import pandas as pd # type: ignore
 
 from cat_merge.merge import merge as cat_merge_merge # type: ignore
 
-ONTO_DATA_PATH = "../BioPortal-to-KGX/transformed/ontologies/"
+ONTO_DATA_PATH = "../transformed/ontologies/"
 
 def parse_load_config(yaml_file: str) -> Dict:
     """Parse load config YAML.
