@@ -90,6 +90,11 @@ def load_and_merge(yaml_file: str, processes: int = 1) -> nx.MultiDiGraph:
 
 def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> None:
     """Load and merge sources with cat-merge.
+    Cat-merge does not merge values based on their ids,
+    it just concatenates and drops exact duplicates.
+    A subsequent step here performs further merging
+    on identical IDs and concatenates other values,
+    delimiting with pipe symbols.
 
     Args:
         merge_all: if True, merge all ontology node and edges.
@@ -103,6 +108,15 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
     
     nodepaths = []
     edgepaths = []
+
+    # Prepare a blank header edgefile so we can ensure we have the correct
+    # column headings
+    blank_header_path = "blank_header.tsv"
+    if not os.path.exists(blank_header_path):
+        with open(blank_header_path, "w") as outfile:
+            outstring = "id\tobject\tsubject\tpredicate\tcategory\n"
+            outfile.write(outstring)
+    edgepaths.append(blank_header_path)
 
     # Need to know ontology names and filepaths
     # Keys in onto_paths are short names, values are lists of filepaths.
@@ -124,7 +138,7 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
     # Separate out node vs. edgelist
     # Do a check to verify that none of the files are empty, or the merge will fail
     # also verify the header in each contains an 'id' field
-    # and validate the values in the 
+    # (it's invalid without it)
     ignore_paths = []
     for onto_name in onto_paths:
         print(f"Validating {onto_name}...")
