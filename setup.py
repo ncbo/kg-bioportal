@@ -62,7 +62,7 @@ setup(
         'compress_json',
         'click==8.0.4',
         'pyyaml',
-        'kgx==1.5.7',
+        'kgx==1.5.9',
         'sphinx',
         'sphinx_rtd_theme',
         'recommonmark',
@@ -72,7 +72,7 @@ setup(
         'networkx',
         'kghub-downloader',
         'koza',
-        'cat-merge==0.1.7'
+        'cat-merge==0.1.15'
     ],
     extras_require=extras,
 )
