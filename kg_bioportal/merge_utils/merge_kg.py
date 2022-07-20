@@ -90,6 +90,11 @@ def load_and_merge(yaml_file: str, processes: int = 1) -> nx.MultiDiGraph:
 
 def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> None:
     """Load and merge sources with cat-merge.
+    Cat-merge does not merge values based on their ids,
+    it just concatenates and drops exact duplicates.
+    A subsequent step here performs further merging
+    on identical IDs and concatenates other values,
+    delimiting with pipe symbols.
 
     Args:
         merge_all: if True, merge all ontology node and edges.
@@ -101,8 +106,6 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
 
     """
     
-
-
     nodepaths = []
     edgepaths = []
 
