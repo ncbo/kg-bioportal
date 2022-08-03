@@ -207,11 +207,15 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
 
     with open(nodefile_path, 'r') as infile:
         with open(temp_nodefile_path, 'w') as outfile:
+            seen_ids = []
             for line in infile:
                 splitline = line.split("\t")
                 if splitline[0] in uniq_ids:
+                    if splitline[0] in seen_ids:
+                        continue
                     outrow = uniq_df.loc[uniq_df['id'] == splitline[0]]
-                    outline = outrow.to_csv(header=None, index=False, sep='\t').rstrip('\n')
+                    outline = outrow.to_csv(header=None, index=False, sep='\t')
+                    seen_ids.append(splitline[0])
                     outfile.write(outline)
                 else:
                     outfile.write(line)
