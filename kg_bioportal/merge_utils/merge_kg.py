@@ -2,6 +2,7 @@ import copy
 import gzip
 import os
 from copy import deepcopy
+import tarfile
 from typing import Dict, List
 
 import networkx as nx  # type: ignore
@@ -191,4 +192,30 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
     with gzip.open(comp_dupnode_path) as infile:
         dupnode_df = pd.read_csv(infile, sep='\t', index_col='id')
     uniq_df = dupnode_df.groupby('id').agg(lambda x: '|'.join(set(x))).reset_index()
-    print(uniq_df)
+    dup_count = len(dupnode_df)
+    uniq_count = len(uniq_df)
+    uniq_ids = list(uniq_df['id'])
+    print(f"Reducing {dup_count} duplicated nodes to {uniq_count} nonredundant nodes...")
+
+    nodefile_name = "merged-kg_nodes.tsv"
+    nodefile_path = os.path.join(OUTPUT_PATH,nodefile_name)
+    temp_nodefile_name = "merged-kg_nodes.tsv.temp"
+    temp_nodefile_path = os.path.join(OUTPUT_PATH,temp_nodefile_name)
+    merge_graph_path = os.path.join(OUTPUT_PATH,'merged-kg.tar.gz')
+    tgfile = tarfile.open(merge_graph_path)
+    tgfile.extract(nodefile_name, OUTPUT_PATH)
+
+    with open(nodefile_path, 'r') as infile:
+        with open(temp_nodefile_path, 'w') as outfile:
+            for line in infile:
+                splitline = line.split("\t")
+                if splitline[0] in uniq_ids:
+                    outrow = uniq_df.loc[uniq_df['id'] == splitline[0]]
+                    outline = outrow.to_csv(header=None, index=False, sep='\t').rstrip('\n')
+                    outfile.write(outline)
+                else:
+                    outfile.write(line)
+
+    os.replace(temp_nodefile_path,nodefile_path)
+
+    print("Complete.")
