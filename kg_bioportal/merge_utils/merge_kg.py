@@ -1,16 +1,17 @@
+import copy
+import gzip
+import os
 from copy import deepcopy
 from typing import Dict, List
+
+import networkx as nx  # type: ignore
+import pandas as pd  # type: ignore
 import yaml
-import networkx as nx # type: ignore
-from kgx.cli.cli_utils import merge # type: ignore
-import os
-import copy
-
-import pandas as pd # type: ignore
-
-from cat_merge.merge import merge as cat_merge_merge # type: ignore
+from cat_merge.merge import merge as cat_merge_merge  # type: ignore
+from kgx.cli.cli_utils import merge  # type: ignore
 
 ONTO_DATA_PATH = "../transformed/ontologies/"
+OUTPUT_PATH = "data/merged"
 
 def parse_load_config(yaml_file: str) -> Dict:
     """Parse load config YAML.
@@ -176,11 +177,18 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
     if merge_all:
         pass
 
+    # Perform the cat merge
     cat_merge_merge(
         name='merged-kg',
         nodes=nodepaths,
         edges=edgepaths,
-        output_dir='data/merged'
+        output_dir=OUTPUT_PATH
     )
 
-
+    # Check for nodes with identical CURIEs
+    # by parsing the OUTPUT_PATH/qc/merged-kg-duplicate-nodes.tsv
+    comp_dupnode_path = os.path.join(OUTPUT_PATH,"qc","merged-kg-duplicate-nodes.tsv.gz")
+    with gzip.open(comp_dupnode_path) as infile:
+        dupnode_df = pd.read_csv(infile, sep='\t', index_col='id')
+    uniq_df = dupnode_df.groupby('id').agg(lambda x: '|'.join(set(x))).reset_index()
+    print(uniq_df)
