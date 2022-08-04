@@ -114,7 +114,10 @@ pipeline {
             steps {
                 dir('./gitrepo') {
 			        sh '. venv/bin/activate && python3.8 run.py catmerge --merge_all'
-                    sh 'tar -rvfz data/merged/merged-kg.tar.gz data/merged/qc/'
+                    sh 'gunzip data/merged/merged-kg.tar.gz'
+                    sh 'tar -rvf data/merged/merged-kg.tar data/merged/qc/'
+                    sh 'tar -rvf data/merged/merged-kg.tar data/merged/merged-kg_nodes.tsv'
+                    sh 'gzip data/merged/merged-kg.tar'
                     //sh '. venv/bin/activate && python3.8 run.py catmerge --include_only $ONTOSET'
                     //sh 'cp merged_graph_stats.yaml merged_graph_stats_$BUILDSTARTDATE.yaml'
                     //sh 'tar -rvfz data/merged/merged-kg.tar.gz merged_graph_stats_$BUILDSTARTDATE.yaml'

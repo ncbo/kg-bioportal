@@ -1,16 +1,18 @@
-from copy import deepcopy
-from typing import Dict, List
-import yaml
-import networkx as nx # type: ignore
-from kgx.cli.cli_utils import merge # type: ignore
-import os
 import copy
+import gzip
+import os
+from copy import deepcopy
+import tarfile
+from typing import Dict, List
 
-import pandas as pd # type: ignore
-
-from cat_merge.merge import merge as cat_merge_merge # type: ignore
+import networkx as nx  # type: ignore
+import pandas as pd  # type: ignore
+import yaml
+from cat_merge.merge import merge as cat_merge_merge  # type: ignore
+from kgx.cli.cli_utils import merge  # type: ignore
 
 ONTO_DATA_PATH = "../transformed/ontologies/"
+OUTPUT_PATH = "data/merged"
 
 def parse_load_config(yaml_file: str) -> Dict:
     """Parse load config YAML.
@@ -90,6 +92,11 @@ def load_and_merge(yaml_file: str, processes: int = 1) -> nx.MultiDiGraph:
 
 def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> None:
     """Load and merge sources with cat-merge.
+    Cat-merge does not merge values based on their ids,
+    it just concatenates and drops exact duplicates.
+    A subsequent step here performs further merging
+    on identical IDs and concatenates other values,
+    delimiting with pipe symbols.
 
     Args:
         merge_all: if True, merge all ontology node and edges.
@@ -103,6 +110,15 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
     
     nodepaths = []
     edgepaths = []
+
+    # Prepare a blank header edgefile so we can ensure we have the correct
+    # column headings
+    blank_header_path = "blank_header.tsv"
+    if not os.path.exists(blank_header_path):
+        with open(blank_header_path, "w") as outfile:
+            outstring = "id\tobject\tsubject\tpredicate\tcategory\n"
+            outfile.write(outstring)
+    edgepaths.append(blank_header_path)
 
     # Need to know ontology names and filepaths
     # Keys in onto_paths are short names, values are lists of filepaths.
@@ -124,7 +140,7 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
     # Separate out node vs. edgelist
     # Do a check to verify that none of the files are empty, or the merge will fail
     # also verify the header in each contains an 'id' field
-    # and validate the values in the 
+    # (it's invalid without it)
     ignore_paths = []
     for onto_name in onto_paths:
         print(f"Validating {onto_name}...")
@@ -162,11 +178,48 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
     if merge_all:
         pass
 
+    # Perform the cat merge
     cat_merge_merge(
         name='merged-kg',
         nodes=nodepaths,
         edges=edgepaths,
-        output_dir='data/merged'
+        output_dir=OUTPUT_PATH
     )
 
+    # Check for nodes with identical CURIEs
+    # by parsing the OUTPUT_PATH/qc/merged-kg-duplicate-nodes.tsv
+    comp_dupnode_path = os.path.join(OUTPUT_PATH,"qc","merged-kg-duplicate-nodes.tsv.gz")
+    with gzip.open(comp_dupnode_path) as infile:
+        dupnode_df = pd.read_csv(infile, sep='\t', index_col='id')
+    uniq_df = dupnode_df.groupby('id').agg(lambda x: '|'.join(set(x))).reset_index()
+    dup_count = len(dupnode_df)
+    uniq_count = len(uniq_df)
+    uniq_ids = list(uniq_df['id'])
+    print(f"Reducing {dup_count} duplicated nodes to {uniq_count} nonredundant nodes...")
 
+    nodefile_name = "merged-kg_nodes.tsv"
+    nodefile_path = os.path.join(OUTPUT_PATH,nodefile_name)
+    temp_nodefile_name = "merged-kg_nodes.tsv.temp"
+    temp_nodefile_path = os.path.join(OUTPUT_PATH,temp_nodefile_name)
+    merge_graph_path = os.path.join(OUTPUT_PATH,'merged-kg.tar.gz')
+    tgfile = tarfile.open(merge_graph_path)
+    tgfile.extract(nodefile_name, OUTPUT_PATH)
+
+    with open(nodefile_path, 'r') as infile:
+        with open(temp_nodefile_path, 'w') as outfile:
+            seen_ids = []
+            for line in infile:
+                splitline = line.split("\t")
+                if splitline[0] in uniq_ids:
+                    if splitline[0] in seen_ids:
+                        continue
+                    outrow = uniq_df.loc[uniq_df['id'] == splitline[0]]
+                    outline = outrow.to_csv(header=None, index=False, sep='\t')
+                    seen_ids.append(splitline[0])
+                    outfile.write(outline)
+                else:
+                    outfile.write(line)
+
+    os.replace(temp_nodefile_path,nodefile_path)
+
+    print("Complete.")
