@@ -1,0 +1,29 @@
+---
+# Feel free to add content and custom Front Matter to this file.
+# To modify the layout, see https://jekyllrb.com/docs/themes/#overriding-theme-defaults
+
+layout: default
+title: KG-Bioportal
+---
+
+<div class="content">    
+    <div class="col-md-12">
+      
+      <h3>Learn more about KG-Bioportal</h3>
+        <li><a href="https://bioportal.bioontology.org/">Visit BioPortal</a></li>
+        <li><a href="https://github.com/ncbo/kg-bioportal">See the KG-Bioportal GitHub repository</a></li>
+        <li><a href="https://github.com/ncbo/BioPortal-to-KGX">See the repository for translation from Bioportal to graph nodes and edges </a></li>
+        <br>
+   
+      <h3>KG-Bioportal Status</h3>
+      <p>The table below lists the presence and status of each ontology in KG-Bioportal.</p>
+    </div>
+  
+    <div class="col-md-12">
+      <div class="row">
+        <div class="col-md-12">
+          {% include kgbp_status_table.html %}
+        </div>
+      </div>
+    </div>
+  </div>
