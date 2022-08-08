@@ -26,7 +26,7 @@ baseurl: "/kg-bioportal" # the subpath of your site, e.g. /blog
 url: "https://ncbo.github.io" # the base hostname & protocol for your site, e.g. http://example.com
 
 # Build settings
-theme: tactile
+theme: jekyll-theme-tactile
 
 # Exclude from processing.
 # The following items will not be processed, by default.
