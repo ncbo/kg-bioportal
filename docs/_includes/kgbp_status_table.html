@@ -1,8 +1,10 @@
 <table class="table">
     <tbody>
           <tr>
-              <th >Ontology Name</th>
+              <th>Ontology Name</th>
               <th>Status</th>
+              <th>Node Count</th>
+              <th>Edge Count</th>
           </tr>
       {% for onto in site.ontologies %}
             <tr>
@@ -11,6 +13,12 @@
                 </td>
                 <td>
                     {{ onto.status }}
+                </td>
+                <td>
+                    {{ onto.nodecount }}
+                </td>
+                <td>
+                    {{ onto.edgecount }}
                 </td>
               </tr>
           {% endfor %}
