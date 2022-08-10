@@ -1,18 +1,18 @@
 <table class="table">
     <tbody>
           <tr>
-              <th>Ontology Name</th>
+              <th >Ontology Name</th>
               <th>Status</th>
           </tr>
-      <!-- {% for project in site.projects %}
+      {% for onto in site.ontologies %}
             <tr>
                 <td>
-                    {{ project.id }}
+                    <a href="https://bioportal.bioontology.org/ontologies/{{ onto.id }}">{{ onto.id }}</a>
                 </td>
                 <td>
-                    {{ project.description }}
+                    {{ onto.status }}
                 </td>
               </tr>
-          {% endfor %} -->
+          {% endfor %}
       </tbody>
     </table>
