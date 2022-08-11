@@ -188,38 +188,38 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
 
     # Check for nodes with identical CURIEs
     # by parsing the OUTPUT_PATH/qc/merged-kg-duplicate-nodes.tsv
-    # comp_dupnode_path = os.path.join(OUTPUT_PATH,"qc","merged-kg-duplicate-nodes.tsv.gz")
-    # with gzip.open(comp_dupnode_path) as infile:
-    #     dupnode_df = pd.read_csv(infile, sep='\t', index_col='id')
-    # uniq_df = dupnode_df.groupby('id').agg(lambda x: '|'.join(set(x))).reset_index()
-    # dup_count = len(dupnode_df)
-    # uniq_count = len(uniq_df)
-    # uniq_ids = list(uniq_df['id'])
-    # print(f"Reducing {dup_count} duplicated nodes to {uniq_count} nonredundant nodes...")
+    comp_dupnode_path = os.path.join(OUTPUT_PATH,"qc","merged-kg-duplicate-nodes.tsv.gz")
+    with gzip.open(comp_dupnode_path) as infile:
+        dupnode_df = pd.read_csv(infile, sep='\t', index_col='id')
+    uniq_df = dupnode_df.groupby('id').agg(lambda x: '|'.join(set(x))).reset_index()
+    dup_count = len(dupnode_df)
+    uniq_count = len(uniq_df)
+    uniq_ids = list(uniq_df['id'])
+    print(f"Reducing {dup_count} duplicated nodes to {uniq_count} nonredundant nodes...")
 
-    # nodefile_name = "merged-kg_nodes.tsv"
-    # nodefile_path = os.path.join(OUTPUT_PATH,nodefile_name)
-    # temp_nodefile_name = "merged-kg_nodes.tsv.temp"
-    # temp_nodefile_path = os.path.join(OUTPUT_PATH,temp_nodefile_name)
-    # merge_graph_path = os.path.join(OUTPUT_PATH,'merged-kg.tar.gz')
-    # tgfile = tarfile.open(merge_graph_path)
-    # tgfile.extract(nodefile_name, OUTPUT_PATH)
+    nodefile_name = "merged-kg_nodes.tsv"
+    nodefile_path = os.path.join(OUTPUT_PATH,nodefile_name)
+    temp_nodefile_name = "merged-kg_nodes.tsv.temp"
+    temp_nodefile_path = os.path.join(OUTPUT_PATH,temp_nodefile_name)
+    merge_graph_path = os.path.join(OUTPUT_PATH,'merged-kg.tar.gz')
+    tgfile = tarfile.open(merge_graph_path)
+    tgfile.extract(nodefile_name, OUTPUT_PATH)
 
-    # with open(nodefile_path, 'r') as infile:
-    #     with open(temp_nodefile_path, 'w') as outfile:
-    #         seen_ids = []
-    #         for line in infile:
-    #             splitline = line.split("\t")
-    #             if splitline[0] in uniq_ids:
-    #                 if splitline[0] in seen_ids:
-    #                     continue
-    #                 outrow = uniq_df.loc[uniq_df['id'] == splitline[0]]
-    #                 outline = outrow.to_csv(header=None, index=False, sep='\t')
-    #                 seen_ids.append(splitline[0])
-    #                 outfile.write(outline)
-    #             else:
-    #                 outfile.write(line)
+    with open(nodefile_path, 'r') as infile:
+        with open(temp_nodefile_path, 'w') as outfile:
+            seen_ids = []
+            for line in infile:
+                splitline = line.split("\t")
+                if splitline[0] in uniq_ids:
+                    if splitline[0] in seen_ids:
+                        continue
+                    outrow = uniq_df.loc[uniq_df['id'] == splitline[0]]
+                    outline = outrow.to_csv(header=None, index=False, sep='\t')
+                    seen_ids.append(splitline[0])
+                    outfile.write(outline)
+                else:
+                    outfile.write(line)
 
-    # os.replace(temp_nodefile_path,nodefile_path)
+    os.replace(temp_nodefile_path,nodefile_path)
 
     print("Complete.")

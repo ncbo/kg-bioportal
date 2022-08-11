@@ -71,7 +71,7 @@ setup(
         'pandas',
         'networkx',
         'kghub-downloader',
-        'cat-merge==0.1.15'
+        'cat-merge==0.1.7'
     ],
     extras_require=extras,
 )
