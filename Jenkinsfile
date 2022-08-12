@@ -114,7 +114,7 @@ pipeline {
             steps {
                 dir('./gitrepo') {
 			        // sh '. venv/bin/activate && python3.8 run.py catmerge --merge_all'
-                    sh '. venv/bin/activate && python3.8 run.py catmerge --include_only BFO,FIDEO,VIDO'
+                    sh '. venv/bin/activate && python3.8 run.py catmerge --exclude NCBITAXON,GAZ,DRON,BERO,SNOMEDCT'
                     sh 'gunzip data/merged/merged-kg.tar.gz'
                     sh 'tar -rvf data/merged/merged-kg.tar data/merged/qc/'
                     sh 'tar -rvf data/merged/merged-kg.tar data/merged/merged-kg_nodes.tsv'
