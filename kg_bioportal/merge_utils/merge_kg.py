@@ -183,11 +183,13 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
         name='merged-kg',
         nodes=nodepaths,
         edges=edgepaths,
-        output_dir=OUTPUT_PATH
+        output_dir=OUTPUT_PATH,
+        qc_report=True
     )
 
     # Check for nodes with identical CURIEs
     # by parsing the OUTPUT_PATH/qc/merged-kg-duplicate-nodes.tsv
+    print("Checking duplicate node list...")
     comp_dupnode_path = os.path.join(OUTPUT_PATH,"qc","merged-kg-duplicate-nodes.tsv.gz")
     with gzip.open(comp_dupnode_path) as infile:
         dupnode_df = pd.read_csv(infile, sep='\t', index_col='id')
