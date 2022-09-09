@@ -200,11 +200,14 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
     temp_nodefile_name = "merged-kg_nodes.tsv.temp"
     temp_nodefile_path = os.path.join(OUTPUT_PATH,temp_nodefile_name)
     merge_graph_path = os.path.join(OUTPUT_PATH,'merged-kg.tar.gz')
+    graph_file_paths = []
     
     with tarfile.open(merge_graph_path) as intar:
-        graph_files = [nodefile_path, edgefile_path]
+        graph_files = intar.getnames()
+        print(graph_files)
         for graph_file in graph_files:
-            intar.extract(graph_file, path=OUTPUT_PATH)
+            intar.extract(graph_file, path=os.path.dirname(merge_graph_path))
+            graph_file_paths.append(os.path.join(os.path.dirname(merge_graph_path), graph_file))
     os.remove(merge_graph_path)
 
     # Remove duplicate rows and merge duplicate nodes
@@ -221,8 +224,8 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
 
     # Compress it again
     with tarfile.open(merge_graph_path, "w:gz") as outtar:
-        for graph_file in [nodefile_path, edgefile_path]:
-            outtar.add(graph_file, arcname=os.path.basename(graph_file))
-            os.remove(graph_file)
+         for graph_file in graph_file_paths:
+             outtar.add(graph_file, arcname=os.path.basename(graph_file))
+             os.remove(graph_file)
 
     print("Complete.")
