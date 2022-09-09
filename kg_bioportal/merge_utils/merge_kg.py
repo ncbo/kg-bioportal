@@ -207,11 +207,6 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
             intar.extract(graph_file, path=OUTPUT_PATH)
     os.remove(merge_graph_path)
 
-    tgfile = tarfile.open(merge_graph_path)
-    tgfile.extract(nodefile_name, OUTPUT_PATH)
-    tgfile.extract(edgefile_name, OUTPUT_PATH)
-    tgfile.close()
-
     # Remove duplicate rows and merge duplicate nodes
     print("Reading merged graph to process duplicates...")
     nodes_df = pd.read_csv(nodefile_path, sep='\t', index_col='id')
