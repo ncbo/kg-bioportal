@@ -195,14 +195,26 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
 
     nodefile_name = "merged-kg_nodes.tsv"
     nodefile_path = os.path.join(OUTPUT_PATH,nodefile_name)
+    edgefile_name = "merged-kg_nodes.tsv"
+    edgefile_path = os.path.join(OUTPUT_PATH,edgefile_name)
     temp_nodefile_name = "merged-kg_nodes.tsv.temp"
     temp_nodefile_path = os.path.join(OUTPUT_PATH,temp_nodefile_name)
     merge_graph_path = os.path.join(OUTPUT_PATH,'merged-kg.tar.gz')
+    
+    with tarfile.open(merge_graph_path) as intar:
+        graph_files = [nodefile_path, edgefile_path]
+        for graph_file in graph_files:
+            intar.extract(graph_file, path=OUTPUT_PATH)
+    os.remove(merge_graph_path)
+
     tgfile = tarfile.open(merge_graph_path)
     tgfile.extract(nodefile_name, OUTPUT_PATH)
+    tgfile.extract(edgefile_name, OUTPUT_PATH)
+    tgfile.close()
 
+    # Remove duplicate rows and merge duplicate nodes
     print("Reading merged graph to process duplicates...")
-    nodes_df = pd.read_csv(infile, sep='\t', index_col='id')
+    nodes_df = pd.read_csv(nodefile_path, sep='\t', index_col='id')
     print(f"Node count before removing complete duplicates: {len(nodes_df.index)}")
     nodes_df.drop_duplicates(keep='first', inplace=True)
     print(f"Node count after removing complete duplicates: {len(nodes_df.index)}")
@@ -210,8 +222,12 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
     print(f"Node count after merging duplicate nodes: {len(uniq_df.index)}")
     uniq_df.to_csv(temp_nodefile_path, sep='\t')
 
-    os.replace(temp_nodefile_path,nodefile_path)
+    os.replace(temp_nodefile_path, nodefile_path)
 
     # Compress it again
+    with tarfile.open(merge_graph_path, "w:gz") as outtar:
+        for graph_file in [nodefile_path, edgefile_path]:
+            outtar.add(graph_file, arcname=os.path.basename(graph_file))
+            os.remove(graph_file)
 
     print("Complete.")
