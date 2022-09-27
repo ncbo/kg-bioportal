@@ -52,6 +52,8 @@ theme: jekyll-theme-tactile
 # TODO: generate stats during each build using the scripts in BioPortal-to-KGX.
 #       Store the stats on KG-Hub as YAML.
 #       Retrieve them with the build_site.sh script.
+nodecount: 5003226
+edgecount: xxx
 ontologies:
     - id: ABA-AMB
       status: OK
