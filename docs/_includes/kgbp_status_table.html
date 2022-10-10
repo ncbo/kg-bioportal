@@ -1,0 +1,26 @@
+<table class="table">
+    <tbody>
+          <tr>
+              <th><b>Ontology Name</b></th>
+              <th><b>Status</b></th>
+              <th><b>Node Count</b></th>
+              <th><b>Edge Count</b></th>
+          </tr>
+      {% for onto in site.ontologies %}
+            <tr>
+                <td>
+                    <a href="https://bioportal.bioontology.org/ontologies/{{ onto.id }}">{{ onto.id }}</a>
+                </td>
+                <td>
+                    {{ onto.status }}
+                </td>
+                <td>
+                    {{ onto.nodecount }}
+                </td>
+                <td>
+                    {{ onto.edgecount }}
+                </td>
+              </tr>
+          {% endfor %}
+      </tbody>
+    </table>
