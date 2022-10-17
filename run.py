@@ -104,6 +104,10 @@ def merge(yaml: str, processes: int, merge_all=False, include_only=[], exclude=[
 
     load_and_merge(yaml, processes)
 
+    make_graph_stats(method='kgx',
+                     input_file="merged_graph_stats.yaml",
+                     output_file="graph_stats.yaml")
+
 @cli.command()
 @click.option("--merge_all",
                 is_flag=True,
@@ -131,7 +135,9 @@ def catmerge(merge_all=False, include_only=[], exclude=[]) -> None:
     """
 
     merge_with_cat_merge(merge_all, include_only, exclude)
-    make_graph_stats(input_file="merged_graph_stats.yaml",
+
+    make_graph_stats(method='catmerge',
+                     input_file="data/merged/qc_report.yaml",
                      output_file="graph_stats.yaml")
 
 if __name__ == "__main__":
