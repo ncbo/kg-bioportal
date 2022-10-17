@@ -183,15 +183,13 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
         nodes=nodepaths,
         edges=edgepaths,
         output_dir=OUTPUT_PATH,
-        qc_report=False
+        qc_report=True
     )
 
-    # Find duplicate nodes and rows
-    # This would normally be done by the cat_merge qc, 
-    # but we don't need the full report, just dup nodes
+    # Find duplicate nodes and rows.
     # For duplicate rows, remove all but the first instance.
     # For duplicate nodes (those with identical CURIEs),
-    # merge all fields with a delimiter
+    # merge all fields with a delimiter.
 
     nodefile_name = "merged-kg_nodes.tsv"
     nodefile_path = os.path.join(OUTPUT_PATH,nodefile_name)

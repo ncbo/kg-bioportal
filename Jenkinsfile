@@ -164,9 +164,9 @@ pipeline {
                                 sh 'mkdir $BUILDSTARTDATE/'
                                 sh 'cp -p data/merged/merged-kg.tar.gz $BUILDSTARTDATE/${MERGEDKGNAME_BASE}.tar.gz'
                                 sh 'cp Jenkinsfile $BUILDSTARTDATE/'
-                                // stats dir
-                                //sh 'mkdir $BUILDSTARTDATE/stats/'
-                                //sh 'cp -p *_stats.yaml $BUILDSTARTDATE/stats/'
+
+                                // Add updated stats
+                                sh '. venv/bin/activate && s3cmd -c $S3CMD_CFG put -pr graph_stats.yaml $BUILDSTARTDATE s3://$S3BUCKETNAME/$S3PROJECTDIR/graph_stats.yaml'
 
                                 sh '. venv/bin/activate && s3cmd -c $S3CMD_CFG put -pr $BUILDSTARTDATE s3://$S3BUCKETNAME/$S3PROJECTDIR/'
                                 sh '. venv/bin/activate && s3cmd -c $S3CMD_CFG rm -r s3://$S3BUCKETNAME/$S3PROJECTDIR/current/'

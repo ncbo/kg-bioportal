@@ -8,6 +8,7 @@ from kg_bioportal import download as kg_download
 from kg_bioportal import transform as kg_transform
 from kg_bioportal.merge_utils.merge_kg import load_and_merge, update_merge_config, merge_with_cat_merge
 from kg_bioportal.transform import DATA_SOURCES
+from kg_bioportal.stats import make_graph_stats
 
 
 @click.group()
@@ -103,6 +104,10 @@ def merge(yaml: str, processes: int, merge_all=False, include_only=[], exclude=[
 
     load_and_merge(yaml, processes)
 
+    make_graph_stats(method='kgx',
+                     input_file="merged_graph_stats.yaml",
+                     output_file="graph_stats.yaml")
+
 @cli.command()
 @click.option("--merge_all",
                 is_flag=True,
@@ -131,6 +136,9 @@ def catmerge(merge_all=False, include_only=[], exclude=[]) -> None:
 
     merge_with_cat_merge(merge_all, include_only, exclude)
 
+    make_graph_stats(method='catmerge',
+                     input_file="data/merged/qc_report.yaml",
+                     output_file="graph_stats.yaml")
 
 if __name__ == "__main__":
     cli()
