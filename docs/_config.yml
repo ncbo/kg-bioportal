@@ -53,7 +53,7 @@ theme: jekyll-theme-tactile
 #       Store the stats on KG-Hub as YAML.
 #       Retrieve them with the build_site.sh script.
 nodecount: 5003226
-edgecount: xxx
+edgecount: 30733778
 ontologies:
     - id: ABA-AMB
       status: OK
