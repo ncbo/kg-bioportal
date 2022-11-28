@@ -18,3 +18,7 @@ wget -N $ONTO_STATUS_URL
 # Append ontology status list
 echo "Adding all lists to Jekyll config."
 cat $JEKYLL_CONFIG_HEADER_FILE $GRAPH_STATS_FILE $ONTO_STATUS_FILE > $JEKYLL_CONFIG_FILE
+
+# Make figures
+echo "Producing figures."
+python make_viz.py
