@@ -60,6 +60,7 @@ setup(
         'cat-merge',
         'click==8.0.4',
         'compress_json',
+        'kaleido',
         'kghub-downloader',
         'kgx',
         'networkx',
