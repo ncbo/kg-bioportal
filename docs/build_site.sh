@@ -6,8 +6,8 @@ JEKYLL_CONFIG_HEADER_FILE="_config_header.yml"
 JEKYLL_CONFIG_FILE="_config.yml"
 GRAPH_STATS_URL="https://kg-hub.berkeleybop.io/kg-bioportal/graph_stats.yaml"
 GRAPH_STATS_FILE="graph_stats.yaml"
-ONTO_STATUS_URL="https://kg-hub.berkeleybop.io/kg-bioportal/onto_status.yaml"
-ONTO_STATUS_FILE="onto_status.yaml"
+ONTO_STATUS_URL="https://kg-hub.berkeleybop.io/kg-bioportal/onto_stats.yaml"
+ONTO_STATUS_FILE="onto_stats.yaml"
 
 # Retrieve most recent KG-Bioportal general stats
 wget -N $GRAPH_STATS_URL
