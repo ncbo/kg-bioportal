@@ -1,3 +1,5 @@
+"""Define the parent class for specific data transforms."""
+
 import os
 from typing import Optional
 
@@ -12,8 +14,7 @@ class Transform:
         self,
         source_name,
         input_dir: Optional[str] = None,
-        output_dir: Optional[str] = None,
-        nlp: bool = False,
+        output_dir: Optional[str] = None
     ):
         # default columns, can be appended to or overwritten as necessary
         self.source_name = source_name

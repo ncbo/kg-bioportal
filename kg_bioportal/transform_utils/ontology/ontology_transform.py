@@ -1,19 +1,22 @@
-import os
+"""Transform for ontologies."""
+
 import gzip
+import os
 import shutil
 from typing import Optional
 
-from kg_bioportal.transform_utils.transform import Transform
-from kg_bioportal.utils.robot_utils import convert_to_json
 from kgx.cli.cli_utils import transform  # type: ignore
 
+from kg_bioportal.transform_utils.transform import Transform
+from kg_bioportal.utils.robot_utils import convert_to_json
 
 ONTOLOGIES = {"ChebiTransform": "chebi.owl.gz", "EnvoTransform": "envo.json"}
 
 
 class OntologyTransform(Transform):
     """
-    OntologyTransform parses an Obograph JSON form of an Ontology into nodes and edges.
+    Parse an Obograph JSON form of an Ontology into nodes and edges.
+
     If it isn't in Obograph JSON format, it is transformed with ROBOT.
     If it needs to be decompressed, that happens here too.
     """
@@ -21,12 +24,13 @@ class OntologyTransform(Transform):
     def __init__(
         self, input_dir: Optional[str] = None, output_dir: Optional[str] = None
     ):
+        """Initialize!"""
         source_name = "ontologies"
         super().__init__(source_name, input_dir, output_dir)
 
     def run(self, data_file: Optional[str] = None) -> None:
-        """Method is called and performs needed transformations to process
-        an ontology.
+        """Call method and performs needed transformations.
+        
         Args:
             data_file: data file to parse
         Returns:
@@ -43,7 +47,8 @@ class OntologyTransform(Transform):
                 self.parse(k, data_file, k)
 
     def parse(self, name: str, data_file: str, source: str) -> None:
-        """Processes the data_file.
+        """Process the data_file.
+
         Args:
             name: Name of the ontology
             data_file: data file to parse

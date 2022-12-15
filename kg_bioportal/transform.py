@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+"""Transform function for KG-Bioportal."""
+
 import logging
 from typing import List, Optional
 
@@ -12,8 +12,11 @@ DATA_SOURCES = {"ChebiTransform": OntologyTransform, "EnvoTransform": OntologyTr
 def transform(
     input_dir: str, output_dir: str, sources: Optional[List[str]] = None
 ) -> None:
-    """Call scripts in kg_bioportal/transform/[source name]/ to transform each source into a graph format that
-    KGX can ingest directly, in either TSV or JSON format:
+    """Call scripts to transform each source into graph format.
+
+    Transforms are in kg_bioportal/transform/[source name]/.
+    Output will be a form KGX can ingest directly,
+    in either TSV or JSON format:
     https://github.com/biolink/kgx/blob/master/specification/kgx-format.md
 
     Args:
