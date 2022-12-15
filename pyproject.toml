@@ -8,7 +8,7 @@ readme = "README.md"
 packages = [{include = "kg_bioportal"}]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = ">=3.10,<4.0"
 cat-merge = "^0.1.18"
 click = "8.0.4"
 compress-json = "^1.0.8"
