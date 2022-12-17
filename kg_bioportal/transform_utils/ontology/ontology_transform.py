@@ -24,13 +24,13 @@ class OntologyTransform(Transform):
     def __init__(
         self, input_dir: Optional[str] = None, output_dir: Optional[str] = None
     ):
-        """Initialize!"""
+        """Initialize."""
         source_name = "ontologies"
         super().__init__(source_name, input_dir, output_dir)
 
     def run(self, data_file: Optional[str] = None) -> None:
         """Call method and performs needed transformations.
-        
+
         Args:
             data_file: data file to parse
         Returns:

@@ -2,6 +2,7 @@
 
 
 def mocked_requests_get(*args, **kwargs):
+    """Mock the requests.get method."""
     class MockResponse:
         def __init__(self, json_data, status_code):
             self.json_data = json_data

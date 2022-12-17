@@ -235,7 +235,8 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
                         f" Will also ignore {this_nodepath}."
                     )
 
-    # Default behavior is to merge all for now, but this could do something different later
+    # Default behavior is to merge all for now,
+    # but this could do something different later
     if merge_all:
         pass
 
@@ -255,7 +256,7 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
 
     nodefile_name = "merged-kg_nodes.tsv"
     nodefile_path = os.path.join(OUTPUT_PATH, nodefile_name)
-    edgefile_name = "merged-kg_nodes.tsv"
+    # edgefile_name = "merged-kg_nodes.tsv"
     # edgefile_path = os.path.join(OUTPUT_PATH, edgefile_name)
     temp_nodefile_name = "merged-kg_nodes.tsv.temp"
     temp_nodefile_path = os.path.join(OUTPUT_PATH, temp_nodefile_name)

@@ -4,11 +4,13 @@ import unittest
 
 from parameterized import parameterized
 
-from kg_bioportal.utils.transform_utils import collapse_uniprot_curie, guess_bl_category
+from kg_bioportal.utils.transform_utils import (collapse_uniprot_curie,
+                                                guess_bl_category)
 
 
 class TestTransformUtils(unittest.TestCase):
     """Test class for transform utilities."""
+
     @parameterized.expand(
         [
             ["", "biolink:NamedThing"],

@@ -12,13 +12,13 @@ from tqdm import tqdm  # type: ignore
 
 
 class TransformError(Exception):
-    """Base class for other exceptions"""
+    """Base class for other exceptions."""
 
     pass
 
 
-class ItemInDictNotFound(TransformError):
-    """Raised when the input value is too small"""
+class ItemInDictNotFoundError(TransformError):
+    """Raised when the input value is too small."""
 
     pass
 
@@ -27,8 +27,8 @@ class ItemInDictNotFound(TransformError):
 
 
 def multi_page_table_to_list(multi_page_table: Any) -> List[Dict]:
-    """Turn table data returned from tabula.io.read_pdf() into list of dicts
-    
+    """Turn table data from tabula.io.read_pdf() into list of dicts.
+
     One dict for each row.
     Args:
         multi_page_table:
@@ -69,7 +69,7 @@ def get_header_items(table_data: Any) -> List:
 
 
 def write_node_edge_item(fh: Any, header: List, data: List, sep: str = "\t"):
-    """Write out a single line for a node or an edge in *.tsv.
+    r"""Write out a single line for a node or an edge in *.tsv.
 
     :param fh: file handle of node or edge file
     :param header: list of header items
@@ -98,7 +98,7 @@ def get_item_by_priority(items_dict: dict, keys_by_priority: list) -> str:
             value = items_dict[key]
             break
     if value is None:
-        raise ItemInDictNotFound("Can't find item in items_dict {}".format(items_dict))
+        raise ItemInDictNotFoundError("Can't find item in items_dict {}".format(items_dict))
     return value
 
 
@@ -119,7 +119,7 @@ def uniprot_make_name_to_id_mapping(dat_gz_file: str) -> dict:
     ftp://ftp.uniprot.org/pub/databases/uniprot/
     current_release/knowledgebase/idmapping/by_organism/
     HUMAN_9606_idmapping.dat.gz
-    :param dat_gz_file: 
+    :param dat_gz_file:
     :return: dict with mapping
     """ ""
     name_to_id_map = dict()
@@ -197,7 +197,6 @@ def ungzip_to_tempdir(gzipped_file: str, tempdir: str) -> str:
 def guess_bl_category(identifier: str) -> str:
     """Guess category for a given identifier.
 
-
     Note: This is a temporary solution and should not be used long term.
     Args:
         identifier: A CURIE
@@ -217,7 +216,7 @@ def guess_bl_category(identifier: str) -> str:
 
 def collapse_uniprot_curie(uniprot_curie: str) -> str:
     """Collapse a protein CURIE to a parent protein.
-    
+
     Given a UniProtKB curie for an isoform such as UniprotKB:P63151-1
     or UniprotKB:P63151-2, collapse to parent protein
     (UniprotKB:P63151 / UniprotKB:P63151)
