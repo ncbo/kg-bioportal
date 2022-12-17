@@ -11,13 +11,16 @@ class TestRun(TestCase):
     """Tests the run.py script."""
 
     def setUp(self) -> None:
+        """Set up for tests."""
         self.runner = CliRunner()
 
     def test_transform(self):
+        """Test call to transform function."""
         result = self.runner.invoke(cli=transform, args=["-i", "tests/data/raw"])
         self.assertNotEqual(result.exit_code, 0)
 
     def test_merge_missing_file_error(self):
+        """Test case of missing input file."""
         with self.assertRaises(FileNotFoundError) as context:
             result = self.runner.invoke(
                 catch_exceptions=False,

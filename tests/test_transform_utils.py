@@ -8,6 +8,7 @@ from kg_bioportal.utils.transform_utils import collapse_uniprot_curie, guess_bl_
 
 
 class TestTransformUtils(unittest.TestCase):
+    """Test class for transform utilities."""
     @parameterized.expand(
         [
             ["", "biolink:NamedThing"],
@@ -17,6 +18,7 @@ class TestTransformUtils(unittest.TestCase):
         ]
     )
     def test_guess_bl_category(self, curie, category):
+        """Test utility for guessing Biolink category."""
         self.assertEqual(category, guess_bl_category(curie))
 
     @parameterized.expand(
@@ -29,4 +31,5 @@ class TestTransformUtils(unittest.TestCase):
         ]
     )
     def test_collapse_uniprot_curie(self, curie, collapsed_curie):
+        """Test utility for collaping UniProtKB ID."""
         self.assertEqual(collapsed_curie, collapse_uniprot_curie(curie))

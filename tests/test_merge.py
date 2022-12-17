@@ -20,6 +20,7 @@ class TestRun(TestCase):
     """
 
     def setUp(self) -> None:
+        """Setup for tests."""
         self.runner = CliRunner()
         self.merge_config_path = "merge.yaml"
         self.stats_path = "merged_graph_stats.yaml"
@@ -29,6 +30,7 @@ class TestRun(TestCase):
         os.getenv("GITHUB_ACTIONS"), "Merge test only runs when data is available."
     )
     def test_current_merge(self):
+        """Test case of merge."""
         result = self.runner.invoke(
             catch_exceptions=False, cli=merge, args=["-y", self.merge_config_path]
         )

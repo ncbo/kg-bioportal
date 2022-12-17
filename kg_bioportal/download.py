@@ -12,7 +12,7 @@ def download(
     Args:
         yaml_file: A string pointing to the yaml file for downloading of data.
         output_dir: A string pointing to the location to download data to.
-        snippet_only: Downloads the first 5 kB of the source for testing and file checks.
+        snippet_only: Downloads the first 5 kB of the source.
         ignore_cache: Ignore cache and download files even if they exist [false]
 
     Returns:

@@ -3,7 +3,7 @@
 import copy
 import os
 import tarfile
-from typing import Dict, List
+from typing import Dict
 
 import networkx as nx  # type: ignore
 import pandas as pd  # type: ignore
@@ -25,8 +25,8 @@ def parse_load_config(yaml_file: str) -> Dict:
         Dict: The config as a dictionary.
 
     """
-    with open(yaml_file) as YML:
-        config = yaml.load(YML, Loader=yaml.FullLoader)
+    with open(yaml_file) as yaml_file_in:
+        config = yaml.load(yaml_file_in, Loader=yaml.FullLoader)
     return config
 
 
@@ -77,13 +77,14 @@ def update_merge_config(
             and filename.endswith(".tsv")
         ]
 
-    # Default behavior is to merge all for now, but this could do something different later
+    # Default behavior is to merge all for now,
+    # but this could do something different later
     if merge_all:
         pass
 
     i = 0
-    with open(yaml_file) as YML:
-        config = yaml.load(YML, Loader=yaml.FullLoader)
+    with open(yaml_file) as yaml_file_in:
+        config = yaml.load(yaml_file_in, Loader=yaml.FullLoader)
         updated_config = copy.deepcopy(config)
         updated_config["merged_graph"]["source"] = {}
         for onto in onto_paths:
@@ -195,7 +196,8 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
                 ) as e:
                     ignore_paths.append(this_edgepath)
                     print(
-                        f"Ignoring {path} due to pandas parsing error. Will also ignore {this_edgepath}. Error: {e}"
+                        f"Ignoring {path} due to pandas parsing error."
+                        f" Will also ignore {this_edgepath}. Error: {e}"
                     )
                     continue
                 num_lines = len(nodedf.index)
@@ -204,7 +206,8 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
                 else:
                     ignore_paths.append(this_edgepath)
                     print(
-                        f"Ignoring {path} as it contains no nodes or node ids. Will also ignore {this_edgepath}."
+                        f"Ignoring {path} as it contains no nodes or node ids."
+                        f" Will also ignore {this_edgepath}."
                     )
             elif path.endswith("_edges.tsv"):
                 this_nodepath = (path.rpartition("_"))[0] + "_nodes.tsv"
@@ -218,7 +221,8 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
                 ) as e:
                     ignore_paths.append(this_nodepath)
                     print(
-                        f"Ignoring {path} due to pandas parsing error. Will also ignore {this_nodepath}. Error: {e}"
+                        f"Ignoring {path} due to pandas parsing error."
+                        f" Will also ignore {this_nodepath}. Error: {e}"
                     )
                     continue
                 num_lines = len(edgedf.index)
@@ -227,7 +231,8 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
                 else:
                     ignore_paths.append(this_nodepath)
                     print(
-                        f"Ignoring {path} as it contains no edges or edge ids. Will also ignore {this_nodepath}."
+                        f"Ignoring {path} as it contains no edges or edge ids."
+                        f" Will also ignore {this_nodepath}."
                     )
 
     # Default behavior is to merge all for now, but this could do something different later
@@ -251,7 +256,7 @@ def merge_with_cat_merge(merge_all: bool, include_only: list, exclude: list) -> 
     nodefile_name = "merged-kg_nodes.tsv"
     nodefile_path = os.path.join(OUTPUT_PATH, nodefile_name)
     edgefile_name = "merged-kg_nodes.tsv"
-    edgefile_path = os.path.join(OUTPUT_PATH, edgefile_name)
+    # edgefile_path = os.path.join(OUTPUT_PATH, edgefile_name)
     temp_nodefile_name = "merged-kg_nodes.tsv.temp"
     temp_nodefile_path = os.path.join(OUTPUT_PATH, temp_nodefile_name)
     merge_graph_path = os.path.join(OUTPUT_PATH, "merged-kg.tar.gz")
