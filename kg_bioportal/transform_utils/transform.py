@@ -1,20 +1,23 @@
+"""Define the parent class for specific data transforms."""
+
 import os
 from typing import Optional
 
 
 class Transform:
-    """Parent class for transforms, that sets up a lot of default file info"""
+    """Parent class for transforms; sets up default file info."""
 
     DEFAULT_INPUT_DIR = os.path.join("data", "raw")
     DEFAULT_OUTPUT_DIR = os.path.join("data", "transformed")
 
     def __init__(
+
         self,
         source_name,
         input_dir: Optional[str] = None,
-        output_dir: Optional[str] = None,
-        nlp: bool = False,
+        output_dir: Optional[str] = None
     ):
+        """Initialize."""
         # default columns, can be appended to or overwritten as necessary
         self.source_name = source_name
         self.node_header = ["id", "name", "category"]
@@ -40,4 +43,5 @@ class Transform:
         os.makedirs(self.output_dir, exist_ok=True)
 
     def run(self, data_file: Optional[str] = None):
+        """Run the transform function."""
         pass

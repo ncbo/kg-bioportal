@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import os
-from xml.etree.ElementInclude import include
 
 import click
 from kg_bioportal import download as kg_download
