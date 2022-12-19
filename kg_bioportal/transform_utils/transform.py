@@ -11,7 +11,7 @@ class Transform:
     DEFAULT_OUTPUT_DIR = os.path.join("data", "transformed")
 
     def __init__(
-        
+
         self,
         source_name,
         input_dir: Optional[str] = None,
