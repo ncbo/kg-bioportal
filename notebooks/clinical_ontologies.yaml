@@ -1,37 +1,36 @@
 # This file is a list of ontologies in Bioportal
 # with relevance to clinical research use cases.
 # They are named based on their Bioportal IDs.
-# Those with the test_set=True flag are part of
+# Those with the test_set=true flag are part of
 # a test set for setting up a demo TRAPI.
 ---
 
 ontologies:
   - name: "MEDDRA"
-    is_umls: True
+    is_umls: true
   - name: "SNOMEDCT"
-    is_umls: True
+    is_umls: true
   - name: "RXNORM"
-    is_umls: True
+    is_umls: true
   - name: "NDDF"
-    is_umls: True
+    is_umls: true
   - name: "RCD"
-    is_umls: True
+    is_umls: true
   - name: "LOINC"
-    is_umls: True
+    is_umls: true
   - name: "NCIT"
-    is_umls: True
+    is_umls: true
   - name: "MESH"
-    is_umls: True
+    is_umls: true
   - name: "ICD10CM"
-    is_umls: True
+    is_umls: true
   - name: "VANDF"
-    is_umls: True
+    is_umls: true
   - name: "RADLEX"
-    is_umls: True
-    test_set: True
+    is_umls: true
+    test_set: true
   - name: "HCPCS"
-    is_umls: True
+    is_umls: true
   - name: "HL7"
   - name: "ATC"
-    test_set: True
-  
+    test_set: true
