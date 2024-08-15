@@ -4,14 +4,11 @@ import logging
 
 import click
 
-from kg_bioportal import transform as kg_transform
 from kg_bioportal.downloader import Downloader
-from kg_bioportal.merge_utils.merge_kg import (load_and_merge,
-                                               merge_with_cat_merge,
-                                               update_merge_config)
-from kg_bioportal.stats import make_graph_stats
-from kg_bioportal.transform import DATA_SOURCES
 
+__all__ = [
+    "main",
+]
 
 @click.group()
 def main(verbose: int, quiet: bool):
