@@ -65,8 +65,8 @@ def download(ontologies, ontology_file, output_dir, snippet_only, ignore_cache) 
 
     Args:
 
-        ontologies: Specify the ontologies to download by name. This should be a space-delimited list.
-        Names should be those used in BioPortal, e.g., PO, SEPIO, etc.
+        ontologies: Specify the ontologies to download by name. This should be a space-delimited list
+        surrounded by quotes. Names should be those used in BioPortal, e.g., PO, SEPIO, etc.
 
         ontology_file: Specify the file containing a list of ontologies to download,
         one per line. Names should be those used in BioPortal, e.g., PO, SEPIO, etc.
