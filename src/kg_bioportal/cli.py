@@ -1,16 +1,16 @@
 """CLI for KG-Bioportal."""
 
 import logging
+
 import click
-from kg_bioportal import download as kg_download
+
 from kg_bioportal import transform as kg_transform
-from kg_bioportal.merge_utils.merge_kg import (
-    load_and_merge,
-    update_merge_config,
-    merge_with_cat_merge,
-)
-from kg_bioportal.transform import DATA_SOURCES
+from kg_bioportal.downloader import Downloader
+from kg_bioportal.merge_utils.merge_kg import (load_and_merge,
+                                               merge_with_cat_merge,
+                                               update_merge_config)
 from kg_bioportal.stats import make_graph_stats
+from kg_bioportal.transform import DATA_SOURCES
 
 
 @click.group()
@@ -32,12 +32,17 @@ def main(verbose: int, quiet: bool):
     logger.info(f"Logger {logger.name} set to level {logger.level}")
 
 
-@cli.command()
+@main.command()
 @click.option(
-    "yaml_file",
-    "-y",
-    required=True,
-    default="download.yaml",
+    "ontologies",
+    "-d",
+    required=False,
+    type=str,
+)
+@click.option(
+    "ontology_file",
+    "-f",
+    required=False,
     type=click.Path(exists=True),
 )
 @click.option("output_dir", "-o", required=True, default="data/raw")
@@ -55,13 +60,19 @@ def main(verbose: int, quiet: bool):
     default=False,
     help="ignore cache and download files even if they exist [false]",
 )
-def download(*args, **kwargs) -> None:
-    """Downloads data files from list of URLs (default: download.yaml) into data
+def download(
+    ontologies, ontology_file, output_dir, snippet_only, ignore_cache
+) -> None:
+    """Downloads specified ontologies into data
     directory (default: data/raw).
 
     Args:
-        yaml_file: Specify the YAML file containing a list of datasets to download.
+        ontologies: Specify the ontologies to download by name. This shoule be a space-delimited list.
+                    Names should be those used in BioPortal, e.g., PO, SEPIO, etc.
+        ontology_file: Specify the file containing a list of ontologies to download,
+                    one per line. Names should be those used in BioPortal, e.g., PO, SEPIO, etc.
         output_dir: A string pointing to the directory to download data to.
+                    Defaults to data/raw.
         snippet_only: Downloads only the first 5 kB of the source, for testing and file checks.
         ignore_cache: If specified, will ignore existing files and download again.
 
@@ -70,122 +81,141 @@ def download(*args, **kwargs) -> None:
 
     """
 
-    kg_download(*args, **kwargs)
+    onto_list = []
+
+    # Parse the ontologies argument
+    if ontologies:
+        for ontology in ontologies.split():
+            onto_list.append(ontology)
+    
+    # Parse the ontology_file argument
+    if ontology_file:
+        with open(ontology_file, "r") as f:
+            for line in f:
+                onto_list.append(line.strip())
+
+    logging.info(f"{len(onto_list)} ontologies to retrieve.")
+
+    dl = Downloader(output_dir, snippet_only, ignore_cache)
+
+    dl.download(onto_list)
 
     return None
 
 
-@cli.command()
-@click.option("input_dir", "-i", default="data/raw", type=click.Path(exists=True))
-@click.option("output_dir", "-o", default="data/transformed")
-@click.option(
-    "sources", "-s", default=None, multiple=True, type=click.Choice(DATA_SOURCES.keys())
-)
-def transform(*args, **kwargs) -> None:
-    """Calls scripts in kg_bioportal/transform/[source name]/ to transform each source
-    into nodes and edges.
+# Below functions are WIP.
 
-    Args:
-        input_dir: A string pointing to the directory to import data from.
-        output_dir: A string pointing to the directory to output data to.
-        sources: A list of sources to transform.
+# @cli.command()
+# @click.option("input_dir", "-i", default="data/raw", type=click.Path(exists=True))
+# @click.option("output_dir", "-o", default="data/transformed")
+# @click.option(
+#     "sources", "-s", default=None, multiple=True, type=click.Choice(DATA_SOURCES.keys())
+# )
+# def transform(*args, **kwargs) -> None:
+#     """Calls scripts in kg_bioportal/transform/[source name]/ to transform each source
+#     into nodes and edges.
 
-    Returns:
-        None.
+#     Args:
+#         input_dir: A string pointing to the directory to import data from.
+#         output_dir: A string pointing to the directory to output data to.
+#         sources: A list of sources to transform.
 
-    """
+#     Returns:
+#         None.
 
-    # call transform script for each source
-    kg_transform(*args, **kwargs)
+#     """
 
-    return None
+#     # call transform script for each source
+#     kg_transform(*args, **kwargs)
 
-
-@cli.command()
-@click.option("yaml", "-y", default="merge.yaml", type=click.Path(exists=True))
-@click.option("processes", "-p", default=1, type=int)
-@click.option(
-    "--merge_all",
-    is_flag=True,
-    help="""Update the merge config file to include *all* ontologies.""",
-)
-@click.option(
-    "--include_only",
-    callback=lambda _, __, x: x.split(",") if x else [],
-    help="""One or more ontologies to merge, and only these,
-                     comma-delimited and named by their short BioPortal ID, e.g., SEPIO.""",
-)
-@click.option(
-    "--exclude",
-    callback=lambda _, __, x: x.split(",") if x else [],
-    help="""One or more ontologies to exclude from merging,
-                     comma-delimited and named by their short BioPortal ID, e.g., SEPIO.
-                     Will select all other ontologies for merging.""",
-)
-def merge(
-    yaml: str, processes: int, merge_all=False, include_only=[], exclude=[]
-) -> None:
-    """Use KGX to load subgraphs to create a merged graph.
-
-    Args:
-        yaml: A string pointing to a KGX compatible config YAML.
-        processes: Number of processes to use.
-        merge_all: Update merge config to include *all* ontologies.
-        include_only: Update merge config to include the specified ontologies.
-        exclude: Update merge config to include all ontologies *except* those specified.
-
-    Returns:
-        None.
-
-    """
-
-    if merge_all or len(include_only) > 0 or len(exclude) > 0:
-        update_merge_config(yaml, merge_all, include_only, exclude)
-
-    load_and_merge(yaml, processes)
-
-    make_graph_stats(
-        method="kgx",
-        input_file="merged_graph_stats.yaml",
-        output_file="graph_stats.yaml",
-    )
+#     return None
 
 
-@cli.command()
-@click.option("--merge_all", is_flag=True, help="""Include *all* ontologies.""")
-@click.option(
-    "--include_only",
-    callback=lambda _, __, x: x.split(",") if x else [],
-    help="""One or more ontologies to merge, and only these,
-                     comma-delimited and named by their short BioPortal ID, e.g., SEPIO.""",
-)
-@click.option(
-    "--exclude",
-    callback=lambda _, __, x: x.split(",") if x else [],
-    help="""One or more ontologies to exclude from merging,
-                     comma-delimited and named by their short BioPortal ID, e.g., SEPIO.
-                     Will select all other ontologies for merging.""",
-)
-def catmerge(merge_all=False, include_only=[], exclude=[]) -> None:
-    """Use cat-merge to create a merged graph.
+# @cli.command()
+# @click.option("yaml", "-y", default="merge.yaml", type=click.Path(exists=True))
+# @click.option("processes", "-p", default=1, type=int)
+# @click.option(
+#     "--merge_all",
+#     is_flag=True,
+#     help="""Update the merge config file to include *all* ontologies.""",
+# )
+# @click.option(
+#     "--include_only",
+#     callback=lambda _, __, x: x.split(",") if x else [],
+#     help="""One or more ontologies to merge, and only these,
+#                      comma-delimited and named by their short BioPortal ID, e.g., SEPIO.""",
+# )
+# @click.option(
+#     "--exclude",
+#     callback=lambda _, __, x: x.split(",") if x else [],
+#     help="""One or more ontologies to exclude from merging,
+#                      comma-delimited and named by their short BioPortal ID, e.g., SEPIO.
+#                      Will select all other ontologies for merging.""",
+# )
+# def merge(
+#     yaml: str, processes: int, merge_all=False, include_only=[], exclude=[]
+# ) -> None:
+#     """Use KGX to load subgraphs to create a merged graph.
 
-    Args:
-        merge_all: Include *all* ontologies.
-        include_only: Include only the specified ontologies.
-        exclude: Include all ontologies *except* those specified.
+#     Args:
+#         yaml: A string pointing to a KGX compatible config YAML.
+#         processes: Number of processes to use.
+#         merge_all: Update merge config to include *all* ontologies.
+#         include_only: Update merge config to include the specified ontologies.
+#         exclude: Update merge config to include all ontologies *except* those specified.
 
-    Returns:
-        None.
+#     Returns:
+#         None.
 
-    """
+#     """
 
-    merge_with_cat_merge(merge_all, include_only, exclude)
+#     if merge_all or len(include_only) > 0 or len(exclude) > 0:
+#         update_merge_config(yaml, merge_all, include_only, exclude)
 
-    make_graph_stats(
-        method="catmerge",
-        input_file="data/merged/qc_report.yaml",
-        output_file="graph_stats.yaml",
-    )
+#     load_and_merge(yaml, processes)
+
+#     make_graph_stats(
+#         method="kgx",
+#         input_file="merged_graph_stats.yaml",
+#         output_file="graph_stats.yaml",
+#     )
+
+
+# @cli.command()
+# @click.option("--merge_all", is_flag=True, help="""Include *all* ontologies.""")
+# @click.option(
+#     "--include_only",
+#     callback=lambda _, __, x: x.split(",") if x else [],
+#     help="""One or more ontologies to merge, and only these,
+#                      comma-delimited and named by their short BioPortal ID, e.g., SEPIO.""",
+# )
+# @click.option(
+#     "--exclude",
+#     callback=lambda _, __, x: x.split(",") if x else [],
+#     help="""One or more ontologies to exclude from merging,
+#                      comma-delimited and named by their short BioPortal ID, e.g., SEPIO.
+#                      Will select all other ontologies for merging.""",
+# )
+# def catmerge(merge_all=False, include_only=[], exclude=[]) -> None:
+#     """Use cat-merge to create a merged graph.
+
+#     Args:
+#         merge_all: Include *all* ontologies.
+#         include_only: Include only the specified ontologies.
+#         exclude: Include all ontologies *except* those specified.
+
+#     Returns:
+#         None.
+
+#     """
+
+#     merge_with_cat_merge(merge_all, include_only, exclude)
+
+#     make_graph_stats(
+#         method="catmerge",
+#         input_file="data/merged/qc_report.yaml",
+#         output_file="graph_stats.yaml",
+#     )
 
 
 if __name__ == "__main__":
