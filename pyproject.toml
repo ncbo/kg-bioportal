@@ -18,6 +18,9 @@ pytest = "^8.3.2"
 setuptools = "^72.2.0"
 tox = "^4.18.0"
 
+[tool.poetry.scripts]
+kgbioportal = "kg_bioportal.cli:main"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
