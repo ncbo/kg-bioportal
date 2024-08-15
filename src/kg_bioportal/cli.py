@@ -60,7 +60,14 @@ def main(verbose: int, quiet: bool):
     default=False,
     help="ignore cache and download files even if they exist [false]",
 )
-def download(ontologies, ontology_file, output_dir, snippet_only, ignore_cache) -> None:
+@click.option(
+    "api_key",
+    "-k",
+    required=False,
+    type=str,
+    help="API key for BioPortal",
+)
+def download(ontologies, ontology_file, output_dir, snippet_only, ignore_cache, api_key) -> None:
     """Downloads specified ontologies into data directory (default: data/raw).
 
     Args:
@@ -98,7 +105,7 @@ def download(ontologies, ontology_file, output_dir, snippet_only, ignore_cache) 
 
     logging.info(f"{len(onto_list)} ontologies to retrieve.")
 
-    dl = Downloader(output_dir, snippet_only, ignore_cache)
+    dl = Downloader(output_dir, snippet_only, ignore_cache, api_key)
 
     dl.download(onto_list)
 
