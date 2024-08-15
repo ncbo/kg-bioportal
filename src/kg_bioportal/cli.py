@@ -1,8 +1,6 @@
 """CLI for KG-Bioportal."""
 
-import os
-from xml.etree.ElementInclude import include
-
+import logging
 import click
 from kg_bioportal import download as kg_download
 from kg_bioportal import transform as kg_transform
@@ -16,8 +14,22 @@ from kg_bioportal.stats import make_graph_stats
 
 
 @click.group()
-def cli():
-    pass
+def main(verbose: int, quiet: bool):
+    """CLI for KG-Bioportal.
+
+    :param verbose: Verbosity while running.
+    :param quiet: Boolean to be quiet or verbose.
+    """
+    logger = logging.getLogger()
+    if verbose >= 2:
+        logger.setLevel(level=logging.DEBUG)
+    elif verbose == 1:
+        logger.setLevel(level=logging.INFO)
+    else:
+        logger.setLevel(level=logging.WARNING)
+    if quiet:
+        logger.setLevel(level=logging.ERROR)
+    logger.info(f"Logger {logger.name} set to level {logger.level}")
 
 
 @cli.command()
@@ -177,4 +189,4 @@ def catmerge(merge_all=False, include_only=[], exclude=[]) -> None:
 
 
 if __name__ == "__main__":
-    cli()
+    main()
