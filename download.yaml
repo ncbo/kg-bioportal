@@ -1,14 +1,11 @@
-# This file is a list of things to be downloaded using the command:
-#   run.py download
 ---
 
-# **** Transformed BioPortal Ontologies ****
-# Note: this file is not publicly accessible,
-# so this link is just a reminder, not what
-# is passed to the download function.
--
-  url: https://kg-hub.berkeleybop.io/frozen_incoming_data/bioportal_transformed/bioportal_transformed.tar.gz
-  local_name: bioportal_transformed.tar.gz
+# **** BioPortal Source Ontologies ****
+# Specific ontologies from BioPortal should be specified here,
+# but otherwise can be specified through the command line.
+# -
+#  url: https://data.bioontology.org/ontologies/PO/
+#  local_name: PO
 
 # **** ROBOT ****
 
