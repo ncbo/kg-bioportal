@@ -10,6 +10,7 @@ __all__ = [
     "main",
 ]
 
+
 @click.group()
 @click.option("-v", "--verbose", count=True)
 @click.option("-q", "--quiet")
@@ -59,20 +60,22 @@ def main(verbose: int, quiet: bool):
     default=False,
     help="ignore cache and download files even if they exist [false]",
 )
-def download(
-    ontologies, ontology_file, output_dir, snippet_only, ignore_cache
-) -> None:
-    """Downloads specified ontologies into data
-    directory (default: data/raw).
+def download(ontologies, ontology_file, output_dir, snippet_only, ignore_cache) -> None:
+    """Downloads specified ontologies into data directory (default: data/raw).
 
     Args:
-        ontologies: Specify the ontologies to download by name. This shoule be a space-delimited list.
-                    Names should be those used in BioPortal, e.g., PO, SEPIO, etc.
+
+        ontologies: Specify the ontologies to download by name. This should be a space-delimited list.
+        Names should be those used in BioPortal, e.g., PO, SEPIO, etc.
+
         ontology_file: Specify the file containing a list of ontologies to download,
-                    one per line. Names should be those used in BioPortal, e.g., PO, SEPIO, etc.
+        one per line. Names should be those used in BioPortal, e.g., PO, SEPIO, etc.
+
         output_dir: A string pointing to the directory to download data to.
-                    Defaults to data/raw.
+        Defaults to data/raw.
+
         snippet_only: Downloads only the first 5 kB of the source, for testing and file checks.
+
         ignore_cache: If specified, will ignore existing files and download again.
 
     Returns:
@@ -86,7 +89,7 @@ def download(
     if ontologies:
         for ontology in ontologies.split():
             onto_list.append(ontology)
-    
+
     # Parse the ontology_file argument
     if ontology_file:
         with open(ontology_file, "r") as f:
