@@ -11,6 +11,8 @@ __all__ = [
 ]
 
 @click.group()
+@click.option("-v", "--verbose", count=True)
+@click.option("-q", "--quiet")
 def main(verbose: int, quiet: bool):
     """CLI for KG-Bioportal.
 
