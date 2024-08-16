@@ -5,6 +5,7 @@ import logging
 import click
 
 from kg_bioportal.downloader import Downloader
+from kg_bioportal.transformer import Transformer
 
 __all__ = [
     "main",
@@ -152,33 +153,28 @@ def download(
     return None
 
 
+@cli.command()
+@click.option("input_dir", "-i", default="data/raw", type=click.Path(exists=True))
+@click.option("output_dir", "-o", default="data/transformed")
+def transform(*args, **kwargs) -> None:
+    """Transforms all ontologies in the input directory to KGX nodes and edges.
+
+    Args:
+        input_dir: A string pointing to the directory to import data from.
+        output_dir: A string pointing to the directory to output data to.
+
+    Returns:
+        None.
+
+    """
+
+    tx = Transformer(input_dir=input_dir, output_dir=output_dir)
+
+    tx.transform_all()
+
+    return None
+
 # Below functions are WIP.
-
-# @cli.command()
-# @click.option("input_dir", "-i", default="data/raw", type=click.Path(exists=True))
-# @click.option("output_dir", "-o", default="data/transformed")
-# @click.option(
-#     "sources", "-s", default=None, multiple=True, type=click.Choice(DATA_SOURCES.keys())
-# )
-# def transform(*args, **kwargs) -> None:
-#     """Calls scripts in kg_bioportal/transform/[source name]/ to transform each source
-#     into nodes and edges.
-
-#     Args:
-#         input_dir: A string pointing to the directory to import data from.
-#         output_dir: A string pointing to the directory to output data to.
-#         sources: A list of sources to transform.
-
-#     Returns:
-#         None.
-
-#     """
-
-#     # call transform script for each source
-#     kg_transform(*args, **kwargs)
-
-#     return None
-
 
 # @cli.command()
 # @click.option("yaml", "-y", default="merge.yaml", type=click.Path(exists=True))
