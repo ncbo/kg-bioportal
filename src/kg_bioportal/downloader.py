@@ -4,8 +4,11 @@ import logging
 import os
 import requests
 
+ONTOLOGY_LIST_NAME = "ontologylist.tsv"
 
 class Downloader:
+
+    # TODO: implement ignore_cache and snippet_only
 
     # Directory to save the downloaded files
     output_dir: str = "data/raw"
@@ -87,3 +90,26 @@ class Downloader:
 
 
         return None
+
+    def get_ontology_list(self) -> None:
+        """Get the list of ontologies from BioPortal.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        headers = {"Authorization": f"apikey token={self.api_key}"}
+
+        logging.info("Getting set of all ontologies...")
+
+        analytics_url = "https://data.bioontology.org/analytics"
+
+        ontologies = requests.get(analytics_url, headers=headers, allow_redirects=True).json()
+
+        with open(f"{self.output_dir}/{ONTOLOGY_LIST_NAME}", "w") as outfile:
+            for name in ontologies:
+                outfile.write(f"{name}\n")
+
+        logging.info(f"Wrote to {self.output_dir}/{ONTOLOGY_LIST_NAME}")

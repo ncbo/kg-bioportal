@@ -33,6 +33,37 @@ def main(verbose: int, quiet: bool):
 
 
 @main.command()
+@click.option("output_dir", "-o", required=True, default="data/raw")
+@click.option(
+    "api_key",
+    "-k",
+    required=False,
+    type=str,
+    help="API key for BioPortal",
+)
+def get_ontology_list(output_dir, api_key) -> None:
+    """Downloads the list of all BioPortal ontologies and saves to a file in the data directory (default: data/raw).
+
+    Args:
+
+        output_dir: A string pointing to the directory to download data to.
+        Defaults to data/raw.
+
+        api_key: BioPortal / NCBO API key.
+
+    Returns:
+        None.
+
+    """
+
+    dl = Downloader(output_dir=output_dir, api_key=api_key)
+
+    dl.get_ontology_list()
+
+    return None
+
+
+@main.command()
 @click.option(
     "ontologies",
     "-d",
@@ -67,7 +98,9 @@ def main(verbose: int, quiet: bool):
     type=str,
     help="API key for BioPortal",
 )
-def download(ontologies, ontology_file, output_dir, snippet_only, ignore_cache, api_key) -> None:
+def download(
+    ontologies, ontology_file, output_dir, snippet_only, ignore_cache, api_key
+) -> None:
     """Downloads specified ontologies into data directory (default: data/raw).
 
     Args:
@@ -81,9 +114,11 @@ def download(ontologies, ontology_file, output_dir, snippet_only, ignore_cache, 
         output_dir: A string pointing to the directory to download data to.
         Defaults to data/raw.
 
-        snippet_only: Downloads only the first 5 kB of the source, for testing and file checks.
+        snippet_only: (Not yet implemented) Downloads only the first 5 kB of the source, for testing and file checks.
 
-        ignore_cache: If specified, will ignore existing files and download again.
+        ignore_cache: (Not yet implemented) If specified, will ignore existing files and download again.
+
+        api_key: BioPortal / NCBO API key.
 
     Returns:
         None.
@@ -105,7 +140,12 @@ def download(ontologies, ontology_file, output_dir, snippet_only, ignore_cache, 
 
     logging.info(f"{len(onto_list)} ontologies to retrieve.")
 
-    dl = Downloader(output_dir, snippet_only, ignore_cache, api_key)
+    dl = Downloader(
+        output_dir=output_dir,
+        snippet_only=snippet_only,
+        ignore_cache=ignore_cache,
+        api_key=api_key,
+    )
 
     dl.download(onto_list)
 
