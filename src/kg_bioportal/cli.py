@@ -153,10 +153,10 @@ def download(
     return None
 
 
-@cli.command()
+@main.command()
 @click.option("input_dir", "-i", default="data/raw", type=click.Path(exists=True))
 @click.option("output_dir", "-o", default="data/transformed")
-def transform(*args, **kwargs) -> None:
+def transform(input_dir, output_dir) -> None:
     """Transforms all ontologies in the input directory to KGX nodes and edges.
 
     Args:
