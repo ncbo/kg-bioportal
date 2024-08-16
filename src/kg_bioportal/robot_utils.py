@@ -49,7 +49,7 @@ def initialize_robot(robot_path: str) -> list:
     return [robot_command, env]
 
 
-def relax_ontology(
+def robot_relax(
     robot_path: str, input_path: str, output_path: str, robot_env: dict
 ) -> bool:
     """

@@ -5,8 +5,9 @@ import os
 import sys
 
 from kg_bioportal.downloader import ONTOLOGY_LIST_NAME
-from kg_bioportal.robot_utils import initialize_robot, robot_convert
+from kg_bioportal.robot_utils import initialize_robot, robot_convert, robot_relax
 
+# TODO: Don't repeat steps if the products already exist
 
 class Transformer:
 
@@ -66,14 +67,14 @@ class Transformer:
         ]
 
         if len(filepaths) == 0:
-            logging.ERROR(f"No ontologies found in {self.input_dir}.")
+            logging.error(f"No ontologies found in {self.input_dir}.")
             sys.exit()
         else:
             logging.info(f"Found {len(filepaths)} ontologies to transform.")
 
         for filepath in filepaths:
             if not self.transform(filepath):
-                logging.ERROR(f"Error transforming {filepath}.")
+                logging.error(f"Error transforming {filepath}.")
             else:
                 logging.info(f"Transformed {filepath}.")
 
@@ -92,14 +93,27 @@ class Transformer:
 
         logging.info(f"Transforming {ontology} to nodes and edges.")
         ontology_name = os.path.splitext(os.path.basename(ontology))[0]
-        output_path = os.path.join(self.output_dir, f"{ontology_name}.json")
+        json_output_path = os.path.join(self.output_dir, f"{ontology_name}.json")
+        
+        # Convert
         if not robot_convert(
             robot_path=self.robot_path,
             input_path=ontology,
-            output_path=output_path,
+            output_path=json_output_path,
             robot_env=self.robot_env,
         ):
             status = False
-        status = True
+
+        # Relax
+        relaxed_outpath = os.path.join(self.output_dir, f"{ontology_name}_relaxed.json")
+        if not robot_relax(
+            robot_path=self.robot_path,
+            input_path=json_output_path,
+            output_path=relaxed_outpath,
+            robot_env=self.robot_env,
+        ):
+            status = False
+        else:
+            status = True
 
         return status
