@@ -7,6 +7,8 @@ import requests
 
 class Downloader:
 
+    # TODO: implement ignore_cache and snippet_only
+
     # Directory to save the downloaded files
     output_dir: str = "data/raw"
 
