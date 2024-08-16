@@ -1,11 +1,10 @@
 """Functions for working with ROBOT."""
 
 import os
-
+import logging
+import requests
 import sh  # type: ignore
 from sh import chmod  # type: ignore
-
-from post_setup.post_setup import robot_setup
 
 # Note that sh module can take environment variables, see
 # https://amoffat.github.io/sh/sections/special_arguments.html#env
@@ -25,10 +24,18 @@ def initialize_robot(robot_path: str) -> list:
     # We may have made it this far without installing ROBOT,
     # so do that now if needed
     if not os.path.exists(robot_path):
-        robot_setup()
+        logging.info("ROBOT not found. Downloading...")
+        robot_url = "https://raw.githubusercontent.com/ontodev/robot/master/bin/robot"
+        robot_jar_url = "https://github.com/ontodev/robot/releases/download/v1.9.6/robot.jar"
+        robot_ex = requests.get(robot_url)
+        robot_jar = requests.get(robot_jar_url)
+        with open("robot", "wb") as f:
+            f.write(robot_ex.content)
+        with open("robot.jar", "wb") as f:
+            f.write(robot_jar.content)
 
-    # Make sure it's executable
-    chmod("+x", "robot")
+        # Make sure it's executable
+        chmod("+x", "robot")
 
     # Declare environment variables
     env = os.environ.copy()
