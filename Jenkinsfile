@@ -41,7 +41,6 @@ pipeline {
                     sh 'cat branch.txt'
                     sh "echo $BUILDSTARTDATE"
                     sh "echo $MERGEDKGNAME_BASE"
-                    sh "echo $MERGEDKGNAME_GENERIC"
                     sh "python3.9 --version"
                     sh "id"
                     sh "whoami" // this should be jenkinsuser
