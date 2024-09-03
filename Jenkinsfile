@@ -74,7 +74,7 @@ pipeline {
                 dir('./gitrepo') {
                     script {
                         // Get the names of all BioPortal ontologies
-                        sh ". venv/bin/activate && kgbioportal get-ontology-list --api_key ${NCBO_API_KEY} --output data/raw/"
+                        sh ". venv/bin/activate && kgbioportal get-ontology-list --api_key ${NCBO_API_KEY} --output_dir data/raw/"
 
                         // Now download all
                         // or at least in the future, do them all.
