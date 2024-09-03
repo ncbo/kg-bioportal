@@ -6,8 +6,10 @@ import sys
 
 from kg_bioportal.downloader import ONTOLOGY_LIST_NAME
 from kg_bioportal.robot_utils import initialize_robot, robot_convert, robot_relax
+from kgx.transformer import Transformer as KGXTransformer
 
 # TODO: Don't repeat steps if the products already exist
+
 
 class Transformer:
 
@@ -94,7 +96,7 @@ class Transformer:
         logging.info(f"Transforming {ontology} to nodes and edges.")
         ontology_name = os.path.splitext(os.path.basename(ontology))[0]
         owl_output_path = os.path.join(self.output_dir, f"{ontology_name}.owl")
-        
+
         # Convert
         if not robot_convert(
             robot_path=self.robot_path,
@@ -112,6 +114,25 @@ class Transformer:
             output_path=relaxed_outpath,
             robot_env=self.robot_env,
         ):
+            status = False
+
+        # Transform to KGX nodes + edges
+        txr = KGXTransformer(stream=True)
+        input_args = {
+            "format": "owl",
+            "filename": [relaxed_outpath],
+        }
+        output_args = {
+            "format": "tsv",
+            "filename": os.path.join(self.output_dir, f"{ontology_name}"),
+            "provided_by": ontology_name,
+            "aggregator_knowledge_source": "infores:bioportal",
+        }
+        logging.info("Doing KGX transform.")
+        if not txr.transform(
+                input_args=input_args,
+                output_args=output_args,
+            ):
             status = False
         else:
             status = True
