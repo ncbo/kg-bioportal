@@ -52,6 +52,7 @@ class Downloader:
 
         return None
 
+    # TODO: save NCBO ID and version for each ontology, then pass to transformer
     def download(self, onto_list: list = []) -> None:
         """Downloads data files from list of ontologies into data directory.
 
