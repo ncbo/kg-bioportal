@@ -77,7 +77,7 @@ def get_ontology_list(output_dir, api_key) -> None:
     required=False,
     type=click.Path(exists=True),
 )
-@click.option("output_dir", "-o", required=True, default="data/raw")
+@click.option("--output_dir", "-o", required=True, default="data/raw")
 @click.option(
     "--snippet_only",
     "-x",
