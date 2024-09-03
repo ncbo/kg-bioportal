@@ -93,22 +93,22 @@ class Transformer:
 
         logging.info(f"Transforming {ontology} to nodes and edges.")
         ontology_name = os.path.splitext(os.path.basename(ontology))[0]
-        json_output_path = os.path.join(self.output_dir, f"{ontology_name}.json")
+        owl_output_path = os.path.join(self.output_dir, f"{ontology_name}.owl")
         
         # Convert
         if not robot_convert(
             robot_path=self.robot_path,
             input_path=ontology,
-            output_path=json_output_path,
+            output_path=owl_output_path,
             robot_env=self.robot_env,
         ):
             status = False
 
         # Relax
-        relaxed_outpath = os.path.join(self.output_dir, f"{ontology_name}_relaxed.json")
+        relaxed_outpath = os.path.join(self.output_dir, f"{ontology_name}_relaxed.owl")
         if not robot_relax(
             robot_path=self.robot_path,
-            input_path=json_output_path,
+            input_path=owl_output_path,
             output_path=relaxed_outpath,
             robot_env=self.robot_env,
         ):
