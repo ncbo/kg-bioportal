@@ -82,7 +82,7 @@ pipeline {
                         sh "printf 'ENVO\nPO\nSEPIO\n' > data/raw/ontologylist.tsv"
                         
                         // Download the ontologies
-                        sh ". venv/bin/activate && kbbioportal download --api_key ${NCBO_API_KEY} --ontology_file data/raw/ontologylist.tsv --output_dir data/raw/"
+                        sh ". venv/bin/activate && kgbioportal download --api_key ${NCBO_API_KEY} --ontology_file data/raw/ontologylist.tsv --output_dir data/raw/"
 
                     }
                 }
