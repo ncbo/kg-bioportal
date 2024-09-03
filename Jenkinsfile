@@ -104,21 +104,6 @@ pipeline {
                 dir('./gitrepo') {
                     script {
 
-                        // make sure we aren't going to clobber existing data
-                        withCredentials([file(credentialsId: 's3cmd_kg_hub_push_configuration', variable: 'S3CMD_CFG')]) {
-                            REMOTE_BUILD_DIR_CONTENTS = sh (
-                                script: '. venv/bin/activate && s3cmd -c $S3CMD_CFG ls s3://$S3BUCKETNAME/$S3PROJECTDIR/$BUILDSTARTDATE/',
-                                returnStdout: true
-                            ).trim()
-                            echo "REMOTE_BUILD_DIR_CONTENTS (THIS SHOULD BE EMPTY): '${REMOTE_BUILD_DIR_CONTENTS}'"
-                            if("${REMOTE_BUILD_DIR_CONTENTS}" != ''){
-                                echo "Will not overwrite existing remote S3 directory: $S3PROJECTDIR/$BUILDSTARTDATE"
-                                sh 'exit 1'
-                            } else {
-                                echo "remote directory $S3PROJECTDIR/$BUILDSTARTDATE is empty, proceeding"
-                            }
-                        }
-
                         if (env.GIT_BRANCH != 'origin/main') {
                             echo "Will not push if not on main branch."
                         } else {
@@ -128,21 +113,13 @@ pipeline {
 					            string(credentialsId: 'aws_kg_hub_access_key', variable: 'AWS_ACCESS_KEY_ID'),
 					            string(credentialsId: 'aws_kg_hub_secret_key', variable: 'AWS_SECRET_ACCESS_KEY')]) {
                                  
-                                //
-                                // make $BUILDSTARTDATE/ directory and sync to s3 bucket
-                                // Don't create any index - none of this will be public
-                                //
-                                sh 'mkdir $BUILDSTARTDATE/'
-                                sh 'cp -p data/merged/merged-kg.tar.gz $BUILDSTARTDATE/${MERGEDKGNAME_BASE}.tar.gz'
-                                sh 'cp Jenkinsfile $BUILDSTARTDATE/'
+                                // Index, then upload
+                                sh '. venv/bin/activate && multi_indexer -v --directory data/transformed/ --prefix https://kghub.io/$S3PROJECTDIR/ -x -u'
+                                sh '. venv/bin/activate && s3cmd -c $S3CMD_CFG put -pr --acl-public --cf-invalidate data/transformed/ s3://kg-hub-public-data/$S3PROJECTDIR/'
 
-                                // Add updated stats
-                                sh '. venv/bin/activate && s3cmd -c $S3CMD_CFG put -pr graph_stats.yaml $BUILDSTARTDATE s3://$S3BUCKETNAME/$S3PROJECTDIR/graph_stats.yaml'
-
-                                sh '. venv/bin/activate && s3cmd -c $S3CMD_CFG put -pr $BUILDSTARTDATE s3://$S3BUCKETNAME/$S3PROJECTDIR/'
-                                sh '. venv/bin/activate && s3cmd -c $S3CMD_CFG rm -r s3://$S3BUCKETNAME/$S3PROJECTDIR/current/'
-                                sh '. venv/bin/activate && s3cmd -c $S3CMD_CFG put -pr $BUILDSTARTDATE/* s3://$S3BUCKETNAME/$S3PROJECTDIR/current/'
-
+                                // Now update the index for the whole project
+                                sh '. venv/bin/activate && multi_indexer -v --prefix https://kghub.io/$S3PROJECTDIR/ -b kg-hub-public-data -r $S3PROJECTDIR -x'
+                                sh '. venv/bin/activate && s3cmd -c $S3CMD_CFG put -pr --acl-public --cf-invalidate ./index.html s3://kg-hub-public-data/$S3PROJECTDIR/'
                             }
 
                         }
