@@ -12,6 +12,8 @@ from kgx.transformer import Transformer as KGXTransformer
 # TODO: Fix KGX hijacking logging
 # TODO: Save KGX logs to a file for each ontology
 # TODO: Address BNodes
+# TODO: get version from BioPortal API (in the downloader)
+
 
 class Transformer:
 
@@ -77,14 +79,15 @@ class Transformer:
             logging.info(f"Found {len(filepaths)} ontologies to transform.")
 
         for filepath in filepaths:
-            if not self.transform(filepath):
+            if not self.transform(filepath, version="latest"):
                 logging.error(f"Error transforming {filepath}.")
             else:
                 logging.info(f"Transformed {filepath}.")
 
         return None
 
-    def transform(self, ontology: str) -> bool:
+    # TODO: use NCBO ID to name the output, not the filename
+    def transform(self, ontology: str, version: str) -> bool:
         """Transforms a single ontology to KGX nodes and edges.
 
         Args:
@@ -97,7 +100,9 @@ class Transformer:
 
         logging.info(f"Transforming {ontology} to nodes and edges.")
         ontology_name = os.path.splitext(os.path.basename(ontology))[0]
-        owl_output_path = os.path.join(self.output_dir, f"{ontology_name}.owl")
+        owl_output_path = os.path.join(
+            self.output_dir, f"{ontology_name}", f"{version}", f"{ontology_name}.owl"
+        )
 
         # Convert
         if not robot_convert(
@@ -109,7 +114,12 @@ class Transformer:
             status = False
 
         # Relax
-        relaxed_outpath = os.path.join(self.output_dir, f"{ontology_name}_relaxed.owl")
+        relaxed_outpath = os.path.join(
+            self.output_dir,
+            f"{ontology_name}",
+            f"{version}",
+            f"{ontology_name}_relaxed.owl",
+        )
         if not robot_relax(
             robot_path=self.robot_path,
             input_path=owl_output_path,
@@ -120,7 +130,9 @@ class Transformer:
 
         # Transform to KGX nodes + edges
         txr = KGXTransformer(stream=True)
-        outfilename = os.path.join(self.output_dir, f"{ontology_name}")
+        outfilename = os.path.join(
+            self.output_dir, f"{ontology_name}", f"{version}", f"{ontology_name}"
+        )
         nodefilename = outfilename + "_nodes.tsv"
         edgefilename = outfilename + "_edges.tsv"
         input_args = {
@@ -139,7 +151,9 @@ class Transformer:
                 input_args=input_args,
                 output_args=output_args,
             )
-            logging.info(f"Nodes and edges written to {nodefilename} and {edgefilename}.")
+            logging.info(
+                f"Nodes and edges written to {nodefilename} and {edgefilename}."
+            )
             status = True
         except Exception as e:
             logging.error(f"Error transforming {ontology} to KGX nodes and edges: {e}")
