@@ -129,12 +129,9 @@ class Transformer:
             "aggregator_knowledge_source": "infores:bioportal",
         }
         logging.info("Doing KGX transform.")
-        if not txr.transform(
+        txr.transform(
                 input_args=input_args,
                 output_args=output_args,
-            ):
-            status = False
-        else:
-            status = True
+        )
 
         return status
