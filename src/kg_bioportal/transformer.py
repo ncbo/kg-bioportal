@@ -9,7 +9,9 @@ from kg_bioportal.robot_utils import initialize_robot, robot_convert, robot_rela
 from kgx.transformer import Transformer as KGXTransformer
 
 # TODO: Don't repeat steps if the products already exist
-
+# TODO: Fix KGX hijacking logging
+# TODO: Save KGX logs to a file for each ontology
+# TODO: Address BNodes
 
 class Transformer:
 
@@ -118,20 +120,29 @@ class Transformer:
 
         # Transform to KGX nodes + edges
         txr = KGXTransformer(stream=True)
+        outfilename = os.path.join(self.output_dir, f"{ontology_name}")
+        nodefilename = outfilename + "_nodes.tsv"
+        edgefilename = outfilename + "_edges.tsv"
         input_args = {
             "format": "owl",
             "filename": [relaxed_outpath],
         }
         output_args = {
             "format": "tsv",
-            "filename": os.path.join(self.output_dir, f"{ontology_name}"),
+            "filename": outfilename,
             "provided_by": ontology_name,
             "aggregator_knowledge_source": "infores:bioportal",
         }
         logging.info("Doing KGX transform.")
-        txr.transform(
+        try:
+            txr.transform(
                 input_args=input_args,
                 output_args=output_args,
-        )
+            )
+            logging.info(f"Nodes and edges written to {nodefilename} and {edgefilename}.")
+            status = True
+        except Exception as e:
+            logging.error(f"Error transforming {ontology} to KGX nodes and edges: {e}")
+            status = False
 
         return status
