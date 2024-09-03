@@ -34,9 +34,9 @@ def main(verbose: int, quiet: bool):
 
 
 @main.command()
-@click.option("output_dir", "-o", required=True, default="data/raw")
+@click.option("--output_dir", "-o", required=True, default="data/raw")
 @click.option(
-    "api_key",
+    "--api_key",
     "-k",
     required=False,
     type=str,
@@ -66,34 +66,34 @@ def get_ontology_list(output_dir, api_key) -> None:
 
 @main.command()
 @click.option(
-    "ontologies",
+    "--ontologies",
     "-d",
     required=False,
     type=str,
 )
 @click.option(
-    "ontology_file",
+    "--ontology_file",
     "-f",
     required=False,
     type=click.Path(exists=True),
 )
 @click.option("output_dir", "-o", required=True, default="data/raw")
 @click.option(
-    "snippet_only",
+    "--snippet_only",
     "-x",
     is_flag=True,
     default=False,
     help="Download only the first 5 kB of each (uncompressed) source, for testing and file checks [false]",
 )
 @click.option(
-    "ignore_cache",
+    "--ignore_cache",
     "-i",
     is_flag=True,
     default=False,
     help="ignore cache and download files even if they exist [false]",
 )
 @click.option(
-    "api_key",
+    "--api_key",
     "-k",
     required=False,
     type=str,
@@ -154,8 +154,8 @@ def download(
 
 
 @main.command()
-@click.option("input_dir", "-i", default="data/raw", type=click.Path(exists=True))
-@click.option("output_dir", "-o", default="data/transformed")
+@click.option("--input_dir", "-i", default="data/raw", type=click.Path(exists=True))
+@click.option("--output_dir", "-o", default="data/transformed")
 def transform(input_dir, output_dir) -> None:
     """Transforms all ontologies in the input directory to KGX nodes and edges.
 
