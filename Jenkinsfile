@@ -74,7 +74,8 @@ pipeline {
                 dir('./gitrepo') {
                     script {
                         // Get the names of all BioPortal ontologies
-                        sh ". venv/bin/activate && kgbioportal get-ontology-list --api_key ${NCBO_API_KEY} --output_dir data/raw/"
+                        // This saves the list to data/raw/ontologylist.tsv
+                        sh ". venv/bin/activate && kgbioportal get-ontology-list --api_key ${NCBO_API_KEY}"
 
                         // Now download all
                         // or at least in the future, do them all.
@@ -82,7 +83,8 @@ pipeline {
                         sh "printf 'ENVO\nPO\nSEPIO\n' > data/raw/ontologylist.tsv"
                         
                         // Download the ontologies
-                        sh ". venv/bin/activate && kgbioportal download --api_key ${NCBO_API_KEY} --ontology_file data/raw/ontologylist.tsv --output_dir data/raw/"
+                        // This saves them to data/raw/
+                        sh ". venv/bin/activate && kgbioportal download --api_key ${NCBO_API_KEY} --ontology_file data/raw/ontologylist.tsv"
 
                     }
                 }
