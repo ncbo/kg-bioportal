@@ -2,6 +2,8 @@
 
 [Bioportal](https://bioportal.bioontology.org/), as a set of knowledge graphs.
 
+See https://kghub.io/kg-bioportal/index.html
+
 ## Data Sources
 
 Source data is derived from the Bioportal API (<https://data.bioontology.org/documentation>).
