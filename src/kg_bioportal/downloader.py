@@ -105,6 +105,8 @@ class Downloader:
         """Get the list of ontologies from BioPortal.
 
         This includes the descriptive name and most recent version.
+        Some versions are not specified, while others are verbose.
+        In the latter case, they are truncated to the first three words.
 
         Args:
             None.
@@ -136,8 +138,14 @@ class Downloader:
 
                 name = metadata["name"].replace("\n", " ").replace("\t", " ")
                 if len(latest_submission) > 0:
-                    if current_version:
-                        current_version = latest_submission["version"].replace("\n", " ").replace("\t", " ")
+                    if latest_submission["version"]:
+                        current_version = " ".join(
+                            (
+                                latest_submission["version"]
+                                .replace("\n", " ")
+                                .replace("\t", " ")
+                            ).split()[:3]
+                        )
                     else:
                         current_version = "NA"
                     submission_id = latest_submission["submissionId"]
