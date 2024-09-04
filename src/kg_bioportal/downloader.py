@@ -6,6 +6,7 @@ import requests
 
 ONTOLOGY_LIST_NAME = "ontologylist.tsv"
 
+
 class Downloader:
 
     # TODO: implement ignore_cache and snippet_only
@@ -87,16 +88,23 @@ class Downloader:
                 f"Latest submission: {latest_sub_metadata['version']} - released {latest_sub_metadata['released']}"
             )
 
-            download_onto = requests.get(download_url, headers=headers, allow_redirects=True)
-            onto_filename = download_onto.headers["Content-Disposition"].split("filename=")[1].replace('"', "")
+            download_onto = requests.get(
+                download_url, headers=headers, allow_redirects=True
+            )
+            onto_filename = (
+                download_onto.headers["Content-Disposition"]
+                .split("filename=")[1]
+                .replace('"', "")
+            )
             with open(f"{self.output_dir}/{onto_filename}", "wb") as outfile:
                 outfile.write(download_onto.content)
-
 
         return None
 
     def get_ontology_list(self) -> None:
         """Get the list of ontologies from BioPortal.
+
+        This includes the descriptive name and most recent version.
 
         Args:
             None.
@@ -104,16 +112,33 @@ class Downloader:
         Returns:
             None.
         """
+
         headers = {"Authorization": f"apikey token={self.api_key}"}
 
         logging.info("Getting set of all ontologies...")
 
         analytics_url = "https://data.bioontology.org/analytics"
 
-        ontologies = requests.get(analytics_url, headers=headers, allow_redirects=True).json()
+        ontologies = requests.get(
+            analytics_url, headers=headers, allow_redirects=True
+        ).json()
 
+        logging.info("Retrieving metadata for each...")
         with open(f"{self.output_dir}/{ONTOLOGY_LIST_NAME}", "w") as outfile:
-            for name in ontologies:
-                outfile.write(f"{name}\n")
+            outfile.write(f"id\tname\tcurrent_version\tsubmission_id\n")
+            for acronym in ontologies:
+                metadata_url = f"https://data.bioontology.org/ontologies/{acronym}"
+                metadata = requests.get(metadata_url, headers=headers).json()
+                latest_submission_url = f"https://data.bioontology.org/ontologies/{acronym}/latest_submission"
+                latest_submission = requests.get(
+                    latest_submission_url, headers=headers
+                ).json()
+
+                name = metadata["name"]
+                current_version = latest_submission["version"]
+                submission_id = latest_submission["submissionId"]
+                outfile.write(
+                    f"{acronym}\t{name}\t{current_version}\t{submission_id}\n"
+                )
 
         logging.info(f"Wrote to {self.output_dir}/{ONTOLOGY_LIST_NAME}")
