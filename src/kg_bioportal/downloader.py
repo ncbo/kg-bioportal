@@ -136,7 +136,10 @@ class Downloader:
 
                 name = metadata["name"].replace("\n", " ").replace("\t", " ")
                 if len(latest_submission) > 0:
-                    current_version = latest_submission["version"].replace("\n", " ").replace("\t", " ")
+                    if current_version:
+                        current_version = latest_submission["version"].replace("\n", " ").replace("\t", " ")
+                    else:
+                        current_version = "NA"
                     submission_id = latest_submission["submissionId"]
                 else:
                     current_version = "NA"
