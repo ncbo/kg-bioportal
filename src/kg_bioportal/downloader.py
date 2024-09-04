@@ -134,9 +134,13 @@ class Downloader:
                     latest_submission_url, headers=headers
                 ).json()
 
-                name = metadata["name"]
-                current_version = latest_submission["version"]
-                submission_id = latest_submission["submissionId"]
+                name = metadata["name"].replace("\n", " ").replace("\t", " ")
+                if len(latest_submission) > 0:
+                    current_version = latest_submission["version"]
+                    submission_id = latest_submission["submissionId"]
+                else:
+                    current_version = "NA"
+                    submission_id = "NA"
                 outfile.write(
                     f"{acronym}\t{name}\t{current_version}\t{submission_id}\n"
                 )
