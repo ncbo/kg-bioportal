@@ -50,6 +50,9 @@ class Downloader:
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
 
+        if not api_key:
+            raise ValueError("API key is required for downloading from BioPortal.")
+
         return None
 
     # TODO: save NCBO ID and version for each ontology, then pass to transformer
