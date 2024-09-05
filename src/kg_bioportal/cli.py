@@ -136,7 +136,7 @@ def download(
             with open(f"{output_dir}/{ONTOLOGY_LIST_NAME}", "r") as f:
                 f.readline()  # Skip the header
                 for line in f:
-                    onto_list.append(line.strip())
+                    onto_list.append(line.strip().split("\t")[0])
         except FileNotFoundError:
             logging.error(
                 f"Ontology list file not found. Please run the 'get_ontology_list' command first."
@@ -153,7 +153,7 @@ def download(
         with open(ontology_file, "r") as f:
             f.readline()  # Skip the header
             for line in f:
-                onto_list.append(line.strip())
+                onto_list.append(line.strip().split("\t")[0])
 
     logging.info(f"{len(onto_list)} ontologies to retrieve.")
 
