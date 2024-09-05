@@ -2,6 +2,8 @@
 
 import logging
 import os
+import time
+
 import requests
 
 ONTOLOGY_LIST_NAME = "ontologylist.tsv"
@@ -158,5 +160,7 @@ class Downloader:
                 outfile.write(
                     f"{acronym}\t{name}\t{current_version}\t{submission_id}\n"
                 )
+                # Wait for half a second to avoid rate limiting
+                time.sleep(0.5)
 
         logging.info(f"Wrote to {self.output_dir}/{ONTOLOGY_LIST_NAME}")
