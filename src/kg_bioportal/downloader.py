@@ -6,6 +6,7 @@ import requests
 
 ONTOLOGY_LIST_NAME = "ontologylist.tsv"
 
+
 class Downloader:
 
     # TODO: implement ignore_cache and snippet_only
@@ -55,7 +56,6 @@ class Downloader:
 
         return None
 
-    # TODO: save NCBO ID and version for each ontology, then pass to transformer
     def download(self, onto_list: list = []) -> None:
         """Downloads data files from list of ontologies into data directory.
 
@@ -83,20 +83,35 @@ class Downloader:
             metadata = requests.get(metadata_url, headers=headers).json()
             logging.info(f"Name: {metadata['name']}")
             latest_sub_metadata = requests.get(latest_sub_url, headers=headers).json()
+            submission_id = latest_sub_metadata["submissionId"]
             logging.info(
-                f"Latest submission: {latest_sub_metadata['version']} - released {latest_sub_metadata['released']}"
+                f"Latest submission: {latest_sub_metadata['version']} - submission ID {submission_id} - released {latest_sub_metadata['released']}"
             )
 
-            download_onto = requests.get(download_url, headers=headers, allow_redirects=True)
-            onto_filename = download_onto.headers["Content-Disposition"].split("filename=")[1].replace('"', "")
-            with open(f"{self.output_dir}/{onto_filename}", "wb") as outfile:
-                outfile.write(download_onto.content)
+            download_onto = requests.get(
+                download_url, headers=headers, allow_redirects=True
+            )
+            onto_filename = (
+                download_onto.headers["Content-Disposition"]
+                .split("filename=")[1]
+                .replace('"', "")
+            )
 
+            outpath = f"{self.output_dir}/{ontology}/{submission_id}/{onto_filename}"
+            outdir = f"{self.output_dir}/{ontology}/{submission_id}"
+            if not os.path.exists(outdir):
+                os.makedirs(outdir)
+            with open(outpath, "wb") as outfile:
+                outfile.write(download_onto.content)
 
         return None
 
     def get_ontology_list(self) -> None:
         """Get the list of ontologies from BioPortal.
+
+        This includes the descriptive name and most recent version.
+        Some versions are not specified, while others are verbose.
+        In the latter case, they are truncated to the first three words.
 
         Args:
             None.
@@ -104,16 +119,46 @@ class Downloader:
         Returns:
             None.
         """
+
         headers = {"Authorization": f"apikey token={self.api_key}"}
 
         logging.info("Getting set of all ontologies...")
 
         analytics_url = "https://data.bioontology.org/analytics"
 
-        ontologies = requests.get(analytics_url, headers=headers, allow_redirects=True).json()
+        ontologies = requests.get(
+            analytics_url, headers=headers, allow_redirects=True
+        ).json()
 
+        logging.info("Retrieving metadata for each...")
         with open(f"{self.output_dir}/{ONTOLOGY_LIST_NAME}", "w") as outfile:
-            for name in ontologies:
-                outfile.write(f"{name}\n")
+            outfile.write(f"id\tname\tcurrent_version\tsubmission_id\n")
+            for acronym in ontologies:
+                metadata_url = f"https://data.bioontology.org/ontologies/{acronym}"
+                metadata = requests.get(metadata_url, headers=headers).json()
+                latest_submission_url = f"https://data.bioontology.org/ontologies/{acronym}/latest_submission"
+                latest_submission = requests.get(
+                    latest_submission_url, headers=headers
+                ).json()
+
+                name = metadata["name"].replace("\n", " ").replace("\t", " ")
+                if len(latest_submission) > 0:
+                    if latest_submission["version"]:
+                        current_version = " ".join(
+                            (
+                                latest_submission["version"]
+                                .replace("\n", " ")
+                                .replace("\t", " ")
+                            ).split()[:3]
+                        )
+                    else:
+                        current_version = "NA"
+                    submission_id = latest_submission["submissionId"]
+                else:
+                    current_version = "NA"
+                    submission_id = "NA"
+                outfile.write(
+                    f"{acronym}\t{name}\t{current_version}\t{submission_id}\n"
+                )
 
         logging.info(f"Wrote to {self.output_dir}/{ONTOLOGY_LIST_NAME}")

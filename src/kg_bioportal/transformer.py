@@ -12,7 +12,7 @@ from kgx.transformer import Transformer as KGXTransformer
 # TODO: Fix KGX hijacking logging
 # TODO: Save KGX logs to a file for each ontology
 # TODO: Address BNodes
-# TODO: get version from BioPortal API (in the downloader)
+# TODO: Assign IDs to edges when they lack them
 
 
 class Transformer:
@@ -66,11 +66,11 @@ class Transformer:
             f"Transforming all ontologies in {self.input_dir} to KGX nodes and edges."
         )
 
-        filepaths = [
-            os.path.join(self.input_dir, f)
-            for f in os.listdir(self.input_dir)
-            if not f.endswith(ONTOLOGY_LIST_NAME)
-        ]
+        filepaths = []
+        for root, _dirs, files in os.walk(self.input_dir):
+            for file in files:
+                if not file.endswith(ONTOLOGY_LIST_NAME):
+                    filepaths.append(os.path.join(root, file))
 
         if len(filepaths) == 0:
             logging.error(f"No ontologies found in {self.input_dir}.")
@@ -79,35 +79,46 @@ class Transformer:
             logging.info(f"Found {len(filepaths)} ontologies to transform.")
 
         for filepath in filepaths:
-            if not self.transform(filepath, version="latest"):
+            if not self.transform(filepath):
                 logging.error(f"Error transforming {filepath}.")
             else:
                 logging.info(f"Transformed {filepath}.")
 
         return None
 
-    # TODO: use NCBO ID to name the output, not the filename
-    def transform(self, ontology: str, version: str) -> bool:
+    def transform(self, ontology_path: str) -> bool:
         """Transforms a single ontology to KGX nodes and edges.
 
         Args:
-            ontology: A string representing the ontology to transform.
+            ontology: A string of the path to the ontology file to transform.
 
         Returns:
             True if transform was successful, otherwise False.
         """
         status = False
 
-        logging.info(f"Transforming {ontology} to nodes and edges.")
-        ontology_name = os.path.splitext(os.path.basename(ontology))[0]
+        ontology_name = (os.path.relpath(ontology_path, self.input_dir)).split(os.sep)[
+            0
+        ]
+        ontology_submission_id = (os.path.relpath(ontology_path, self.input_dir)).split(
+            os.sep
+        )[1]
+
+        logging.info(
+            f"Transforming {ontology_name}, submission ID {ontology_submission_id}, to nodes and edges."
+        )
+
         owl_output_path = os.path.join(
-            self.output_dir, f"{ontology_name}", f"{version}", f"{ontology_name}.owl"
+            self.output_dir,
+            f"{ontology_name}",
+            f"{ontology_submission_id}",
+            f"{ontology_name}.owl",
         )
 
         # Convert
         if not robot_convert(
             robot_path=self.robot_path,
-            input_path=ontology,
+            input_path=ontology_path,
             output_path=owl_output_path,
             robot_env=self.robot_env,
         ):
@@ -117,7 +128,7 @@ class Transformer:
         relaxed_outpath = os.path.join(
             self.output_dir,
             f"{ontology_name}",
-            f"{version}",
+            f"{ontology_submission_id}",
             f"{ontology_name}_relaxed.owl",
         )
         if not robot_relax(
@@ -131,7 +142,10 @@ class Transformer:
         # Transform to KGX nodes + edges
         txr = KGXTransformer(stream=True)
         outfilename = os.path.join(
-            self.output_dir, f"{ontology_name}", f"{version}", f"{ontology_name}"
+            self.output_dir,
+            f"{ontology_name}",
+            f"{ontology_submission_id}",
+            f"{ontology_name}",
         )
         nodefilename = outfilename + "_nodes.tsv"
         edgefilename = outfilename + "_edges.tsv"
@@ -156,7 +170,7 @@ class Transformer:
             )
             status = True
         except Exception as e:
-            logging.error(f"Error transforming {ontology} to KGX nodes and edges: {e}")
+            logging.error(f"Error transforming {ontology_name} to KGX nodes and edges: {e}")
             status = False
 
         return status
