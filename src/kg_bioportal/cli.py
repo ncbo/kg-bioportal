@@ -4,7 +4,7 @@ import logging
 
 import click
 
-from kg_bioportal.downloader import Downloader
+from kg_bioportal.downloader import Downloader, ONTOLOGY_LIST_NAME
 from kg_bioportal.transformer import Transformer
 
 __all__ = [
@@ -127,6 +127,20 @@ def download(
     """
 
     onto_list = []
+
+    # If no input args provided, use the full list of ontologies
+    # But if the full list isn't available, throw an error and remind
+    # the user to download it first
+    if not ontologies and not ontology_file:
+        try:
+            with open(f"{output_dir}/{ONTOLOGY_LIST_NAME}", "r") as f:
+                for line in f:
+                    onto_list.append(line.strip())
+        except FileNotFoundError:
+            logging.error(
+                f"Ontology list file not found. Please run the 'get_ontology_list' command first."
+            )
+            return None
 
     # Parse the ontologies argument
     if ontologies:
