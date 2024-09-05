@@ -134,6 +134,7 @@ def download(
     if not ontologies and not ontology_file:
         try:
             with open(f"{output_dir}/{ONTOLOGY_LIST_NAME}", "r") as f:
+                f.readline()  # Skip the header
                 for line in f:
                     onto_list.append(line.strip())
         except FileNotFoundError:
@@ -150,6 +151,7 @@ def download(
     # Parse the ontology_file argument
     if ontology_file:
         with open(ontology_file, "r") as f:
+            f.readline()  # Skip the header
             for line in f:
                 onto_list.append(line.strip())
 
