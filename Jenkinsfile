@@ -75,18 +75,11 @@ pipeline {
                     script {
                         // Get the names of all BioPortal ontologies
                         // This saves the list to data/raw/ontologylist.tsv
-                        // Deactivated for testing purposes
-                        //sh ". venv/bin/activate && kgbioportal get-ontology-list --api_key ${NCBO_API_KEY}"
+                        sh ". venv/bin/activate && kgbioportal -vvv get-ontology-list --api_key ${NCBO_API_KEY}"
 
-                        // Now download all
-                        // or at least in the future, do them all.
-                        // For now just do a few
-                        sh "mkdir -p data/raw"
-                        sh "printf 'ENVO\nPO\nSEPIO\n' > data/raw/ontologylist.tsv"
-                        
                         // Download the ontologies
                         // This saves them to data/raw/
-                        sh ". venv/bin/activate && kgbioportal download --api_key ${NCBO_API_KEY} --ontology_file data/raw/ontologylist.tsv"
+                        sh ". venv/bin/activate && kgbioportal download --api_key ${NCBO_API_KEY}"
 
                     }
                 }
@@ -107,8 +100,10 @@ pipeline {
                 dir('./gitrepo') {
                     script {
 
-                        if (env.GIT_BRANCH != 'origin/main') {
-                            echo "Will not push if not on main branch."
+                        //if (env.GIT_BRANCH != 'origin/main') {
+                        //    echo "Will not push if not on main branch."
+                        if (1 == 1) {
+                            echo "TESTING."
                         } else {
                             withCredentials([
 					            file(credentialsId: 's3cmd_kg_hub_push_configuration', variable: 'S3CMD_CFG'),
