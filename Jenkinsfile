@@ -75,7 +75,8 @@ pipeline {
                     script {
                         // Get the names of all BioPortal ontologies
                         // This saves the list to data/raw/ontologylist.tsv
-                        sh ". venv/bin/activate && kgbioportal get-ontology-list --api_key ${NCBO_API_KEY}"
+                        // Deactivated for testing purposes
+                        //sh ". venv/bin/activate && kgbioportal get-ontology-list --api_key ${NCBO_API_KEY}"
 
                         // Now download all
                         // or at least in the future, do them all.
