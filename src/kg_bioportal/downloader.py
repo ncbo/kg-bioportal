@@ -56,7 +56,6 @@ class Downloader:
 
         return None
 
-    # TODO: save NCBO ID and version for each ontology, then pass to transformer
     def download(self, onto_list: list = []) -> None:
         """Downloads data files from list of ontologies into data directory.
 
@@ -84,8 +83,9 @@ class Downloader:
             metadata = requests.get(metadata_url, headers=headers).json()
             logging.info(f"Name: {metadata['name']}")
             latest_sub_metadata = requests.get(latest_sub_url, headers=headers).json()
+            submission_id = latest_sub_metadata["submissionId"]
             logging.info(
-                f"Latest submission: {latest_sub_metadata['version']} - released {latest_sub_metadata['released']}"
+                f"Latest submission: {latest_sub_metadata['version']} - submission ID {submission_id} - released {latest_sub_metadata['released']}"
             )
 
             download_onto = requests.get(
@@ -96,7 +96,12 @@ class Downloader:
                 .split("filename=")[1]
                 .replace('"', "")
             )
-            with open(f"{self.output_dir}/{onto_filename}", "wb") as outfile:
+
+            outpath = f"{self.output_dir}/{ontology}/{submission_id}/{onto_filename}"
+            outdir = f"{self.output_dir}/{ontology}/{submission_id}"
+            if not os.path.exists(outdir):
+                os.makedirs(outdir)
+            with open(outpath, "wb") as outfile:
                 outfile.write(download_onto.content)
 
         return None
