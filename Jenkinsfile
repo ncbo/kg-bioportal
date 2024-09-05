@@ -95,7 +95,7 @@ pipeline {
         stage('Transform') {
            steps {
                dir('./gitrepo') {
-		           sh ". venv/bin/activate && kgbioportal transform --input_dir data/raw/ --output_dir data/transformed/"
+		           sh ". venv/bin/activate && kgbioportal transform"
 	       }
            }
         }
