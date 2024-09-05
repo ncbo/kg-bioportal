@@ -2,6 +2,8 @@
 
 import logging
 import os
+import time
+
 import requests
 
 ONTOLOGY_LIST_NAME = "ontologylist.tsv"
@@ -134,14 +136,12 @@ class Downloader:
         with open(f"{self.output_dir}/{ONTOLOGY_LIST_NAME}", "w") as outfile:
             outfile.write(f"id\tname\tcurrent_version\tsubmission_id\n")
             for acronym in ontologies:
-                metadata_url = f"https://data.bioontology.org/ontologies/{acronym}"
-                metadata = requests.get(metadata_url, headers=headers).json()
                 latest_submission_url = f"https://data.bioontology.org/ontologies/{acronym}/latest_submission"
                 latest_submission = requests.get(
                     latest_submission_url, headers=headers
                 ).json()
 
-                name = metadata["name"].replace("\n", " ").replace("\t", " ")
+                name = latest_submission["ontology"]["name"].replace("\n", " ").replace("\t", " ")
                 if len(latest_submission) > 0:
                     if latest_submission["version"]:
                         current_version = " ".join(
@@ -160,5 +160,7 @@ class Downloader:
                 outfile.write(
                     f"{acronym}\t{name}\t{current_version}\t{submission_id}\n"
                 )
+                # Wait for half a second to avoid rate limiting
+                time.sleep(0.5)
 
         logging.info(f"Wrote to {self.output_dir}/{ONTOLOGY_LIST_NAME}")
