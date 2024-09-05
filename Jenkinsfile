@@ -81,6 +81,7 @@ pipeline {
                         // Now download all
                         // or at least in the future, do them all.
                         // For now just do a few
+                        sh "mkdir -p data/raw"
                         sh "printf 'ENVO\nPO\nSEPIO\n' > data/raw/ontologylist.tsv"
                         
                         // Download the ontologies
