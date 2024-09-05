@@ -102,10 +102,8 @@ pipeline {
                 dir('./gitrepo') {
                     script {
 
-                        //if (env.GIT_BRANCH != 'origin/main') {
-                        //    echo "Will not push if not on main branch."
-                        if (1 == 1) {
-                            echo "TESTING."
+                        if (env.GIT_BRANCH != 'origin/main') {
+                            echo "Will not push if not on main branch."
                         } else {
                             withCredentials([
 					            file(credentialsId: 's3cmd_kg_hub_push_configuration', variable: 'S3CMD_CFG'),
