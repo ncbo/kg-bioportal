@@ -141,8 +141,8 @@ class Downloader:
                     latest_submission_url, headers=headers
                 ).json()
 
-                name = latest_submission["ontology"]["name"].replace("\n", " ").replace("\t", " ")
                 if len(latest_submission) > 0:
+                    name = latest_submission["ontology"]["name"].replace("\n", " ").replace("\t", " ")
                     if latest_submission["version"]:
                         current_version = " ".join(
                             (
@@ -155,6 +155,7 @@ class Downloader:
                         current_version = "NA"
                     submission_id = latest_submission["submissionId"]
                 else:
+                    name = acronym
                     current_version = "NA"
                     submission_id = "NA"
                 outfile.write(
