@@ -2,3 +2,1143 @@ id	name	current_version	submission_id
 ABA-AMB	Allen Brain Atlas (ABA) Adult Mouse Brain Ontology	1	1
 ABD	Anthology of Biosurveillance Diseases	NA	4
 ACESO	Adverse Childhood Experiences Ontology	Light	2
+ACGT-MO	Cancer Research and Management ACGT Master Ontology	1.1	2
+ACVD_ONTOLOGY	Atherosclerotic Cerebrovascular Disease Ontology	2.0	4
+AD-DROP	Alzheimer Disease Relevance Ontology by Process	alpha	1
+ADALAB	AdaLab ontology	0.9.2	10
+ADALAB-META	AdaLab-meta ontology	0.9.2	12
+ADAR	Autism DSM-ADI-R ontology	1.1	1
+ADCAD	Arctic Data Center Academic Disciplines Ontology	Version 1.0.0	1
+ADHER_INTCARE_EN	Adherence and Integrated Care	English 051319	1
+ADHER_INTCARE_SP	Adherence and Integrated Care in Spanish	Spanish 052319	6
+ADMF	alzhaimer dessiese main factors	NA	1
+ADMIN	Nurse Administrator	NA	1
+ADMO	Alzheimer Disease Map Ontology	beta	4
+ADO	Alzheimer's Disease Ontology	2.0.1	4
+ADW	Animal Natural History and Life History Ontology	10/11/04	2
+AEO	Anatomical Entity Ontology	NA	7
+AERO	Adverse Event Reporting Ontology	unknown	45
+AFO	Allotrope Merged Ontology Suite	REC/2024/06	38
+AFPO	African Population Ontology	2024-03-21	1
+AGRO	AGRonomy Ontology	NA	6
+AGROCYMAC	Control y Monitoreo de afecciones en los cultivos	NA	2
+AGROMOP	Control de Cacao	1.1	1
+AHOL	Animal Health Ontology for Livestock	1.0	1
+AHSO	Animal Health Surveillance Ontology	0.1.0	1
+AI-RHEUM	Artificial Intelligence Rheumatology Consultant System Ontology	2024AA	24
+AIO	Artificial Intelligence Ontology	2024-08-14	20
+AISM	Ontology for the Anatomy of the Insect SkeletoMuscular system	2023-04-14	6
+ALLERGIDOC	Allergy Ontology	1.0	1
+ALLERGYDETECTOR	Allergy Detector II	0.0.1	1
+AMINO-ACID	Amino Acid Ontology	version 1.2, copyright	2
+AMPHX	The Amphioxus Development and Anatomy Ontology	NA	5
+AO	Asthma Ontology	1.3	2
+APACOMPUTER	Computer Cluster	NA	1
+APADISORDERS	Disorders cluster	NA	1
+APAEDUCLUSTER	Educational Cluster	NA	1
+APANEUROCLUSTER	APA Neuro Cluster	NA	1
+APAOCUEMPLOY	APA Occupational and Employment cluster	NA	1
+APAONTO	Psychology Ontology	4	4
+APASTATISTICAL	APA Statistical Cluster	NA	1
+APATANDT	APA Tests and Testing cluster	NA	1
+APATREATMENT	APA Treatment Cluster	NA	1
+APO	Ascomycete Phenotype Ontology	releases/2024-08-03	40
+APOLLO-SV	Apollo Structured Vocabulary	2024-08-15	64
+APRO	Ancient Poet Resource Ontology	NA	1
+ARCRC	Arctic Report Card	0.10.0	4
+ARO	Antibiotic Resistance Ontology	NA	20
+ASDF	ASDF	NA	NA
+ASDPTO	Autism Spectrum Disorder Phenotype Ontology	1	1
+ASPECT	ASPECT: wind energy vAriableS, ParametErs and ConsTants	0.1.0	3
+ASSAYNODE	Assaynode	1.0	2
+ATC	Anatomical Therapeutic Chemical Classification	2024AA	22
+ATO	Amphibian Taxonomy Ontology	See Remote Site	2
+ATOL	Animal Trait Ontology for Livestock	6.0	2
+ATOM	Atlas Ontology Model	2023-04-27	1
+AURA	KB_Bio_101	1.0	1
+BAO	BioAssay Ontology	2.8.11	56
+BAO-GPCR	G Protein-Coupled Receptor BioAssays Ontology	1.1	23
+BCGO	Breast Cancer Grading Ontology	1.5	2
+BCI-O	Brain-Computer Interaction (BCI) Ontology	0.9.6	6
+BCLION	Breast Cancer Lifestyle Ontology	1.0	1
+BCO	Biological Collections Ontology	2021-11-14	11
+BCON	Breast Cancer Ontology	1.0	2
+BCS7	Breast Cancer Staging - 7th Edition	version 0.1	1
+BCS8	Breast Cancer Staging - 8th Edition	version 0.1	1
+BCSR-ONTO	Breast cancer screening recommendation ontology	2.1	3
+BCTEO	Bone and Cartilage Tissue Engineering Ontology	releases/2013-08	4
+BCTT	Behaviour Change Technique Taxonomy	0.4	6
+BDO	Bone Dysplasia Ontology	1.5	9
+BE	Bioentities	1.0	5
+BERO	Biological and Environmental Research Ontology	2022-12-23	3
+BFLC	LC BIBFRAME 2.0 Vocabulary Extension	1.2.0	4
+BFO	Basic Formal Ontology	2.0	2
+BHN	Biologie Hors Nomenclature	3.2	1
+BHO	Bleeding History Phenotype Ontology	0.4	3
+BIBFRAME	BIBFRAME 2.0	2.2.0	8
+BIBLIOTEK-O	The Biblioteko Ontology	Version 1.1.0	3
+BIFO	Biofilm Ontology	NA	1
+BIM	Biomedical Image Ontology	1.3	6
+BIN	Body in Numbers project terminology	1.1	2
+BIODIVTHES	Biodiversity Thesaurus	2.1	1
+BIOLINK	Biolink Model	2.2.13	62
+BIOMO	Biological Observation Matrix Ontology	0.0.1	1
+BIOMODELS	BioModels Ontology	21	3
+BIPOM	Biological interlocked Process Ontology for metabolism	Core	3
+BIPON	Bacterial interlocked Process ONtology	2017-11-08-bis	3
+BIRNLEX	Biomedical Informatics Research Network Project Lexicon	1.3.1	1
+BIRTHONTO	BirthOnto: Birth Data Analysis	1.1	1
+BKO	Bricks ontology	13:07:2018 10:45	1
+BLLM	BLLM	NA	NA
+BMONT	The Biomarker Ontology	Version Release: 0.5.4	1
+BMS-LM	BioMedical Study Lifecycle Management	Version 1.1	1
+BMT	Biomedical Topics	1.4	1
+BNO	Bionutrition Ontology	0.2	2
+BOF	Biodiversity Ontology	1.2	2
+BOSHI	BOSHI	NA	NA
+BP	BioPAX Ontology of Biological Pathways	Level3 v1.0	1
+BP-METADATA	BioPortal Metadata Ontology	0.9.5	6
+BPFORMS	Ontology of chemically concrete, composable DNA, RNA, and protein residue and crosslinks	0.0.9	1
+BPT	Biological Pathway Taxonomy	synonymes2022	2
+BRAIN-COF	Computational Ontology Framework for Brain Profiles	3	2
+BRCT	Brain Region & Cell Type terminology	3.0	1
+BRIDG	Biomedical Research Integrated Domain Group Model	3.2	1
+BRO	Biomedical Resource Ontology	3.2.1	14
+BRSO	Biological Resource Schema Ontology	0.02	1
+BSAO	Botryllus schlosseri anatomy and development ontology	Version 1	1
+BSPO	Spatial Ontology	2023-05-27	32
+BT	BioTop Ontology	Last modification Apr	12
+BT-ONTOLOGY	BrainTeaser Ontology (BTO)	2.0	3
+BTO	BRENDA Tissue and Enzyme Source Ontology	releases/2021-10-26	67
+BTO-BFO	Brinell Test Ontology-BFO	5.0.4 (BFO, IOF.	4
+BTO-EMMO	Brinell Test Ontology-EMMO	3.0.4 (EMMO, CHAMEO,	3
+BTO-PROVO	Brinell Test Ontology-PROVO	4.0.4 (PROV, PMDco)	2
+BTO_ONTOLOGY	Brain Tumour Ontology	1	1
+C19M	C19M	NA	NA
+CABRO	Computer Assisted Brain Injury Rehabilitation Ontology	0.5	1
+CANCO	Cancer Chemoprevention Ontology	0.3	3
+CANONT	Upper-Level Cancer Ontology 	unknown	1
+CAO	Clusters of Orthologous Groups (COG) Analysis Ontology	1.4	3
+CARELEX	Content Archive Resource Exchange Lexicon	1.02	45
+CARO	Common Anatomy Reference Ontology	2023-03-15	16
+CAROLIO	Caroli's Disease and Syndrome Ontology	2.2	1
+CARRE	CARRE Risk Factor ontology	0.2	3
+CASE-BASE-ONTO	Case-base ontology for gastric dystemperament in Persian medicine	1.0	1
+CBO	Cell Behavior Ontology	Version 1.1.2 added	25
+CCF	Human Reference Atlas Common Coordinate Framework Ontology	3.0.0	16
+CCO	Cell Cycle Ontology	2.10	6
+CCON	Cerrado concepts and plant community dynamics	0.9.3	8
+CCONT	Cell Culture Ontology	1.1	3
+CCTOO	Cancer Care: Treatment Outcome Ontology	releases/2018-05-11	2
+CDAO	Comparative Data Analysis Ontology	$Revision$	7
+CDMONTO	Common Diabetes Medications Ontology	2	1
+CDNO	Compositional Dietary Nutrition Ontology	NA	16
+CDO	Chinese Diabetes Mellitus Ontology	3.0	6
+CDOH	Commercial determinant of Health Ontology	v1	1
+CDPEO	Chronic Disease Patient Education Ontology	1.0.0	1
+CEDARPC	CEDAR Provisional Classes	NA	2
+CEDARVS	CEDAR Value Sets	0.2.2	4
+CEPH	Cephalopod Ontology	NA	1
+CHD	Congenital Heart Defects Ontology	1.1	5
+CHEAR	Children's Health Exposure Analysis Resource	2.8	15
+CHEBI	Chemical Entities of Biological Interest Ontology	236	199
+CHEMBIO	Systems Chemical Biology and Chemogenomics Ontology 	1.1	10
+CHEMINF	Chemical Information Ontology	2.1.0	52
+CHEMROF	CHEMROF	NA	4
+CHIRO	CHEBI Integrated Role Ontology	NA	2
+CHMO	Chemical Methods Ontology	releases/2014-11-20	27
+CHO	ChemoOnto	Version: 1.0.1 Date:	1
+CHR	Monochrom	2024-08-06	2
+CHRO	Chromatin Regulator Ontology	2023-08-18	2
+CIDO	Coronavirus Infectious Disease Ontology	2024-02-16	42
+CIDOC-CRM	CIDOC Conceptual Reference Model	v6.2	2
+CIINTEADO	Ciona intestinalis Anatomy and Development Ontology	Version 1	2
+CIO	Confidence Information Ontology	NA	1
+CISAVIADO	Ciona savignyi Anatomy and Development Ontology 	NA	2
+CKDO	Chronic Kidney Disease Ontology	v1.0	1
+CL	Cell Ontology	2024-08-16	116
+CLAO	Collembola Anatomy Ontology	2021-09-27	2
+CLO	Cell Line Ontology	2.1.188	66
+CLYH	Clytia hemisphaerica Development and Anatomy Ontology	NA	4
+CMDO	Clinical MetaData Ontology	1.1.4	10
+CMECS	Coastal and Marine Ecological Classification Standard Catalog	1.1.0	2
+CMO	Clinical Measurement Ontology	2.224	146
+CMPO	Cellular microscopy phenotype ontology	1.3	14
+CMR-QA	Cardiovascular Magnetic Resonance Quality Assessment Ontology	0.4.5	1
+CN	computer network	NA	1
+CNO	Computational Neuroscience Ontology	version 0.5	8
+CO	CO	NA	NA
+CO-WHEAT	Wheat Trait Ontology 	08.11.2010	1
+COB	Core Ontology for Biology and Biomedicine	2023-11-16	15
+CODO	CODO: an Ontology for collection and analysis of COviD-19 data	1.5	6
+COGAT	Cognitive Atlas Ontology	0.4	8
+COGPO	Cognitive Paradigm Ontology	1	1
+COHSI2STUDY	cohsi2study	0.2.8	27
+COHSI2TERMSWEEKX	cohsi2termsweekx	NA	1
+COID	Combined Ontology for Inflammatory Diseases	1.0.0	1
+COKPME	COKPME - COVID19 Ontology for analyzing the Karnataka Private Medical Establishments Data  	1.0	1
+COLAO	Coleoptera Anatomy Ontology	2024-06-21	8
+COMET	LinkML Common Metadata Elements and Terms	NA	5
+COMODI	COMODI	NA	6
+CONDOR	Liver Cancer Ontology Diagnosis Treatment	0.1	1
+CONTSONTO	Continuity of care	1.5	5
+COPDO	COPD Ontology	1	1
+COSTART	Coding Symbols for a Thesaurus of Adverse Reaction Terms	2024AA	24
+COVID-19	COVID-19 Ontology	Version Release: 1.0.0	4
+COVID-19-ONT-PM	COVID-19OntologyInPatternMedicine	007	9
+COVID19	COVID-19 Surveillance Ontology	V1.0	3
+COVID19-IBO	Covid19 Impact on Banking Ontology	1.5	6
+COVIDCRFRAPID	WHO COVID-19 Rapid Version CRF semantic data model	1.1.4	12
+CPRO	Computer-Based Patient Record Ontology	Last modification: July	3
+CPT	CPT - Current Procedural Terminology	2020AB	3
+CPTAC	CPTAC Proteomics Pipeline Infrastructure Ontology	alpha 1.1	3
+CRENO	Culture, Race, Ethnicity and Nationality Ontology	0.6	2
+CRISP	Computer Retrieval of Information on Scientific Projects Thesaurus	2024AA	24
+CRO	Contributor Role Ontology	v2019-08-16	4
+CRYOEM	Cryo Electron Microscopy	2021-03-09	4
+CS	Coping Strategies for Adverse Drug Events Ontology	NA	1
+CSEO	Cigarette Smoke Exposure Ontology	1.0	2
+CSO	Clinical Study Ontology	NA	1
+CSSO	Clinical Signs and Symptoms Ontology	Version 0.6	6
+CST	Cancer Staging Terms	NA	1
+CSTD	Clinical smell and taste disorders	1	1
+CTCAE	Common Terminology Criteria for Adverse Events	5.0	3
+CTENO	Ctenophore Ontology	NA	1
+CTGO	Clinical Trials Gov Ontology	1.0	1
+CTO	Clinical Trials Ontology	Version Release: 1.0.0	1
+CTO-NDD	Clinical Trials Ontology - Neurodegenerative Diseases	0.6	1
+CTONT	Epoch Clinical Trial Ontology	<table border="1"> <tr>	1
+CTU_BEREADY_GEM	CTU Bern BEReady Gemeinden	gem_onto_1level_v0_01	3
+CTX	Cerebrotendinous Xanthomatosis Ontology	vtemp2	2
+CU-VO	Venom Ontology	1.0	1
+CVAO	STO	2017-11-01	2
+CVDO	Cardiovascular Disease Ontology	2024-05-17	5
+CWD	Consumer Wearable Device	NA	1
+CYTO	CYTOKINE	Cytokines	27
+DATACITE	SPAR DataCite Ontology	1.2	2
+DATACITE-VOCAB	DATACITE V4.4	0.1.0	5
+DC	Dublin Core	NA	3
+DCAT	Data Catalog Vocabulary	NA	2
+DCAT-FDC	Data Catalog Vocabulary (DCAT)	Toto je aktualizovaná	1
+DCAT3	DCAT3	3	1
+DCCDFV	Dublin Core Collection Description Frequency Vocabulary	NA	1
+DCM	DICOM Controlled Terminology	2024c_20240617	46
+DCMITYPE	DCMI Type Vocabulary	NA	4
+DCO	Dispedia Core Ontology	0.7.0.0002	34
+DCT	DC Terms	NA	1
+DCTERMS	DCMI Metadata Terms: properties in /terms/ namespace	NA	1
+DDANAT	Dictyostelium Discoideum Anatomy Ontology	1.19	24
+DDI	Ontology for Drug Discovery Investigations	$Revision$	2
+DDIEM	Drug Database for Inborn Errors of Metabolism (DDIEM) Ontology	1.2	4
+DDPHENO	Dictyostelium Discoideum Phenotype Ontology	NA	507
+DDSS	Health_ontology	NA	1
+DEB	Devices, Experimental scaffolds and Biomaterials Ontology	4.0	7
+DECIDE	DECIDE ONTOLOGY	NA	1
+DERMLEX	Dermatology Lexicon	1	4
+DERMO	Human Dermatological Disease Ontology	1.19	10
+DFO	Databank Family Ontology	0.1	1
+DIAB	BioMedBridges Diabetes Ontology	2.0	73
+DIAGONT	Diagnostic Ontology	2.0	1
+DIDEO	Drug Interaction and Evidence Ontology	release version 2017-11-17	48
+DIKB	Drug Interaction Knowledge Base Ontology	Version 1.6	5
+DILON	Dietary lifestyle ontology	2	2
+DINTO	The Drug-Drug Interactions Ontology	1.3	5
+DISDRIV	Disease Drivers Ontology	NA	2
+DLORO	Dependency Layered Ontology for Radiation Oncology	1.2	2
+DMDSONT	Diabetes Mellitus Diagnosis and Support Ontology 	ver 1.0	1
+DMTO	Diabetes Mellitus Treatment Ontology	2015-11-20	5
+DOCCC	Diagnosis Ontology of Clinical Care Classification	20131004	3
+DOID	Human Disease Ontology	2024-08-29	652
+DOREMUS-KEYS	Doremus List of Keys	NA	3
+DOVES	Digital medicine Outcomes Value Set (DOVeS) Ontology	releases/2023-03-01	2
+DPCO	Diabetes Pharmacology Ontology	1.0	2
+DPO	Drosophila Phenotype Ontology	2024-08-08	33
+DRANPTO	Dementia-Related Agitation Non-Pharmacological Treatment Ontology	Version 1.0	1
+DREAMDNPTO	Dementia-Related Emotional And Mood Disturbance Non-Pharmacological Treatment Ontology	v1.0	1
+DRMO	Dental Restorative Material Ontology	NA	1
+DRON	The Drug Ontology	2024-09-04	26
+DRPSNPTO	Dementia-Related Psychotic Symptoms Non-Pharmacological Treatment Ontology	v1.0	1
+DSEO	Data Science Education Ontology	1.1	4
+DSIP	Pharmacy mock data	NA	1
+DSIP1V	DSIP1_vocabulary	NA	2
+DSIP2324_DEMO	DSIP2324_Demonstration	0.2	2
+DSIP7	DSIP_FieldLab_7	NA	1
+DSIP8	DSIP8REFUGEE	NA	3
+DSIPF7	DSIP FiledLab7 	NA	3
+DSIPFL7	DSIP_Fieldlab_7	latest_v1	12
+DSIP_FL_7	DSIP_FL_7	v1	1
+DTO	Drug Target Ontology	1.1.1	5
+DUO	The Data Use Ontology	NA	8
+E-PPO	Enhanced Personal Profile Ontology	NA	1
+EBP	EmpowerBP	2.5	2
+ECAO	The Echinoderm Anatomy and Development Ontology	NA	6
+ECDO	Elderly Care Dementia Ontology	NA	1
+ECG	Electrocardiography Ontology	1	12
+ECM4M-MD-VOCABS	EarthCube M4M Metadata Vocabulary	0.1.2	4
+ECO	Evidence and Conclusion Ontology	releases/2024-07-19	121
+ECOCORE	An ontology of core ecological entities	2022-03-09	7
+ECOSIM	ecosim ontology	NA	1
+ECP	Electronic Care Plan	0.6	2
+ECSO	The Ecosystem Ontology	0.9	64
+ECTO	Environmental conditions, treatments and exposures ontology	2023-02-14	10
+EDAM	EDAM - Bioscientific data analysis ontology	unstable(1.26_dev)	44
+EDAM-BIOIMAGING	EDAM Bioimaging Ontology	alpha06	6
+EDDA	EDDA Study Designs Taxonomy	2.0	11
+EDDA_PT	EDDA Publication Types Taxonomy	1.0	1
+EDEM-CONNECTONTO	eDEM-Connect: Ontology of Dementia-related Agitation and Relationship between Informal Caregivers and Persons with Dementia	Version 1.0	1
+EFO	Experimental Factor Ontology	3.69.0	267
+EGO	Epigenome Ontology	Arbor version; 1.0.1	1
+EHDA	Human Developmental Anatomy Ontology, timed version	unknown	7
+EHDAA	Human Developmental Anatomy Ontology, abstract version 1	unknown	7
+EHDAA2	Human Developmental Anatomy Ontology, abstract version 2	releases/2024-01-11	34
+ELD	EthiopianListOfDiseases	4	5
+ELECTRICA	Ontology for ELEctronic tool for Clinicians, Trainers and Researchers In Child Abuse	2024-07-06	5
+ELIG	Eligibility Feature Hierarchy	v. 1.0	1
+ELTER_CL	eLTER Controlled Lists	1.1.1	52
+EMAP	Mouse Gross Anatomy and Development Ontology	unknown	7
+EMAPA	Mouse gross anatomy and development, timed	NA	48
+EMIF-AD	EMIF-AD ontology	0.0.2	3
+EMO	Enzyme Mechanism Ontology	NA	1
+ENM	eNanoMapper	10.0	34
+ENTITY	ISO-15926-2_2003_entityMembership	Created 2008-07-14. Version	1
+ENVO	Environment Ontology	2024-07-01	60
+ENVS_VARIABLES	ENVS variables	0.1.1	2
+ENVTHES	Thesaurus for long-term ecological research, monitoring, experiments	5.0.8	40
+EO	Ethnicity Ontoloy	1.0	1
+EO1	Example Ontology	NA	1
+EOL	Environment Ontology for Livestock	NA	1
+EP	Cardiac Electrophysiology Ontology	1	2
+EPIE	Epigenetic Entity	1.3	4
+EPILONT	Epilepsy Ontology	V1	2
+EPIO	EpilepsyOntology	Version Release: 1.0.0	1
+EPIP	Epigenetic Process	1.3	4
+EPISEM	Epilepsy Semiology	5.0	8
+EPO	Early Pregnancy Ontology	1.1	1
+EPSO	Epilepsy and Seizure Ontology	3	7
+ERO	Eagle-I Research Resource Ontology	2013-08-02	14
+ESFO	Enzyme Structure Function Ontology	1	1
+ESO_C	Epilepsy Semiology Ontology	1.0	1
+ESSO	Epilepsy Syndrome Seizure Ontology	1.03	5
+ETANC	ETHIOPIANC	0.2	2
+ETHANC	ETHANC	14	16
+ETHOPD	Ethiopian OPD	0.3	1
+EUPATH	VEuPathDB Ontology	2023-05-30	19
+EVI	Evidence Graph Ontology	1.1	7
+EXACT	An ontology for experimental actions	2	2
+EXMO	Exercise Medicine Ontology	1.1	3
+EXO	Exposure Ontology	releases/2022-06-29	11
+EXON	Experimental Ontology	NA	1
+EXTRACT	EXTeRnAl Conditions Taxonomy (EXTRACT)	v0.1.0	2
+FALDO	Feature Annotation Location Description Ontology 	Created at the	18
+FALL	MyOntoServiceFull_FallDetection	1	1
+FALLS	falls prevention 	0.1	1
+FAO	Fungal Gross Anatomy Ontology	NA	27
+FARMACI	FARMACI	NA	NA
+FAST-CHRONO	FAST (Faceted Access of Subject Terminology) Chronological Facet	NA	1
+FAST-EVENT	FAST (Faceted Application of Subject Terminology) Event	NA	1
+FAST-EVENT-SKOS	FAST (Faceted Application of Subject Terminology) Event Facet	NA	1
+FAST-FORMGENRE	FAST (Faceted Application of Subject Terminology) FormGenre facet	NA	1
+FAST-GENREFORM	FAST (Faceted Access of Subject Terminology) GenreForm	NA	3
+FAST-TITLE	FAST (Faceted Application of Subject Terminology) Title Facet	NA	1
+FASTO	HL7 FHIR and SSN ontology based Type 1 Diabetes Mellitus Ontology	2015-11-20	2
+FB-BT	Drosophila Gross Anatomy Ontology	fbbt/releases/2024-08-08	83
+FB-CV	FlyBase Controlled Vocabulary	2024-08-08	51
+FB-DV	Drosophila Development Ontology	fbdv/releases/2024-08-07	61
+FB-SP	Fly Taxonomy	NA	8
+FBbi	Biological Imaging Methods Ontology	NA	104
+FCC1	Fernald Community Cohort N	1.0	1
+FDC-GDMT	Ontology for Generic Dataset Metadata Template	v0.3.7	12
+FDSAJFAHSJK	OWL_XML_Tool5	NA	1
+FDT-O	FAIR Data Train Ontology	- Refactored FHIR	9
+FENICS	Functional Electrophysiology Nomenclature for Ion Channels	0.0.5	9
+FG	FAIR Genomes	1.2-Minor	4
+FGNHNS	FoodGroupNHNS	0.232	54
+FHHO	Family Health History Ontology	1	1
+FIDEO	Food Interactions with Drugs Evidence Ontology	2023-12-18	8
+FIRE	Fire Ontology	0.8	7
+FISH-AST	FISH Archaeological Sciences Thesaurus	NA	1
+FISHO	Fish Ontology	Version 1.0.3 (Possible	1
+FITBIT	FITBIT	NA	NA
+FIT_BIT	Fitbit Vocabularies 	NA	1
+FIX	Physico-Chemical Methods and Properties	1.2	4
+FLDLB3	FIELDLAB3_2023_2	3	4
+FLOPO	Flora Phenotype Ontology	0.9	8
+FLU	Influenza Ontology	0.9.0	27
+FLYGLYCODB	FlyGlycoDB	1.0.0	2
+FMA	Foundational Model of Anatomy	5.0.0	29
+FMPM	Food Matrix for Predictive Microbiology	0.9.2	5
+FNS-H	FNS-Harmony	1.3	2
+FO	Fern Ontology	0.05	6
+FOAF	Friend of a Friend Vocabulary	0.99	1
+FOBI	FOBI (Food-Biomarker Ontology)	NA	3
+FOO	Forest Observatory Ontology	BBC Wildlife Ontology	21
+FOODON	The FoodOn Food Ontology	2024-06-17	104
+FOUR-M_VOCABS	AGE-FRIENDLY 4M VOCABULARY	1	1
+FOVT	FuTRES Ontology of Vertebrate Traits	2023-05-31	7
+FPLX	FamPlex	1.0	38
+FRMO	Fall Risk Management Ontology 	09.10	18
+FTC	Functional Therapeutic Chemical Classification System	1	1
+FYPO	Fission Yeast Phenotype Ontology	2024-09-02	489
+G-PROV	Guideline Provenance	1	1
+G4-DSIP	Group 4-Data Science in Practice	1.0.0	6
+GALEN	Galen Ontology	1.1	1
+GALLONT	Plant Gall Ontology	2024-04-19	1
+GAMUTS	Radiology Gamuts Ontology	2.0	25
+GAZ	Gazetteer	$Revision: 1.512 $	14
+GB	GlycanBind	1.1.1	3
+GBM	Glioblastoma	NA	1
+GBOL	GBOL	1	2
+GCBO	Global Code Book Ontology	2024-05-01	3
+GCO	Genome Component Ontology	0.2	4
+GDCO	Data Collection Ontology	1.0	1
+GDMT	Generic Dataset Metadata Template Vocabulary	1.0.0-alpha	4
+GECCO	COVID-19 Common Datamodel	1.0.0	1
+GECKO	Genomics Cohorts Knowledge Ontology	NA	11
+GENDER	Gender Identity	NA	1
+GENE-CDS	Genomic Clinical Decision Support Ontology	0.8.0	1
+GENEPIO	Genomic Epidemiology Application Ontology 	NA	1
+GENEVIEVE	GENEVIEVE	NA	NA
+GENO	Genotype Ontology	2023-10-08	31
+GEO	Geographical Entity Ontology	production version 2018-02-23	3
+GEOSPARQL	GeoSPARQL	OGC GeoSPARQL 1.0	1
+GEOSPECIES	GeoSpecies Ontology	2012-10-02	2
+GEXO	Gene Expression Ontology	2015	2
+GFF-M4M	GO FAIR M4M	0.0.5	40
+GFFO	Genetic Feature Format Ontology	0.0.1	1
+GFO	General Formal Ontology	Version 1.0 ($Revision:	1
+GFO-BIO	General Formal Ontology for Biology	1.1	1
+GFVO	Genomic Feature and Variation Ontology	1.0.6	20
+GLYCO	Glycomics Ontology	4.6.0.0	1
+GLYCOCOO	GlycoConjugate Ontology	1.1.3	2
+GLYCORDF	GlycoRDF	1.2.1	60
+GML	Ontology for Geography Markup Language (GML3.0)	version 1.0	1
+GMM	GoMapMan	1.2	25
+GMO	Growth Medium Ontology	0.24 Beta	9
+GNO	Glycan Naming Ontology	V2.2.0	16
+GO	Gene Ontology	releases/2024-06-17	1824
+GO-EXT	Gene Ontology Extension	2	2
+GO-PLUS	go-plus	2024-06-17	699
+GOLDTERMS	GOLD Ecosystem Classification	NA	4
+GPML	Graphical Pathway Markup Language	2013a	344
+GRO	Gene Regulation Ontology	0.5	5
+GRO-CPD	Cereal Plant Development Ontology	1.6	1
+GRO-CPGA	Cereal Plant Gross Anatomy Ontology	unknown	11
+GSSO	Gender, Sex, and Sexual Orientation Ontology	2.0.6	75
+GVO	Genome Variation Ontology	2021-11-18	3
+HAAURAADO	Halocynthia aurantium Anatomy and Development Ontology	NA	2
+HAMIDEHSGH	Inherited Retinal Dystrophy	NA	1
+HANCESTRO	Human Ancestry Ontology	2024-08-19	18
+HAO	Hymenoptera Anatomy Ontology	2023-06-01	27
+HAROREADO	Halocynthia roretzi Anatomy and Development Ontology	NA	2
+HASCO	Human-Aware Science Ontology	0.9	6
+HC	HC	NA	NA
+HCDR	Homelessness and Clinical Data Recording	1	1
+HCODONONT	HGeneCodonOntology	2	4
+HCPCS	Healthcare Common Procedure Coding System	2024AA	24
+HDMPONTO	HierarchicalDMProcessOnto	NA	1
+HECON	HECON: Health Condition Evolution Ontology	0.1	1
+HED	Hierarchical Event Descriptors	releases/2024-06-10	1
+HEIO	Regional Healthcare System Interoperability and Information Exchange Measurement Ontology	Version 1.15	17
+HELIFIT	HeLiFit-Ontology	1.6.4	1
+HENECON	Head and Neck Cancer Ontology	2.0	1
+HENEGEO	Head and Neck Cancer - Clinical and Gene Ontology	1.0	1
+HFO	Heart Failure Ontology	version 1.0	1
+HGNC	HUGO Gene Nomenclature	July2010	1
+HGNC-NR	HGNC New Releases Ontology	2024-03-04	11
+HHEAR	Human Health Exposure Analysis Resource	1.11	16
+HHEARP	HHEAR Properties	0.0.3	3
+HHEARVS	HHEAR Value Sets	0.0.12	12
+HINO	Human Interaction Network Ontology	Vision Release: 1.0.69	6
+HIO	Hearing Impairment Ontology	1	3
+HIV	HIV ontology	2.6	10
+HIVCRS	HIVCompoundRels	1	1
+HIVHPV	HIVHPV	NA	NA
+HIVHPVFGS	HIV, HPV, FGS vocabulary	NA	2
+HIVHPVSCHISTOSOM	HIVHPVSchistosomiasis	1.1	2
+HIVHPVSTOM	HIVHPVStom	NA	1
+HIVMT	HIVMutation	01	6
+HIVO004	HIVOntologymain.owl	020	29
+HL7	Health Level Seven Reference Implementation Model, Version 3	2024AA	24
+HMADO	Human Microbiome Associated Disease Ontology 	NA	1
+HMIS033B	HMIS 033	NA	1
+HMISLAB0115	HMIS LAB 011 5	NA	1
+HNS	HNS_Ontolgoy	4.0	1
+HO	Histological Ontology	1.1	78
+HOIP	Homeostasis imbalance process ontology	2024/04/03	65
+HOM	Ontology of Homology and Related Concepts in Biology	releases/2015-01-07	7
+HOME	Health Ontology for Minority Equity	1	1
+HOOM	HPO - ORDO Ontological Module	2.2	10
+HORD	Holistic Ontology of Rare Diseases	4.0	4
+HP	Human Phenotype Ontology	hp/releases/2024-08-13	616
+HPIO	Host Pathogen Interactions Ontology	1	2
+HP_O	Hypersensitivity pneumonitis ontology	1.0	1
+HRA	Human Reference Atlas	2.1.0	1
+HRAVS	HuBMAP Research Attributes Value Set	2.5.11	100
+HRDO	Disease core ontology applied to Rare Diseases	V2	2
+HSAPDV	Human Developmental Stages Ontology	NA	179
+HSCLO38	Homo sapiens Chromosomal Location Ontology for GRCh38	NA	4
+HSO	Health Surveillance Ontology	3.1.1	9
+HSPO	Health and Social Person-centric Ontology	0.1.0	3
+HTN	Hypertension Ontology	NA	1
+HTO	Horridge Test Ontology	0.0.1	1
+HUPSON	Human Physiology Simulation Ontology	1.1.1	1
+I-ADOPT	I-ADOPT Framework Ontology	1.0.3	5
+I2SV	Integration and Implementation Sciences Vocabulary	1.0.0	5
+IAML-MOP	IAML Medium of Performance Vocabulary	NA	2
+IAO	Information Artifact Ontology	2022-11-07	10
+IBD	Indian Biodiversity Ontology	1.1	1
+IBIO	IndianBiodiversity	NA	1
+IBO	Imaging Biomarker Ontology	NA	2
+ICD-O-3	International Classification of Diseases for Oncology, 3rd edition	OCD-O Revision 3.2	5
+ICD10	International Classification of Diseases, Version 10	2024AA	24
+ICD10CM	International Classification of Diseases, Version 10 - Clinical Modification	2024AA	26
+ICD10PCS	International Classification of Diseases, Version 10 - Procedure Coding System	2024AA	25
+ICD11-BODYSYSTEM	Body System Terms from ICD11	1	1
+ICD9CM	International Classification of Diseases, Version 9 - Clinical Modification	2024AA	26
+ICDO	International Classification of Diseases Ontology	1.0.83	13
+ICECI	International Classification of  External Causes of Injuries	Original Source: 1.2;	6
+ICEO	Integrative and Conjugative Element Ontology	2.1	31
+ICF	International Classification of Functioning, Disability and Health	1.0.2	3
+ICHOM-PROMS-PCB	ICHOM Set Pregnancy and Childbirth	NA	3
+ICNP	International Classification for Nursing Practice	classified	6
+ICO	Informed Consent Ontology	1.0.187	17
+ICPC2P	International Classification of Primary Care - 2 PLUS	2024AA	24
+ICPS	International Classification for Patient Safety	Created by Aldo	7
+ICW	International Classification of Wellness	1.2	4
+ID-AMR	Infectious Diseases and Antimicrobial Resistance	1.2.1	35
+IDEM	IDEM: wInD Energy Models Taxonomy	v0.1.0	2
+IDG_GL	IDG gene list	1.0	5
+IDO	Infectious Disease Ontology	8-3-20	13
+IDO-COVID-19	The COVID-19 Infectious Disease Ontology	8-3-2020	2
+IDOBRU	Brucellosis Ontology	Arbor version; 1.2.92	61
+IDODEN	Dengue Fever Ontology	0.15b	6
+IDOMAL	Malaria Ontology	1.3.9	186
+IDQA	Image and Data Quality Assessment Ontology	v50	8
+IFAR	Fanconi Anemia Ontology	3	5
+IK	IK	NA	NA
+ILLNESSINJURY	Illness and Injury	1.0.2	1
+IMGT-ONTOLOGY	Immunogenetics Ontology	1.0.3	5
+IMOBO	Intelligent Medicine oriented Biobank Ontology	0.1	1
+INBANCIDO	Assessment of Indian Economy During Covid-19 	1.0.214	1
+INBIO	Invasion Biology Ontology	1.1	2
+INBIODIV	An Ontology for Indian Biodiversity Knowledge Management	1.1	1
+INCENTIVE	INCENTIVE Community Controlled Vocabulary	0.1.3	7
+INCENTIVE-VARS	INCENTIVE Variables	0.1.0	9
+INFECTION_TRANS	Infection Transmission Ontology	1.0.2	2
+INFRA-EN	Infrastructure	1.0	1
+INFRARISK	InfraRisk Ontology	1.0	1
+INJURYTYPES	Injury Types	NA	1
+INO	Interaction Network Ontology	1.1.13	34
+INSECTH	insectH	0.1	7
+INSNAME	VODANAINSNAMES	5	5
+INTO	Indian Terrorism Ontology	1.1	1
+INTVEETYPE	Interviewee Type	NA	1
+INTVMODE	Interview Mode	NA	1
+INVERSEROLES	ISO-15926-2_2003_inverseRoles	Generated 2008-09-03T19:12:44.687+02:00	1
+IOBC	Interlinking Ontology for Biological Concepts	version 1.6.0	25
+IPD	injury process description ontology	1.0	2
+IRD	Inherited Retinal Dystrophies	NA	1
+IRDG	Data harmonization ontology for cross border malaria surveillance 	NA	1
+ISO-15926-2_2003	ISO-15926-2_2003_oil	Generated 2008-02-21T17:29:19.558+01:00	1
+ISO-ANNOTATIONS	ISO-15926-2_2003_annotations	NA	1
+ISO-FOOD	A formal representation of the knowledge within the domain of Isotopes for Food Science	NA	1
+ISO19108TO	ISO 19108 Temporal Objects	2006-10-15	2
+ISO19110	ISO 19110 Methodology for Feature Cataloguing	2005-02-15	2
+ISO19115	ISO 19115	version 1.10	3
+ISO19115CC	ISO 19115 Common Classes	2014	3
+ISO19115CI	ISO 19115 Citation Information	2014	4
+ISO19115CON	ISO 19115 Constraints Information	2014	3
+ISO19115DI	ISO 19115 Distribution Information	2014	3
+ISO19115DTC	ISO 19115 Date Type Code	2.0	1
+ISO19115EX	ISO 19115 Extent Information	2014	28
+ISO19115ID	ISO 19115 Identification Information	2003-05-0	6
+ISO19115MI	ISO 19115 Metadata Information	2014	126
+ISO19115PR	ISO 19115 Codelists	2.0	5
+ISO19115ROLES	ISO 19115 Role Codes	2.0	6
+ISO19115SRS	ISO 19115 Reference Systems	2014	4
+ISO19115TCC	ISO 19115 Topic Categories	NA	11
+ISO639-1	ISO 639-1: Codes for the Representation of Names of Languages - Part 1: Two-letter codes for languages	1.0.0	1
+ISO639-2	ISO 639-2: Codes for the Representation of Names of Languages	NA	3
+ISPO	Integrated Ontology for Symptom Phenotype Terminologies	2023V1	1
+ISSVA	International Society for the Study of Vascular Anomalies (ISSVA) Ontology	1.1.3	5
+ITEMAS	Medical Technology Innovation in healthcare centers	3.0	1
+ITO	Intelligence Task Ontology	1.12 (PWC export	17
+IXNO	Interaction Ontology	1	2
+JERM	Just Enough Results Model Ontology	2	15
+KENYAANC	kenyaancfile	1	1
+KGCL	Knowledge Graph Change Language	0.1.0	6
+KISAO	Kinetic Simulation Algorithm Ontology	2.34	63
+KORO	Knowledge Object Reference Ontology	1.3	6
+KTAO	Kidney Tissue Atlas Ontology	Vision Release: 1.0.121	20
+KUSIIMA	KUSIIMA	NA	NA
+LABO	clinical LABoratory Ontology	NA	4
+LAND-SURFACE	Land Surface classifiers	3rd Edition	1
+LANDFORM	Landform classifiers	3rd edition	2
+LBO	Livestock Breed Ontology	9.5	62
+LC-CARRIERS	Library of Congress Carriers Scheme	NA	4
+LC-MEDIA	Library of Congress Media Types Scheme	NA	17
+LCDGT	Library of Congress Demographic Group Terms	NA	2
+LCGFT	Library of Congress Genre/Form Thesaurus for Library and Archival Materials	2017-09-05	3
+LDA	Ontology of Language Disorder in Autism	12-15-2008	1
+LDBASE	LDbase	0.0.1	2
+LEGALAPA	legalapa	01	1
+LEGALAPATEST2	apalegal	1	1
+LEPAO	Lepidoptera Anatomy Ontology	2023-02-18	2
+LHN	Loggerhead Nesting Ontology	NA	4
+LICO	Liver Case Ontology (LiCO)	changes * Segments	2
+LIFO	Life Ontology	Vision Release: 1.0.17	1
+LION	LipidOntology	1.1	1
+LIPRO	Lipid Ontology	See Remote Site	4
+LOINC	Logical Observation Identifier Names and Codes	2024AA	27
+LONGCOVID	Long Covid Phenotype Ontology	20220106	2
+LPT	Livestock Product Trait Ontology	4.3	13
+LSFC	LSFC	NA	NA
+LUNGMAP-HUMAN	Anatomic Ontology for Human Lung Maturation	1.4	6
+LUNGMAP-MOUSE	Anatomic Ontology for Mouse Lung Maturation	1.2	4
+LUNGMAP_H_CELL	Cell Ontology for Human Lung Maturation	3.2	6
+LUNGMAP_M_CELL	Cell Ontology for Mouse Lung Maturation	3.2	5
+M	M	NA	NA
+M4M-20-SUBJECTS	M4M.20 FAIRWare Subjects	0.1.3	6
+M4M-20-VARIABLES	M4M.20 FAIRWare Variables	0.1.3	7
+M4M-21-SUBJECTS	M4M.21 FAIRWare Subjects	0.1.2	4
+M4M-21-VARIABLES	M4M.21 FAIRWare Variables	0.1.2	5
+M4M-CHAR	M4M-CHAR	0.0.1	1
+M4M19-SUBS	M4M19 Subjects	0.1.0	3
+M4M19-VARS	M4M19 Variables	0.2.0	4
+MA	Mouse Adult Gross Anatomy Ontology	releases/2017-02-07	128
+MACROALGAETRAITS	Macroalgae Traits Thesaurus	NA	1
+MADS-RDF	Metadata Authority Description Schema in RDF	1.0	5
+MAMO	Mathematical Modelling Ontology	2023-02-03	17
+MAMO-SCR-ONTO	Mammography Screening Ontology	1.0	1
+MARC-LANGUAGES	MARC List for Languages	NA	271
+MARC-RELATORS	MARC Code List for Relators	NA	7
+MAT	Minimal Anatomical Terminology	1.1	4
+MATERIALSMINE	MaterialsMine Ontology	1.1	3
+MATR	Material	2.3	1
+MATRCOMPOUND	Material Compound	2.3	1
+MATRELEMENT	Material Element	2.3	1
+MATRROCK	Material Rock	2.3	1
+MATRROCKIGNEOUS	Material Rock Igneouus	2.3	2
+MAXO	Medical Action Ontology	2024-07-29	55
+MCBCC	Breast Tissue Cell Lines Ontology	2	2
+MCCL	Cell Line Ontology [by Mahadevan]	2	2
+MCCV	Microbial Culture Collection Vocabulary	Version 0.99 beta	11
+MCHVODANATERMS	MCHVODANATERMS	3.0	5
+MCO	Microbial Conditions Ontology	NA	1
+MCRO	Model Card Report Ontology	2023-03-07	1
+MDDB	Master Drug Data Base Clinical Drugs	2017AA	10
+MDM	Mapping of Drug Names and MeSH 2022	0.330	5
+MEDDRA	Medical Dictionary for Regulatory Activities Terminology (MedDRA)	2024AA	24
+MEDEON	Medical Error Ontology	NA	1
+MEDLINEPLUS	MedlinePlus Health Topics	2024AA	23
+MEDO	Mouse Experimental Design Ontology	1.0	1
+MEGO	Mobile Genetic Element Ontology	2_1	2
+MELLO-D	MEdical LifeLog Ontology for people with Disability	1.5	5
+MELO	Melanoma Ontology	1.0	2
+MEO	Metagenome and Microbes Environmental Ontology	0.9	9
+MEPO	Mapping of Epilepsy Ontologies	0.6	6
+MERA	Medical Educational Resource Aggregator	0.0.1	1
+MESH	Medical Subject Headings	2024AA	28
+METABUS	metaBUS controlled vocabulary for organizational and applied psychology research	0.1	18
+MF	Mental Functioning Ontology	2022-07-19	27
+MFMO	Mammalian Feeding Muscle Ontology	NA	1
+MFO	Medaka Fish Anatomy and Development Ontology	NA	15
+MFOEM	Emotion Ontology	2022-07-19	40
+MFOMD	MFO Mental Disease Ontology	2020-04-26	2
+MGBD	MGB Drug List	0.6	7
+MHC	Major Histocompatibility Complex Ontology	1.0.1	4
+MHCRO	MHC Restriction Ontology	2024-08-02	37
+MI	Molecular Interactions	NA	67
+MIAPA	MIAPA Ontology	NA	1
+MIDO	Medical Imaging and Diagnostic Ontology	2015-11-20	1
+MIM	Molecular Interaction Map	10:30:2014 16:04	3
+MINERAL	Material Mineral	2.3	1
+MINI-FAST-1	mini fast test	NA	1
+MIO	Myocardial Infarction Ontology	V1.0.0	3
+MIRNAO	MicroRNA Ontology	1.7	12
+MIRO	Mosquito Insecticide Resistance	releases/2014-05-14	1152
+MIXS	Minimal Information about any Sequence Ontology	6.1.0	6
+MIXSCV	Minimal Information about any Sequence (MIxS) Controlled Vocabularies	1	2
+MLTX	Machine Learning Methodology Taxonomy Mapping	1	1
+MM	MM	NA	NA
+MMO	Measurement Method Ontology	2.109	133
+MMUSDV	Mouse Developmental Stages	NA	40
+MNR	Material Natural Resource 	2.3	1
+MNV	VODANA Migrants	1.0	1
+MO	Microarray and Gene Expression Data Ontology	1.3.1.1	3
+MOC	Material Organic Compound	2.3	1
+MODSCI	Modern Science Ontology	1.0	3
+MOMCARE	MomCareVocabulary	1.1	1
+MONDO	Mondo Disease Ontology	releases/2024-05-08	63
+MONO	Monogenean Ontology	NA	2
+MOOCCIADO	Molgula occidentalis Anatomy and Development Ontology	NA	2
+MOOCCUADO	Molgula occulta Anatomy and Development Ontology	NA	2
+MOOCULADO	Molgula oculata Anatomy and Development Ontology	NA	2
+MOP	Molecular Process Ontology	NA	8
+MOSAIC	The MOSAiC Ontology	Version 1.0.1	4
+MP	Mammalian Phenotype Ontology	2024-08-08	437
+MPATH	Mouse Pathology Ontology	2020-05-19	22
+MPIO	Minimum PDDI Information Ontology	2023-10-17	2
+MPO	Microbial Phenotype Ontology	Version 0.74 alpha	7
+MRO	Defen	NA	1
+MS	Mass Spectrometry Ontology	4.1.174	245
+MSO	Multiple sclerosis ontology	NA	2
+MSR	Mammography screening recommendation	0.0.1	1
+MSTDE	Minimal Standard Terminology of Digestive Endoscopy	2024AA	24
+MSTDE-FRE	Minimal Standard Terminology of Digestive Endoscopy, French	2024AA	24
+MSV	Metagenome Sample Vocabulary	0.2	2
+MVAONT	Mosquito Vector Association Ontology with Biocontrol Agents	Version2	2
+MWLA	Medical Web Lifestyle Aggregator	0.0.1	1
+MWS22	Svu ontology	NA	1
+MY_SYRIANCINEMA	MWS-WSM Syrian Cinema Ontology	4.3	1
+N-CDOH	Non Clinical Determinants of Health	v1	4
+NANDO	Nanbyo Disease Ontology	2023-11-28	15
+NATPRO	Natural Products Ontology	unknown	1
+NBO	Neuro Behavior Ontology	2023-07-04	38
+NCBITAXON	National Center for Biotechnology Information (NCBI) Organismal Classification	2024AA	24
+NCCNEHR	NCCN EHR Oncology Categories	1.0.0	1
+NCCO	Nursing Care Coordination Ontology	1.0	1
+NCIT	National Cancer Institute Thesaurus	24.01e	142
+NCOD	NCoD	0.1.1	1
+NCRO	Non-coding RNA Ontology	Working version 06102015	12
+NDDF	National Drug Data File	2024AA	24
+NDDO	Neurodegenerative Disease Data Ontology	0.2	10
+NDFRT	National Drug File - Reference Terminology	2018AA	13
+NEIC-ONTO	Unoffical NeIC Organisation Vocabulary	0.2.2	5
+NEICBEER	The NeIC PaRI beer vocabulary	0.1.0	1
+NEIO	Neural Electronic Interface Ontology	2024-06-25	3
+NEMO	Neural ElectroMagnetic Ontology	v3.10	24
+NEO	Neurologic Examination Ontology	49.0	90
+NEOMARK3	Neomark Oral Cancer Ontology, version 3	3.1	2
+NEOMARK4	Neomark Oral Cancer Ontology, version 4	4.1	1
+NERO	Named Entity Recognition Ontology 	The main developer	1
+NEUDIGS	Neuroscience Domain Insight Graph	0.0.1	1
+NEUMORE	Neural Motor Recovery Ontology	0.1	1
+NEUROBRG	NeuroBridge Ontology	1.0 (Release 2023)	2
+NGBO	Next Generation Biobanking Ontology	2024-08-27	4
+NGSONTO	NGS ontology	1.2	32
+NHSQI2009	NHSQI2009	NA	NA
+NIC	NIC	NA	NA
+NIDM-RESULTS	NIDM-Results	Recommendation version 2013-04-30	2
+NIFCELL	Neuroscience Information Framework (NIF) Cell Ontology	v.1.10 - July	15
+NIFDYS	Neuroscience Information Framework (NIF) Dysfunction Ontlogy	1.5 (December, 2012)	16
+NIFSTD	Neuroscience Information Framework (NIF) Standard Ontology	3.1 - January	27
+NIFSUBCELL	Neuroscience Information Framework (NIF) Subcellular Ontology	1.3 (May 2012)	1
+NIGO	Neural-Immune Gene Ontology	v1	2
+NIHSS	National Institutes of Health Stroke Scale Ontology	2024/06	15
+NIO	Neuropsychological Integrative Ontology	v15 Heneka comments	2
+NIST_GEL	NIST Genome Editing Lexicon	2.2	8
+NLMVS	NIH NLM Value Sets	1.0	1
+NLN	NLighten Ontology	2018-02-28	1
+NMDCO	NMDC Ontology	2024-03-15	8
+NMOBR	NeuroMorpho.Org brain region ontologies	2.0	36
+NMOSP	NeuroMorpho.Org species ontology	1.3	22
+NMR	NMR-Controlled Vocabulary	1.1.0	12
+NND_CH	NND_Clinical_history	1	2
+NND_ND	NND_Neuropathological_Diagnosis	2023-03-31	2
+NOMEN	NOMEN - A nomenclatural ontology for biological names	NA	15
+NONRCTO	Non-Randomized Controlled Trials Ontology	2.0	1
+NPI	Non-Pharmacological Interventions (NPIs)	Version 8	5
+NPO	NanoParticle Ontology	2011-12-08 (yyyy-mm-dd)	31
+NPOKB	Neuron Phenotype Ontology	2024-08-28	16
+NRO	NeuralReprogrammingOntology	1.0.0	1
+NXDX	Test NXDX	2021/8/10	1
+O-REXTECH	OSIRIS-REx Analytical Technique	0.0.2	2
+OA	Web Annotation Ontology	2016-11-12T21:28:11Z	4
+OAE	Ontology of Adverse Events	1.2.47	171
+OARCS	Ontology of Arthropod Circulatory Systems	2019-04-18	2
+OBA	Ontology of Biological Attributes	2024-06-27	20
+OBCS	Ontology of Biological and Clinical Statistics	2023-12-08	15
+OBI	Ontology for Biomedical Investigations	2024-06-10	54
+OBIB	Ontology for Biobanking	2023-04-05	14
+OBIWS	Bioinformatics Web Service Ontology	Release v1.1	2
+OBI_BCGO	Beta Cell Genomics Ontology	2015-07-08	14
+OBI_IEE	The Ontology for Biomedical Investigation based Inner Ear Electrophysiology 	2018-05-23	1
+OBOE	The Extensible Observation Ontology	Version 1.2	4
+OBOE-SBC	Santa Barbara Coastal Observation Ontology	Version 1.0	1
+OBOREL	Relations Ontology	2024-04-24	42
+OBS	OntoBioStat	NA	5
+OCCO	Occupation Ontology	2023-08-20	5
+OCD	OCD ontology	NA	8
+OCDM	Ontology of Craniofacial Development and Malformation	1.10.0	8
+OCE	Ontology of Chemical Elements	Vision Release: 1.0.29	2
+OCHV	Ontology of Consumer Health Vocabulary	1	2
+OCIMIDO	Ocular Immune-Mediated Inflammatory Diseases Ontology	1.2	2
+OCMR	Ontology of Chinese Medicine for Rheumatism	Vision Release; 1.0.11	3
+OCO	OpenCareOntology 	1.1	2
+OCRE	Ontology of Clinical Research	Revision 315	23
+OCVDAE	Ontology of Cardiovascular Drug Adverse Events	Vision Release; 1.0.4	2
+ODAE	Ontology of Drug Adverse Events	Vision Release: 1.0.08	1
+ODHT	Digital Health Technologies	0.2	2
+ODNAE	Ontology of Drug Neuropathy Adverse Events	Vision Release; 1.0.13	3
+OF	OntoFood	1.0	1
+OFSMR	Open Predictive Microbiology Ontology	0.4	19
+OGDI	Ontology for Genetic Disease Investigations	1.0	3
+OGG	Ontology of Genes and Genomes	Vision Release: 1.0.59	3
+OGG-MM	Ontology of Genes and Genomes - Mouse	Vision Release: 1.0.66	5
+OGI	Ontology for Genetic Interval	2.0	18
+OGMD	Ontology of Glucose Metabolism Disorder	1	46
+OGMS	Ontology for General Medical Science	2021-08-19	22
+OGR	Ontology of Geographical Region	1.1	2
+OGROUP	Orthologous Group Ontology	1.0	1
+OGSF	Ontology for Genetic Susceptibility Factor	2.0	11
+OHD	The Oral Health and Disease Ontology	2024-06-21	7
+OHMI	Ontology of Host-Microbe Interactions	2019-09-17	26
+OHPI	Ontology of Host-Pathogen Interactions	1.0.26	11
+OLAM	Ontology of Laboratory Animal Medicine	Vision Release: 1.0.20	7
+OLATDV	Medaka Developmental Stages	NA	174
+OM	Ontology of units of Measure	2.0.57	31
+OMDO	OligoMetastatic Disease Ontology	NA	1
+OMIM	Online Mendelian Inheritance in Man	2024AA	26
+OMIT	Ontology for MicroRNA Target	OBO 4.0-12122013-2338	41
+OMO	OBO Metadata Ontology	NA	1
+OMP	Ontology of Microbial Phenotypes	releases/2019-06-07	46
+OMRSE	Ontology for Modeling and Representation of Social Entities	2024-08-14	61
+OMV	Ontology Metadata Vocabulary	2.4.1	1
+ONE	Ontology for Nutritional Epidemiology	V2.2	9
+ONL-DP	Dataset processing	V1	1
+ONL-MR-DA	Magnetic Resonance Dataset Acquisition Ontology	V1	1
+ONL-MSA	Mental State Assessment	v1	1
+ONL-TASKS	Cognitive Reserves Assessment Tasks	NA	1
+ONLIRA	Ontology of Liver for Radiology	changes * Segments	4
+ONS	Ontology for Nutritional Studies	2024-07-03	38
+ONSTR	Ontology for Newborn Screening Follow-up and Translational Research	0.4	5
+ONTOAD	Bilingual Ontology of Alzheimer's Disease and Related Diseases	1.0	2
+ONTOAVIDA	OntoAvida: ontology for Avida digital evolution platform	NA	3
+ONTODM-ALGORITHM	OntoDM-core/algorithms	0.1	2
+ONTODM-CORE	Ontology of Core Data Mining Entities	2.0	9
+ONTODM-KDD	Ontology of Data Mining Investigations	0.1	1
+ONTODT	Ontology of Datatypes	2.0	9
+ONTOKBCF	Ontological Knowledge Base Model for Cystic Fibrosis	1301	3
+ONTOLURGENCES	Emergency care ontology	3.0.4	1
+ONTOMA	Ontology of Alternative Medicine, French	Version 1.1Date: 11-2011	1
+ONTONEO	Obstetric and Neonatal Ontology	2021-04-29	14
+ONTOPARON	Ontology of Amyotrophic Lateral Sclerosis, all modules	1.1	9
+ONTOPARON_SOCIAL	Ontology of amyotrophic  lateral sclerosis, social module	1.0	12
+ONTOPBM	Ontology for Process-Based Modeling of Dynamical Systems (OntoPBM)	0.1	13
+ONTOPNEUMO	Ontology of Pneumology	0.1	1
+ONTOPSYCHIA	OntoPsychia, social module	1.0	2
+ONTOREPLICOV	OntoRepliCov	0	1
+ONTOSIM	The Ontology of Information System on Mortality	1.0.0	2
+ONTOSINASC	Ontology of Information System on Live Births	1.0.0	1
+ONTOTOX	Chemotherapy Toxicities Ontology	1.0	1
+ONTOTOXNUC	Ontology of Nuclear Toxicity	1.0	4
+ONTRISCAL	Ontology of Risk Stratification in Mental Health	1.0	1
+OOEVV	Ontology of Experimental Variables and Values	0.0.4	4
+OOSTT	Ontology of Organizational Structures of Trauma centers and Trauma systems	release version -	11
+OPB	Ontology of Physics for Biology	1.2	18
+OPD-NAMBOBI	SELECTED OTHER PRIORITY DISEASES UNDER IDSR (INTEGRATED DISEASE SURVEILLANCE AND RESPONSES)	NA	1
+OPDE	OPD-Ethiopia	NA	1
+OPDRE	OPD Regitry Ethiopia	0.0.1	1
+OPDRONT	OPD Register Ontology	0.0.1	2
+OPDT	opd_test	NA	1
+OPDZIMBABWE	OPDZimbabwe	1.1	1
+OPE	Ontology of Physical Exercises	0.0.1	6
+OPL	Ontology for Parasite LifeCycle	2023-08-28	11
+OPMI	Ontology of Precision Medicine and Investigation	Vision Release: 1.0.166	27
+OPTIMAL	OPTImAL: An ontology for patient adherence modeling in physical activity domain	1	1
+OPTION-ONTOLOGY	Optimization Algorithm Benchmarking Ontology	1.0.0	3
+ORCS	Ontology for Representing CDM Semantics	2021-11-13	1
+ORDO	Orphanet Rare Disease Ontology	4.5	29
+OREX-SAM	OSIRIS-REx sample type	0.2.0	1
+OREX-WG	OSIRIS-REx sample analysis workgroups	0.1.0	1
+ORNASEQ	Ontology of RNA Sequencing	NA	1
+ORTH	Orthology Ontology	2.0	7
+OVAE	Ontology of Vaccine Adverse Events	Vision Release: 1.0.34	10
+OntoVIP	Medical image simulation	v1	1
+PACO	Physical Activity Ontology	0.2	2
+PAE	Plant Anatomy	Release #20	13
+PAINO	Pain Ontology	1.0.0	1
+PANDA	Probabilistic Knowledge Assembly Ontology	0.9	2
+PANET	PaN Experimental technique	1.0.0-3-g6a0b629-dirty	25
+PARTUMDO	postpartum depression ontology	NA	1
+PATAXO	Technical Taxonomies for Patents	1.0.0	1
+PATCT	Placental Cell Type	1.0	1
+PATEL	Archana Patel	1	1
+PATGV	Placental Genetic Variance	1.0	1
+PATHLEX	Anatomic Pathology Lexicon	1.2	5
+PATIT	Placental Investigative Technique	1.0	1
+PATMHC	Placental Maternal Health Conditions	1.0	1
+PATO	Phenotypic Quality Ontology	2024-09-04	204
+PAV	PAV Provenance, Authoring and Versioning	2.3.1	3
+PAYMENTMODE	Payment Mode	NA	1
+PAYOR	Payor	NA	1
+PBO	Plant Breeding Ontology	NA	4
+PBPKO	PBPKO	NA	NA
+PCALION	Prostate Cancer Lifestyle Ontology	3.0	6
+PCAO	Prostate Cancer Ontology	2.0	2
+PCL	Provisional Cell Ontology	2024-07-11	23
+PCMO	Pediatric Consultation and Monitoring Ontology 	v.4.0	2
+PCO	Population and Community Ontology	2013-10-03	17
+PDO	Pathogenic Disease Ontology	Version 0.7	6
+PDON	Parkinson's Disease Ontology	1.0	1
+PDO_CAS	Plant Diversity Ontology	NA	1
+PDQ	Physician Data Query	2024AA	26
+PDRO	The Prescription of Drugs Ontology	NA	9
+PDUMDV	Platynereis Developmental Stages	NA	175
+PE	Pulmonary Embolism Ontology	version 1.0	1
+PE-O	Pre-eclampsia Ontology	v15 Heneka comments	3
+PEAO	Plant Experimental Assay Ontology	NA	4
+PECO	Plant Experimental Conditions Ontology	releases/2023-11-10	31
+PEDTERM	Pediatric Terminology	Version 2.0	5
+PEO	Parasite Experiment Ontology	1	5
+PESONT	Preposition_enabled Spatial Ontology	NA	1
+PGHD-BP	PGHD Auxillary - BP	1.1	2
+PGHD_CONNECT	PGHD_CONNECT	1.0	1
+PGXO	PGxO	0.4	4
+PHAGE	Phylogenetics Ontology	5.0	5
+PHARE	Pharmacogenomic Relationships Ontology	version id: 110114	2
+PHARMGKB	PHARMGKB	NA	NA
+PHENOMEBLAST	PHENOMEBLAST	NA	NA
+PHENX	PhenX Phenotypic Terms	1.2	16
+PHFUMIADO	Phallusia fumigata Anatomy and Development Ontology	NA	2
+PHIPO	Pathogen Host Interaction Phenotype Ontology	2024-08-29	29
+PHMAMMADO	Phallusia mammillata Anatomy and Development Ontology	NA	2
+PHYLONT	Phylogenetic Ontology	ver8	7
+PIERO	Enzyme Reaction Ontology for annotating Partial Information of chemical transformation	NA	10
+PINO	Pregnancy Information Needs Ontology	1.1	2
+PLANA	Planarian Anatomy and Developmental Stage Ontolgoy	2023-03-13	36
+PLANP	Planarian Phenotype Ontology	NA	5
+PLANTSO	Plant Stress Ontology	2023-11-14	3
+PLIO	Protein-ligand interaction ontology	1.0	1
+PLOSTHES	PLOS Thesaurus	plosthes.2017-1	10
+PMA	Portfolio Management Application	0.9.1	4
+PMAPP-PMO	PMO Precision Medicine Ontology	4.0	1
+PMD	Persian Medicine Diseases Ontology	1.0	1
+PMDO	Parkinson and Movement Disorder Ontology	1.1	4
+PMO	Performed Music Ontology	1.0	13
+PMO-SPEED	PMO Playing Speed Vocabulary	1.0	2
+PMR	Physical Medicine and Rehabilitation	1.6	4
+PNADO	Pneumonia Diagnosis Ontology	Version 1.0, 2021/02/01	1
+PO	Plant Ontology	releases/2024-04-17	28
+PORO	Porifera Ontology	unknown	9
+PP	Pipeline Patterns Ontology	1.0	1
+PPLC	Placental Pathology Lesion Classification	1.0	1
+PPO	Plant Phenology Ontology	NA	8
+PR	Protein Ontology	69.0	89
+PREGONTO	Pregnancy Ontology	NA	1
+PREMEDONTO	Precision Medicine Ontology	NA	1
+PREO	Presence Ontology	1.0.0	1
+PROCCHEMICAL	Chemical Process	2.3	1
+PROCO	Process Chemistry Ontology	PROCO release 20220414	1
+PROJ	Project ontology	2020	2
+PROPREO	Proteomics Data and Process Provenance Ontology	1.1	2
+PROVO	Provenance Ontology	Recommendation version 2013-04-30	124
+PSDO	Performance Summary Display Ontology	1.0.1	6
+PSDS	Plant Structure Development Stage	Release #20	6
+PSIMOD	Protein Modification Ontology	1.031.6	26
+PSO	PatientSafetyOntology	008:2017-08-04: Einarbeitung der	2
+PSO_2	PatientSafetyOntologyRevisted	005	3
+PTO	Plant Trait Ontology	July 2023	437
+PTRANS	Pathogen Transmission Ontology	releases/2022-10-10	19
+PTS	Pathway Terminology System	1.0	1
+PVONTO	Pharmacovigilance Ontology	0.1	1
+PW	Pathway Ontology	7.85	115
+QUDT	Quantities, Units, Dimensions, and Types Ontology	NA	39
+QUDT2	Quantities, Units, Dimensions and Types (QUDT) Schema - Version 2.0	2.0	1
+QUDT2-1	Quantities, Units, Dimensions and Types (QUDT Version 2.1)	2.1	2
+RADLEX	Radiology Lexicon	4.1	41
+RADMO	RADMO	NA	NA
+RADXTT-MVREASONS	RADx Tiger Team Missing Value Reasons	0.1.2	10
+RAO	Rheumatoid Arthritis ontology	Version 1.0	1
+RB	RegenBase ontology	1.0	5
+RBO	Radiation Biology Ontology	2024-05-31	29
+RCD	Read Codes, Clinical Terms Version 3 (CTV3) 	2024AA	24
+RCTONT	Randomized Controlled Trials Ontology	2.0	1
+RCTV2	Read Clinical Terminology Version 2	2015	1
+RDA-CONTENT	RDA Content type	NA	1
+RDA-ISSUANCE	RDA Mode of Issuance	1.0	2
+RDFS	The RDF Schema vocabulary	1.1	3
+RDL	RDL	Generated 2013-03-28T19:01:04.897+01:00	1
+RDO	Reusable Biodiversity Ontology	1.1	1
+REGN_BRO	REGN_BRO	1.1	1
+REGN_GO	REGN_GO	2023-01-01	1
+REPO	Reproductive Trait and Phenotype Ontology	1.1	3
+REPOS	repository	NA	1
+REPRODUCE-ME	REPRODUCE-ME	1.1	7
+RETO	Regulation of Transcription Ontology	2015	8
+REX	Physico-Chemical Process	1.13	7
+REXO	Regulation of Gene Expression Ontolology	2015	6
+RGD	RGD	NA	NA
+RH-MESH	Robert Hoehndorf Version of MeSH	2014	3
+RNAO	RNA Ontology	r113	4
+RNPRIO	Research Network and Patient Registry Inventory Ontology	1	1
+RNRMU	RNRMU	0.1	1
+RO	Radiomics Ontology	2.1	6
+ROCKNROLLTEST	ROCK-N-ROLL-TEST	NA	2
+ROLEO	Role Ontology	Vision Release: 1.0.16	3
+ROO	Radiation Oncology Ontology	0.5	8
+ROS	Radiation Oncology Structures Ontology	1.2.2	6
+RPO	Resource of Asian Primary Immunodeficiency Diseases (RAPID) Phenotype Ontology	Version 1.0	2
+RS	Rat Strain Ontology	6.230	273
+RSA	Reference Sequence Annotation	0.6	6
+RVO	Research Variable Ontology	1.0	2
+RXNO	Name Reaction Ontology	releases/2021-12-16	41
+RXNORM	RxNORM	2024AA	27
+SALMON	Salmon Ontology	0.3.2	3
+SAO	Subcellular Anatomy Ontology	Version 1.2	3
+SARSMUTONTO	Ontology for SARS-CoV-2  lineages and mutations	1.1	7
+SASAP	The State of Alaska's Salmon and People Ontology	0.3.1	2
+SATO	SATO (IDEAS expAnded wiTh BCIO): workflow for designers of patient-centered mobile health behaviour change intervention applications	v2	2
+SBO	Systems Biology Ontology	28:08:2021 03:13	663
+SBOL	Synthetic Biology Open Language Visual Ontology	unknown	2
+SCDO	Sickle Cell Disease Ontology	2021-04-15	21
+SCHEMA	Schema.org core and all extension vocabularies	3.4 fixes	4
+SCIO	Spinal Cord Injury Ontology	1	2
+SCO	Study Cohort Ontology	1.1.0	5
+SCO_F23	SCO_F23	NA	NA
+SD3	Simulation Delivery and Documentation Deviations	1.0	1
+SDO	Sleep Domain Ontology	Last modification: Feb.	4
+SDOHO	social determinants of health ontology-TaoLab	SDoHO_1005	1
+SEDI	Semantic DICOM Ontology	0.6 alpha	6
+SENSO	Sensitive Data Ontology	Version 0.1.0	1
+SEP	Sample Processing and Separation Techniques Ontology	1.070708	5
+SEPIO	Scientific Evidence and Provenance Information Ontology	2023-06-13	7
+SEPON	Sepsis Ontology	V1.0.0	2
+SHR	Student Health Record Ontology	1.1	3
+SIBO	Social Insect Behavior Ontology	NA	1
+SIMM	In Silico Methodologies Ontology for MAATrica metric	NA	1
+SIMON	Simple Measurement Ontology	1.0	1
+SIO	Semanticscience Integrated Ontology	1.59	94
+SITBAC	Situation-Based Access Control Ontology	1.3	3
+SK	Digital Forensic	NA	1
+SLSO	Space Life Sciences Ontology	2024-05-17	2
+SMASH	SMASH Ontology	NA	6
+SMO	Syrian Movies Ontology	NA	1
+SNMI	Systematized Nomenclature of Medicine, International Version	2024AA	24
+SNOMEDCT	SNOMED CT	2024AA	29
+SNPO	Single-Nucleotide Polymorphism (SNP) Ontology	version: full 1.6	4
+SO	Sequence Types and Features Ontology	unknown	310
+SOCPRES	Social Prescribing Ontology	NA	1
+SOHO	Social Determinants of Health Ontology	3	4
+SOIL-PROF	Soil Profile classifiers	3rd edition	3
+SOPHARM	Suggested Ontology for Pharmacogenomics	Version: SO-Pharm 2.2	18
+SOS	emergência	NA	1
+SOY	Soy Ontology	unknown	2
+SP	SMART Protocols	4.0	6
+SPD	Spider Anatomy Ontology	1.1	24
+SPO	Skin Physiology Ontology	2	1
+SPTO	Solanaceae Phenotype Ontology	unknown	9
+SP_ONTOLOGY	SmartPITeS Proyect Ontology for Complex Chronic Patients	NA	1
+SSE	Surgical Secondary Events	1.1	2
+SSN	Semantic Sensor Network Ontology	New modular version	2
+SSO	Syndromic Surveillance Ontology	1	1
+STATO	Statistics Ontology	2024-07-07	15
+STMSO	symptomatic treatment of multiple sclerosis ontology	NA	1
+STO-DRAFT	The Stroke Ontology	2017-11-01	1
+STY	Semantic Types Ontology	2024AA	23
+SUGARBIND	SugarBind	2023-06-20	1
+SURGICAL	Nurse Surgical	NA	1
+SVU_MWS_WSM	Syrian Cinema Ontology	1.0	1
+SVU_MWS_WSM_F23	MWS-WSM-F23 Syrian Cinema Ontology	1.0	1
+SWEET	Semantic Web for Earth and Environment Technology Ontology	3.6.0	13
+SWO	Software Ontology	2023-03-05	32
+SYMP	Symptom Ontology	2024-05-17	35
+SYRIAN-CINEMA	Syrian Cinema	1.0.0	3
+T4FS	terms4FAIRskills	2023-03-02	1
+TADS	Tick Gross Anatomy Ontology	1.21	17
+TAO	Teleost Anatomy Ontology	2012-08-10	135
+TAON	TAON	NA	NA
+TAXRANK	Taxonomic Rank Vocabulary	unknown	9
+TCDO	Traditional Chinese Drug Ontology	0.05	3
+TCO	Thyroid Cancer Ontology	1.0	2
+TDWGSPEC	TDWG Specimen LSID Ontology	0.3	1
+TEDDY	Terminology for the Description of Dynamics	rel-2014-04-24 (inferred)	11
+TEMPO	TempO	0.1	3
+TEO	Time Event Ontology	1.0.8	4
+TEPHRAM4MEXAMPLE	Tephra M4M Example	0.1.1	1
+TEST-M4M20-PAV	test-m4m20-subjects-pav	0.1.0	1
+TESTEX	test1	0.0.1	1
+TEST_A	TEST_A	NA	1
+TEST_CBI	test_cbi	NA	1
+TGMA	Mosquito Gross Anatomy Ontology	releases/2013-06-03	17
+THREE-ST	3-Step Theory of suicide	1.0.1	4
+TIME	OWL-Time	2017	4
+TIMEBANK	Timebank Ontology	0.3	2
+TM-CONST	Traditional Medicine Constitution Value Set	1	1
+TM-MER	Traditional Medicine Meridian Value Sets	1	1
+TM-OTHER-FACTORS	Traditional Medicine Other Factors Value Set	1	1
+TM-SIGNS-AND-SYMPTS	Traditional Medicine Signs and Symptoms Value Set	1	1
+TMA	Tissue Microarray Ontology	1.0.0	1
+TML	trasformative machine learning metadata	0.1	1
+TMO	Translational Medicine Ontology	1.0.2	13
+TOK	Terminological and Ontological Knowledge Resources Ontology	0.2.1	3
+TOP-MENELAS	Menelas Project Top-Level Ontology	1.0	8
+TP4	Oualid	NA	1
+TP_REL_FAM	Relation familiales	NA	2
+TRAK	Taxonomy for Rehabilitation of Knee Conditions	unknown	5
+TRANS	Nurse Transitional	NA	1
+TRIAGE	Nurse triage	NA	2
+TRON	Tribolium Ontology	unknown	2
+TST7	FIELDLAB3_2023	NA	3
+TTO	Teleost Taxonomy Ontology	unknown	44
+TXPO	Toxic Process Ontology	2022/12/07	31
+TYPON	Microbial Typing Ontology	20140929	11
+UBERON	Uber Anatomy Ontology	2023-07-25	347
+UGANDA_DISEASES	Uganda_diseases	7	17
+UHC-METADATA	UHC Metadata	v0.0.1	1
+UMMS	FirstOntologyForUMMS	0.3	3
+UNITSONT	Units Ontology	1.0	1
+UO	Units of Measurement Ontology	2023-05-25	220
+UPA	Unipathway	UniPathway Release 2015_03	2
+UPHENO	Combined Phenotype Ontology	NA	4
+VANDF	Veterans Health Administration National Drug File	2024AA	24
+VARIO	Variation Ontology	2018-11-09	16
+VBO	Vertebrate Breed Ontology	2024-08-14	3
+VDOT	Viral Disease Ontology Trunk	Initial Version release	35
+VEO	Visualized Emotion Ontology	0.5	1
+VFB_DRIVERS	vfb_drivers	2024-09-02	134
+VHOG	Vertebrate Homologous Organ Group Ontology	unknown	13
+VICO	Vaccination Informed Consent Ontology	Arbor version; 1.0.52	10
+VIDO	Virus Infectious Disease Ontology	10-27-2022	3
+VIMM	In Vitro Methodologies Ontology for MAATrica metric	NA	1
+VIO	Vaccine Investigation Ontology	Vision Release: 1.0.01	1
+VIVO	VIVO Ontology for Researcher Discovery	version 1.7	3
+VIVO-ISF	VIVO-Integrated Semantic Framework	1.6	1
+VO	Vaccine Ontology	2024-08-11	297
+VODANA-GENERAL	VODANATERMS	8	12
+VODANA-MI	VODANA-MIGRANTS-INTERVIEWS	2.0	3
+VODANA-MIGRANTS	VODANA MIGRANTS VOCABULARY	1	1
+VODANA-MPA	VODANA-MIGRANTS-PRESS ARTICLES	2	3
+VODANACOVID	VODANA-COVIDTERMS	3.0	4
+VODANADISEASES	VODANADiseases	2.0.1	3
+VODANAKENYA	VODANA KENYA	0.1.1	4
+VODANAMFLCODE	VODANAFACILITIESLIST	4.0	4
+VODANANIGERIA	VODANANIGERIA	2.0	3
+VODANAUGANDA	VODANAUGANDA	2.0	2
+VODANETHIOPIA_OR	ETHIOPIA_OUTPATIENT	2	4
+VODAN_ANC	VODAN ANC Vocabulary 	VI	2
+VRD	Vaccineresearchdata	2.0	1
+VSAO	Vertebrate Skeletal Anatomy Ontology	2012-11-06	21
+VSO	Vital Sign Ontology	2012-04-25	1
+VT	Vertebrate Trait Ontology	releases/2024-09-03	149
+VTO	Vertebrate Taxonomy Ontology	unknown	14
+VVMM	In Vivo Methodologies Ontology for MAATrica metric	NA	1
+WB-BT	C. elegans Gross Anatomy Vocabulary	releases/2024-07-01	144
+WB-LS	C. elegans Development Vocabulary	unknown	50
+WB-PHENOTYPE	C. elegans Phenotype Vocabulary	releases/2024-06-05	416
+WC	Whole-cell modeling ontology	0.0.1	13
+WEAR	WEAR: Wind Energy mAteRials Taxonomy	v0.1.0	1
+WEAVE	WEAVE: Wind Energy ActiVitiEs	v0.1.0	2
+WETAXTOPICS	NEAT: wiNd Energy tAxonomy of Topics	v0.1.1	6
+WHO-ART	World Health Organization (WHO) Adverse Reaction Terminology	2024AA	23
+WIKIPATHWAYS	WikiPathways	2013a	229
+WSIO	Web-Service Interaction Ontology	beta2	4
+WWECA	Women with Epilepsy of Child-bearing Age Ontology	3.0	4
+XAO	Xenopus Anatomy Ontology	releases/2024-09-03	33
+XCO	Experimental Conditions Ontology	4.179	192
+XEO	XEML Environment Ontology	1.6	4
+XLMOD	mass spectrometry cross-linking and derivatization reagents	release/2019-10-28	4
+XPO	Xenopus Phenotype Ontology	2024-04-18	11
+XREF-FUNDER-REG	CrossRef Funder Registry	NA	27
+ZAHRAHADDAD	ارتباطات	NA	1
+ZEA	Maize Gross Anatomy Ontology	1.2	2
+ZECO	Zebrafish Experimental Conditions Ontology	2022-02-14	10
+ZFA	Zebrafish Anatomy and Development Ontology	releases/2022-12-09	248
+ZFS	Zebrafish Developmental Stages	NA	168
+ZONMW-ADMIN-MD	ZonMW Administrative Metadata Vocabulary	1.2.0a	13
+ZONMW-CONTENT	ZonMW COVID-19	2.4.0	37
+ZONMW-GENERIC	ZonMw Generic Terms	1.5.0	21
+ZP	Zebrafish Phenotype Ontology	2024-04-18	5
+pseudo	Pseudogene	0.1	1
+suicideo	suicideonto	2	1
