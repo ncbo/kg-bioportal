@@ -83,7 +83,7 @@ class Downloader:
             logging.info(f"Downloading {ontology}...")
 
             metadata_url = f"https://data.bioontology.org/ontologies/{ontology}"
-            latest_sub_url = (
+            latest_submission_url = (
                 f"https://data.bioontology.org/ontologies/{ontology}/latest_submission"
             )
             download_url = (
@@ -92,10 +92,15 @@ class Downloader:
 
             metadata = self.requests_session.get(metadata_url, headers=headers).json()
             logging.info(f"Name: {metadata['name']}")
-            latest_sub_metadata = self.requests_session.get(latest_sub_url, headers=headers).json()
-            submission_id = latest_sub_metadata["submissionId"]
+            latest_submission = self.requests_session.get(latest_submission_url, headers=headers).json()
+            if len(latest_submission) > 0:
+                submission_id = latest_submission["submissionId"]
+            else:
+                logging.warning(f"No submission found for {ontology}.")
+                self.error_ontologies.append(ontology)
+                continue
             logging.info(
-                f"Latest submission: {latest_sub_metadata['version']} - submission ID {submission_id} - released {latest_sub_metadata['released']}"
+                f"Latest submission: {latest_submission['version']} - submission ID {submission_id} - released {latest_submission['released']}"
             )
 
             try:
