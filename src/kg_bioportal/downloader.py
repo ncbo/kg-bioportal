@@ -5,6 +5,7 @@ import os
 import time
 
 import requests
+from requests.adapters import HTTPAdapter, Retry
 
 ONTOLOGY_LIST_NAME = "ontologylist.tsv"
 
@@ -52,6 +53,10 @@ class Downloader:
         self.ignore_cache = ignore_cache
         self.api_key = api_key
 
+        self.requests_session = requests.Session()
+        self.retries = Retry(total=5, backoff_factor=1, status_forcelist=[429, 504])
+        self.requests_session.mount("https://", HTTPAdapter(max_retries=self.retries))
+
         # If the output directory does not exist, create it
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
@@ -85,16 +90,16 @@ class Downloader:
                 f"https://data.bioontology.org/ontologies/{ontology}/download"
             )
 
-            metadata = requests.get(metadata_url, headers=headers).json()
+            metadata = self.requests_session.get(metadata_url, headers=headers).json()
             logging.info(f"Name: {metadata['name']}")
-            latest_sub_metadata = requests.get(latest_sub_url, headers=headers).json()
+            latest_sub_metadata = self.requests_session.get(latest_sub_url, headers=headers).json()
             submission_id = latest_sub_metadata["submissionId"]
             logging.info(
                 f"Latest submission: {latest_sub_metadata['version']} - submission ID {submission_id} - released {latest_sub_metadata['released']}"
             )
 
             try:
-                download_onto = requests.get(
+                download_onto = self.requests_session.get(
                     download_url, headers=headers, allow_redirects=True
                 )
                 onto_filename = (
@@ -143,7 +148,7 @@ class Downloader:
 
         analytics_url = "https://data.bioontology.org/analytics"
 
-        ontologies = requests.get(
+        ontologies = self.requests_session.get(
             analytics_url, headers=headers, allow_redirects=True
         ).json()
 
@@ -152,7 +157,7 @@ class Downloader:
             outfile.write(f"id\tname\tcurrent_version\tsubmission_id\n")
             for acronym in ontologies:
                 latest_submission_url = f"https://data.bioontology.org/ontologies/{acronym}/latest_submission"
-                latest_submission = requests.get(
+                latest_submission = self.requests_session.get(
                     latest_submission_url, headers=headers
                 ).json()
 
@@ -180,7 +185,5 @@ class Downloader:
                 outfile.write(
                     f"{acronym}\t{name}\t{current_version}\t{submission_id}\n"
                 )
-                # Wait for half a second to avoid rate limiting
-                time.sleep(0.5)
 
         logging.info(f"Wrote to {self.output_dir}/{ONTOLOGY_LIST_NAME}")
