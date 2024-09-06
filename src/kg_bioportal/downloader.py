@@ -26,6 +26,9 @@ class Downloader:
     # API key for BioPortal
     api_key: str = ""
 
+    # List of ontologies encountering errors on download
+    error_ontologies: list = []
+
     def __init__(
         self,
         output_dir: str = "data/raw",
@@ -90,14 +93,21 @@ class Downloader:
                 f"Latest submission: {latest_sub_metadata['version']} - submission ID {submission_id} - released {latest_sub_metadata['released']}"
             )
 
-            download_onto = requests.get(
-                download_url, headers=headers, allow_redirects=True
-            )
-            onto_filename = (
-                download_onto.headers["Content-Disposition"]
-                .split("filename=")[1]
-                .replace('"', "")
-            )
+            try:
+                download_onto = requests.get(
+                    download_url, headers=headers, allow_redirects=True
+                )
+                onto_filename = (
+                    download_onto.headers["Content-Disposition"]
+                    .split("filename=")[1]
+                    .replace('"', "")
+                )
+            except KeyError:
+                logging.warning(
+                    f"Could not download {ontology}. Check if the ontology is downloadable."
+                )
+                self.error_ontologies.append(ontology)
+                continue
 
             outpath = f"{self.output_dir}/{ontology}/{submission_id}/{onto_filename}"
             outdir = f"{self.output_dir}/{ontology}/{submission_id}"
@@ -105,6 +115,11 @@ class Downloader:
                 os.makedirs(outdir)
             with open(outpath, "wb") as outfile:
                 outfile.write(download_onto.content)
+
+        if self.error_ontologies:
+            logging.warning(
+                f"Encountered errors downloading the following ontologies: {self.error_ontologies}"
+            )
 
         return None
 
@@ -142,7 +157,11 @@ class Downloader:
                 ).json()
 
                 if len(latest_submission) > 0:
-                    name = latest_submission["ontology"]["name"].replace("\n", " ").replace("\t", " ")
+                    name = (
+                        latest_submission["ontology"]["name"]
+                        .replace("\n", " ")
+                        .replace("\t", " ")
+                    )
                     if latest_submission["version"]:
                         current_version = " ".join(
                             (
