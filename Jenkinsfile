@@ -81,7 +81,7 @@ pipeline {
 
                         // Download the ontologies
                         // This saves them to data/raw/
-                        sh ". venv/bin/activate && kgbioportal download --api_key ${NCBO_API_KEY}"
+                        sh ". venv/bin/activate && kgbioportal -vvv download --api_key ${NCBO_API_KEY}"
 
                     }
                 }
