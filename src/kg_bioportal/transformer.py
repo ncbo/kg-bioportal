@@ -9,8 +9,7 @@ import yaml
 from kgx.transformer import Transformer as KGXTransformer
 
 from kg_bioportal.downloader import ONTOLOGY_LIST_NAME
-from kg_bioportal.robot_utils import (initialize_robot, robot_convert,
-                                      robot_relax)
+from kg_bioportal.robot_utils import initialize_robot, robot_convert, robot_relax
 
 # TODO: Don't repeat steps if the products already exist
 # TODO: Fix KGX hijacking logging
@@ -105,11 +104,15 @@ class Transformer:
             else:
                 logging.info(f"Transformed {filepath}.")
                 status = True
+            if status == False:
+                strstatus = "Failed"
+            else:
+                strstatus = "OK"
             onto_log[ontology_name] = {
-                    "status": status,
-                    "nodecount": nodecount,
-                    "edgecount": edgecount,
-                }
+                "status": strstatus,
+                "nodecount": nodecount,
+                "edgecount": edgecount,
+            }
 
         # Write total stats to a yaml
         logging.info("Writing total stats to total_stats.yaml.")
@@ -122,9 +125,20 @@ class Transformer:
             f.write("totalcount: " + str(success_count) + "\n")
 
         # Dump onto_log to a yaml
+        # Rearrange it a bit first
         logging.info("Writing ontology stats to onto_stats.yaml.")
+        onto_stats_list = []
+        for onto in onto_log:
+            onto_stats_list.append(
+                {
+                    "id": onto,
+                    "status": onto_log[onto]["status"],
+                    "nodecount": onto_log[onto]["nodecount"],
+                    "edgecount": onto_log[onto]["edgecount"],
+                }
+            )
         with open(os.path.join(self.output_dir, "onto_stats.yaml"), "w") as of:
-            yaml.dump({"ontologies": onto_log}, of)
+            yaml.dump({"ontologies": onto_stats_list}, of)
 
         return None
 
@@ -141,6 +155,8 @@ class Transformer:
                 Number of edges in the ontology.
         """
         status = False
+        nodecount = 0
+        edgecount = 0
 
         ontology_name = (os.path.relpath(ontology_path, self.input_dir)).split(os.sep)[
             0
@@ -214,10 +230,19 @@ class Transformer:
                 f"Nodes and edges written to {nodefilename} and {edgefilename}."
             )
             status = True
+
+            # Get length of nodefile
+            with open(nodefilename, "r") as f:
+                nodecount = len(f.readlines()) - 1
+
+            # Get length of edgefile
+            with open(edgefilename, "r") as f:
+                edgecount = len(f.readlines()) - 1
+
         except Exception as e:
             logging.error(
                 f"Error transforming {ontology_name} to KGX nodes and edges: {e}"
             )
             status = False
 
-        return status, 0, 0
+        return status, nodecount, edgecount
