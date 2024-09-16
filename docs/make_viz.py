@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import yaml
 
-with open("onto_status.yaml", "r") as infile:
+with open("onto_stats.yaml", "r") as infile:
     ontos = pd.DataFrame(((yaml.safe_load(infile)))["ontologies"])
     countcols = ["nodecount", "edgecount"]
     ontos[countcols] = ontos[countcols].apply(pd.to_numeric, errors="coerce")
