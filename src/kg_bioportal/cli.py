@@ -175,6 +175,10 @@ def download(
 def transform(input_dir, output_dir) -> None:
     """Transforms all ontologies in the input directory to KGX nodes and edges.
 
+    Yields two log files: total_stats.yaml and onto_stats.yaml.
+    The first contains the total counts of Bioportal ontologies and transforms.
+    The second contains the counts of nodes and edges for each ontology.
+
     Args:
         input_dir: A string pointing to the directory to import data from.
         output_dir: A string pointing to the directory to output data to.

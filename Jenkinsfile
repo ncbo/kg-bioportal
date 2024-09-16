@@ -112,6 +112,7 @@ pipeline {
 					            string(credentialsId: 'aws_kg_hub_secret_key', variable: 'AWS_SECRET_ACCESS_KEY')]) {
                                  
                                 // Index, then upload
+                                // This will include the log files (onto_stats.yaml and total_stats.yaml)
                                 sh '. venv/bin/activate && multi_indexer -v --directory data/transformed/ --prefix https://kghub.io/$S3PROJECTDIR/ -x -u'
                                 sh '. venv/bin/activate && s3cmd -c $S3CMD_CFG put -pr --acl-public --cf-invalidate data/transformed/ s3://kg-hub-public-data/$S3PROJECTDIR/'
 

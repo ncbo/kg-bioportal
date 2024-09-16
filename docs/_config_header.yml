@@ -21,7 +21,7 @@
 title: KG-Bioportal
 email: jhc@lbl.gov
 description: >- # this means to ignore newlines until "baseurl:"
-  BioPortal as a Knowledge Graph. 
+  BioPortal as Knowledge Graphs.
 baseurl: "/kg-bioportal" # the subpath of your site, e.g. /blog
 url: "https://ncbo.github.io" # the base hostname & protocol for your site, e.g. http://example.com
 
@@ -49,6 +49,3 @@ theme: jekyll-theme-tactile
 #   - vendor/ruby/
 
 # Ontology status table goes under here.
-# TODO: generate stats during each build using the scripts in BioPortal-to-KGX.
-#       Store the stats on KG-Hub as YAML.
-#       Retrieve them with the build_site.sh script.
