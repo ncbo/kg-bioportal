@@ -93,8 +93,8 @@ class Transformer:
         else:
             logging.info(f"Found {len(filepaths)} ontologies to transform.")
 
-        ontology_name = (os.path.relpath(filepath, self.input_dir)).split(os.sep)[0]
         for filepath in filepaths:
+            ontology_name = (os.path.relpath(filepath, self.input_dir)).split(os.sep)[0]
             success, nodecount, edgecount = self.transform(filepath)
             if not success:
                 logging.error(f"Error transforming {filepath}.")
