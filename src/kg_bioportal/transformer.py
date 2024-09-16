@@ -3,10 +3,14 @@
 import logging
 import os
 import sys
+from typing import Tuple
+
+import yaml
+from kgx.transformer import Transformer as KGXTransformer
 
 from kg_bioportal.downloader import ONTOLOGY_LIST_NAME
-from kg_bioportal.robot_utils import initialize_robot, robot_convert, robot_relax
-from kgx.transformer import Transformer as KGXTransformer
+from kg_bioportal.robot_utils import (initialize_robot, robot_convert,
+                                      robot_relax)
 
 # TODO: Don't repeat steps if the products already exist
 # TODO: Fix KGX hijacking logging
@@ -55,6 +59,10 @@ class Transformer:
     def transform_all(self) -> None:
         """Transforms all ontologies in the input directory to KGX nodes and edges.
 
+        Yields two log files: total_stats.yaml and onto_stats.yaml.
+        The first contains the total counts of Bioportal ontologies and transforms.
+        The second contains the counts of nodes and edges for each ontology.
+
         Args:
             None.
 
@@ -65,6 +73,14 @@ class Transformer:
         logging.info(
             f"Transforming all ontologies in {self.input_dir} to KGX nodes and edges."
         )
+
+        # This keeps track of the status of each transform.
+        # Ontology acronym IDs are keys.
+        # Values are dictionaries of:
+        # status: True if transform was successful, otherwise False.
+        # nodecount: Number of nodes in the ontology.
+        # edgecount: Number of edges in the ontology.
+        onto_log = {}
 
         filepaths = []
         for root, _dirs, files in os.walk(self.input_dir):
@@ -78,22 +94,51 @@ class Transformer:
         else:
             logging.info(f"Found {len(filepaths)} ontologies to transform.")
 
+        ontology_name = (os.path.relpath(filepath, self.input_dir)).split(os.sep)[0]
         for filepath in filepaths:
-            if not self.transform(filepath):
+            success, nodecount, edgecount = self.transform(filepath)
+            if not success:
                 logging.error(f"Error transforming {filepath}.")
+                status = False
+                nodecount = 0
+                edgecount = 0
             else:
                 logging.info(f"Transformed {filepath}.")
+                status = True
+            onto_log[ontology_name] = {
+                    "status": status,
+                    "nodecount": nodecount,
+                    "edgecount": edgecount,
+                }
+
+        # Write total stats to a yaml
+        logging.info("Writing total stats to total_stats.yaml.")
+        # Get the count of successful transforms
+        success_count = 0
+        for onto in onto_log:
+            if onto_log[onto]["status"]:
+                success_count += 1
+        with open(os.path.join(self.output_dir, "total_stats.yaml"), "w") as f:
+            f.write("totalcount: " + str(success_count) + "\n")
+
+        # Dump onto_log to a yaml
+        logging.info("Writing ontology stats to onto_stats.yaml.")
+        with open(os.path.join(self.output_dir, "onto_stats.yaml"), "w") as of:
+            yaml.dump({"ontologies": onto_log}, of)
 
         return None
 
-    def transform(self, ontology_path: str) -> bool:
+    def transform(self, ontology_path: str) -> Tuple[bool, int, int]:
         """Transforms a single ontology to KGX nodes and edges.
 
         Args:
             ontology: A string of the path to the ontology file to transform.
 
         Returns:
-            True if transform was successful, otherwise False.
+            Tuple of:
+                True if transform was successful, otherwise False.
+                Number of nodes in the ontology.
+                Number of edges in the ontology.
         """
         status = False
 
@@ -170,7 +215,9 @@ class Transformer:
             )
             status = True
         except Exception as e:
-            logging.error(f"Error transforming {ontology_name} to KGX nodes and edges: {e}")
+            logging.error(
+                f"Error transforming {ontology_name} to KGX nodes and edges: {e}"
+            )
             status = False
 
-        return status
+        return status, 0, 0
