@@ -3,6 +3,7 @@
 import logging
 import os
 import sys
+import tarfile
 from typing import Tuple
 
 import yaml
@@ -55,7 +56,7 @@ class Transformer:
 
         return None
 
-    def transform_all(self) -> None:
+    def transform_all(self, compress: bool) -> None:
         """Transforms all ontologies in the input directory to KGX nodes and edges.
 
         Yields two log files: total_stats.yaml and onto_stats.yaml.
@@ -63,7 +64,7 @@ class Transformer:
         The second contains the counts of nodes and edges for each ontology.
 
         Args:
-            None.
+            compress: If True, compresses the output nodes and edges to tar.gz.
 
         Returns:
             None.
@@ -95,7 +96,7 @@ class Transformer:
 
         for filepath in filepaths:
             ontology_name = (os.path.relpath(filepath, self.input_dir)).split(os.sep)[0]
-            success, nodecount, edgecount = self.transform(filepath)
+            success, nodecount, edgecount = self.transform(filepath, compress)
             if not success:
                 logging.error(f"Error transforming {filepath}.")
                 status = False
@@ -142,11 +143,12 @@ class Transformer:
 
         return None
 
-    def transform(self, ontology_path: str) -> Tuple[bool, int, int]:
+    def transform(self, ontology_path: str, compress: bool) -> Tuple[bool, int, int]:
         """Transforms a single ontology to KGX nodes and edges.
 
         Args:
-            ontology: A string of the path to the ontology file to transform.
+            ontology_path: A string of the path to the ontology file to transform.
+            compress: If True, compresses the output nodes and edges to tar.gz.
 
         Returns:
             Tuple of:
@@ -238,6 +240,27 @@ class Transformer:
             # Get length of edgefile
             with open(edgefilename, "r") as f:
                 edgecount = len(f.readlines()) - 1
+
+            # Compress if requested
+            if compress:
+                logging.info("Compressing nodes and edges.")
+                with tarfile.open(f"{outfilename}.tar.gz", "w:gz") as tar:
+                    tar.add(nodefilename, arcname=f"{ontology_name}_nodes.tsv")
+                    tar.add(edgefilename, arcname=f"{ontology_name}_edges.tsv")
+
+                os.remove(nodefilename)
+                os.remove(edgefilename)
+
+            # Remove the owl files
+            # They may not exist if the transform failed
+            try:
+                os.remove(owl_output_path)
+            except OSError:
+                pass
+            try:
+                os.remove(relaxed_outpath)
+            except OSError:
+                pass
 
         except Exception as e:
             logging.error(
