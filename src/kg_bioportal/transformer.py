@@ -10,8 +10,7 @@ import yaml
 from kgx.transformer import Transformer as KGXTransformer
 
 from kg_bioportal.downloader import ONTOLOGY_LIST_NAME
-from kg_bioportal.robot_utils import (initialize_robot, robot_convert,
-                                      robot_relax)
+from kg_bioportal.robot_utils import initialize_robot, robot_convert, robot_relax
 
 # TODO: Don't repeat steps if the products already exist
 # TODO: Fix KGX hijacking logging
@@ -248,9 +247,20 @@ class Transformer:
                 with tarfile.open(f"{outfilename}.tar.gz", "w:gz") as tar:
                     tar.add(nodefilename, arcname=f"{ontology_name}_nodes.tsv")
                     tar.add(edgefilename, arcname=f"{ontology_name}_edges.tsv")
-                
+
                 os.remove(nodefilename)
                 os.remove(edgefilename)
+
+            # Remove the owl files
+            # They may not exist if the transform failed
+            try:
+                os.remove(owl_output_path)
+            except OSError:
+                pass
+            try:
+                os.remove(relaxed_outpath)
+            except OSError:
+                pass
 
         except Exception as e:
             logging.error(
