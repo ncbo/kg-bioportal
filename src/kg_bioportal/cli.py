@@ -172,7 +172,14 @@ def download(
 @main.command()
 @click.option("--input_dir", "-i", default="data/raw", type=click.Path(exists=True))
 @click.option("--output_dir", "-o", default="data/transformed")
-def transform(input_dir, output_dir) -> None:
+@click.option(
+    "--compress",
+    "-c",
+    is_flag=True,
+    default=True,
+    help="If true, compresses the output nodes and edges to tar.gz. Defaults to True.", 
+)
+def transform(input_dir, output_dir, compress) -> None:
     """Transforms all ontologies in the input directory to KGX nodes and edges.
 
     Yields two log files: total_stats.yaml and onto_stats.yaml.
@@ -190,7 +197,7 @@ def transform(input_dir, output_dir) -> None:
 
     tx = Transformer(input_dir=input_dir, output_dir=output_dir)
 
-    tx.transform_all()
+    tx.transform_all(compress=compress)
 
     return None
 
