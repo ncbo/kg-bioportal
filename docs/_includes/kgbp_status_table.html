@@ -6,7 +6,8 @@
               <th><b>Node Count</b></th>
               <th><b>Edge Count</b></th>
           </tr>
-      {% for onto in site.ontologies %}
+      {% assign sorted_ontologies = site.ontologies | sort: 'id' %}
+      {% for onto in sorted_ontologies %}
             <tr>
                 <td>
                     <a href="https://bioportal.bioontology.org/ontologies/{{ onto.id }}">{{ onto.id }}</a>
