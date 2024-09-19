@@ -24,9 +24,12 @@ description: >- # this means to ignore newlines until "baseurl:"
   BioPortal as Knowledge Graphs.
 baseurl: "/kg-bioportal" # the subpath of your site, e.g. /blog
 url: "https://ncbo.github.io" # the base hostname & protocol for your site, e.g. http://example.com
+show_downloads: false
 
 # Build settings
-theme: jekyll-theme-tactile
+remote_theme: pages-themes/slate@v0.2.0
+plugins:
+- jekyll-remote-theme
 
 # Exclude from processing.
 # The following items will not be processed, by default.
