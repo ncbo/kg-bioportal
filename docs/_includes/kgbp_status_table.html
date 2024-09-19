@@ -13,7 +13,11 @@
                     <a href="https://bioportal.bioontology.org/ontologies/{{ onto.id }}">{{ onto.id }}</a>
                 </td>
                 <td>
-                    {{ onto.status }}
+                    {% if onto.status == "Failed" %}
+                        <b style="color: red;">{{ onto.status }}</b>
+                    {% else %}
+                        {{ onto.status }}
+                    {% endif %}
                 </td>
                 <td>
                     {{ onto.nodecount }}
