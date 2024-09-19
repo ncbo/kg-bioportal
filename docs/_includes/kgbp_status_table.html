@@ -2,6 +2,7 @@
     <tbody>
           <tr>
               <th><b>Ontology Name</b></th>
+              <th><b>Download</b></th>
               <th><b>Status</b></th>
               <th><b>Node Count</b></th>
               <th><b>Edge Count</b></th>
@@ -9,20 +10,25 @@
       {% assign sorted_ontologies = site.ontologies | sort: 'id' %}
       {% for onto in sorted_ontologies %}
             <tr>
-                <td>
+                <td style="vertical-align: middle; text-align: left;">
                     <a href="https://bioportal.bioontology.org/ontologies/{{ onto.id }}">{{ onto.id }}</a>
                 </td>
-                <td>
+                <td style="text-align: center;">
+                    <a href="https://kghub.io/kg-bioportal/{{ onto.id }}">
+                        <img src="{{site.baseurl | prepend: site.url}}/assets/images/folder.png" alt="Download" style="width: 20px; height: 20px;">
+                    </a>
+                </td>
+                <td style="vertical-align: middle; text-align: left;">
                     {% if onto.status == "Failed" %}
                         <b style="color: red;">{{ onto.status }}</b>
                     {% else %}
                         {{ onto.status }}
                     {% endif %}
                 </td>
-                <td>
+                <td style="vertical-align: middle; text-align: left;">
                     {{ onto.nodecount }}
                 </td>
-                <td>
+                <td style="vertical-align: middle; text-align: left;">
                     {{ onto.edgecount }}
                 </td>
               </tr>
