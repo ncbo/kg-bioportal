@@ -203,7 +203,7 @@ def transform(input_dir, output_dir, compress) -> None:
 
     return None
 
-
+# TODO: enable toggle to use local vs remote transformed graphs
 @main.command()
 @click.option(
     "--input_dir", "-i", default="data/transformed", type=click.Path(exists=True)
