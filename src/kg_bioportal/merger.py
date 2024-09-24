@@ -6,10 +6,7 @@ import sys
 import tarfile
 from typing import List, Tuple
 
-import yaml
-from cat_merge.merge import merge
-
-from kg_bioportal.downloader import ONTOLOGY_LIST_NAME
+from cat_merge.merge import merge as catmerge
 
 
 class Merger:
@@ -110,12 +107,14 @@ class Merger:
 
         return None
 
-    def merge(self, ontology_path: str, compress: bool) -> Tuple[bool, int, int]:
+    def merge(
+        self, nodelist: List[str], edgelist: List[str], compress: bool
+    ) -> Tuple[bool, int, int]:
         """Merge graph files using cat_merge.
 
         Args:
-            nodes: A list of paths to node files to transform.
-            edges: A list of paths to edge files to transform.
+            nodelist: A list of paths to node files to transform.
+            edgelist: A list of paths to edge files to transform.
             compress: If True, compresses the output nodes and edges to tar.gz.
 
         Returns:
@@ -128,122 +127,25 @@ class Merger:
         nodecount = 0
         edgecount = 0
 
-        ontology_name = (os.path.relpath(ontology_path, self.input_dir)).split(os.sep)[
-            0
-        ]
-        ontology_submission_id = (os.path.relpath(ontology_path, self.input_dir)).split(
-            os.sep
-        )[1]
-
         logging.info(
-            f"Transforming {ontology_name}, submission ID {ontology_submission_id}, to nodes and edges."
+            f"Merging {len(nodelist)} node files and {len(edgelist)} edge files."
         )
 
-        owl_output_path = os.path.join(
-            self.output_dir,
-            f"{ontology_name}",
-            f"{ontology_submission_id}",
-            f"{ontology_name}.owl",
+        catmerge(
+            name="kg_bioportal",
+            nodes=nodelist,
+            edges=edgelist,
+            output_dir=self.output_dir,
+            qc_report=True,
         )
 
-        # If the downloaded file is compressed, we need to decompress it
-        if ontology_path.endswith((".gz", ".zip")):
-            new_path = self.decompress(
-                ontology_path=ontology_path,
-                ontology_name=ontology_name,
-                ontology_submission_id=ontology_submission_id,
-            )
-            ontology_path = new_path
-
-        # Convert
-        if not robot_convert(
-            robot_path=self.robot_path,
-            input_path=ontology_path,
-            output_path=owl_output_path,
-            robot_env=self.robot_env,
-        ):
-            status = False
-
-        # Relax
-        relaxed_outpath = os.path.join(
-            self.output_dir,
-            f"{ontology_name}",
-            f"{ontology_submission_id}",
-            f"{ontology_name}_relaxed.owl",
-        )
-        if not robot_relax(
-            robot_path=self.robot_path,
-            input_path=owl_output_path,
-            output_path=relaxed_outpath,
-            robot_env=self.robot_env,
-        ):
-            status = False
-
-        # Transform to KGX nodes + edges
-        txr = KGXTransformer(stream=True)
-        outfilename = os.path.join(
-            self.output_dir,
-            f"{ontology_name}",
-            f"{ontology_submission_id}",
-            f"{ontology_name}",
-        )
-        nodefilename = outfilename + "_nodes.tsv"
-        edgefilename = outfilename + "_edges.tsv"
-        input_args = {
-            "format": "owl",
-            "filename": [relaxed_outpath],
-        }
-        output_args = {
-            "format": "tsv",
-            "filename": outfilename,
-            "provided_by": ontology_name,
-            "aggregator_knowledge_source": "infores:bioportal",
-        }
-        logging.info("Doing KGX transform.")
-        try:
-            txr.transform(
-                input_args=input_args,
-                output_args=output_args,
-            )
-            logging.info(
-                f"Nodes and edges written to {nodefilename} and {edgefilename}."
-            )
-            status = True
-
-            # Get length of nodefile
-            with open(nodefilename, "r") as f:
-                nodecount = len(f.readlines()) - 1
-
-            # Get length of edgefile
-            with open(edgefilename, "r") as f:
-                edgecount = len(f.readlines()) - 1
-
-            # Compress if requested
-            if compress:
-                logging.info("Compressing nodes and edges.")
-                with tarfile.open(f"{outfilename}.tar.gz", "w:gz") as tar:
-                    tar.add(nodefilename, arcname=f"{ontology_name}_nodes.tsv")
-                    tar.add(edgefilename, arcname=f"{ontology_name}_edges.tsv")
-
-                os.remove(nodefilename)
-                os.remove(edgefilename)
-
-            # Remove the owl files
-            # They may not exist if the transform failed
-            try:
-                os.remove(owl_output_path)
-            except OSError:
-                pass
-            try:
-                os.remove(relaxed_outpath)
-            except OSError:
-                pass
-
-        except Exception as e:
-            logging.error(
-                f"Error transforming {ontology_name} to KGX nodes and edges: {e}"
-            )
-            status = False
+        if compress:
+            logging.info("Compressing merged graph.")
+            with tarfile.open(
+                os.path.join(self.output_dir, "merged_graph.tar.gz"), "w:gz"
+            ) as tar:
+                tar.add(os.path.join(self.output_dir, "kg_bioportal_nodes.tsv"))
+                tar.add(os.path.join(self.output_dir, "kg_bioportal_edges.tsv"))
 
         return status, nodecount, edgecount
 
