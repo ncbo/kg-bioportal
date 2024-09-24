@@ -209,22 +209,15 @@ def transform(input_dir, output_dir, compress) -> None:
     "--input_dir", "-i", default="data/transformed", type=click.Path(exists=True)
 )
 @click.option("--output_dir", "-o", default="data/merged")
-@click.option(
-    "--compress",
-    "-c",
-    is_flag=True,
-    default=True,
-    help="If true, compresses the output nodes and edges to tar.gz. Defaults to True.",
-)
 def merge(input_dir, output_dir, compress) -> None:
     """Merges all edges and nodes in the input directory to a single KGX graph.
 
+    Compresses all nodes and edges to tar.gz.
     Yields one log files: merged_graph_stats.yaml.
 
     Args:
         input_dir: A string pointing to the directory to import data from.
         output_dir: A string pointing to the directory to output data to.
-        compress: If true, compresses the output nodes and edges to tar.gz. Defaults to True.
 
     Returns:
         None.

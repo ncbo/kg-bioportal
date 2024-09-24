@@ -37,7 +37,7 @@ class Merger:
 
         return None
 
-    def merge_all(self, compress: bool) -> None:
+    def merge_all(self) -> None:
         """Merges all ontologies in the input directory to a single graph.
 
         Yields one log files: merged_graph_stats.yaml.
@@ -97,7 +97,7 @@ class Merger:
 
         for filepath in filepaths:
             ontology_name = filepath[0]
-            success, nodecount, edgecount = self.merge(nodelist, edgelist, compress)
+            success, nodecount, edgecount = self.merge(nodelist, edgelist)
             if not success:
                 logging.error("Error in merging.")
                 status = False
@@ -108,7 +108,7 @@ class Merger:
         return None
 
     def merge(
-        self, nodelist: List[str], edgelist: List[str], compress: bool
+        self, nodelist: List[str], edgelist: List[str]
     ) -> Tuple[bool, int, int]:
         """Merge graph files using cat_merge.
 
@@ -138,14 +138,6 @@ class Merger:
             output_dir=self.output_dir,
             qc_report=True,
         )
-
-        if compress:
-            logging.info("Compressing merged graph.")
-            with tarfile.open(
-                os.path.join(self.output_dir, "merged_graph.tar.gz"), "w:gz"
-            ) as tar:
-                tar.add(os.path.join(self.output_dir, "kg_bioportal_nodes.tsv"))
-                tar.add(os.path.join(self.output_dir, "kg_bioportal_edges.tsv"))
 
         return status, nodecount, edgecount
 
