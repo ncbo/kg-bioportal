@@ -182,7 +182,9 @@ class Transformer:
         # If the downloaded file is compressed, we need to decompress it
         if ontology_path.endswith((".gz", ".zip")):
             new_path = self.decompress(
-                ontology_path=ontology_path, ontology_name=ontology_name
+                ontology_path=ontology_path,
+                ontology_name=ontology_name,
+                ontology_submission_id=ontology_submission_id,
             )
             ontology_path = new_path
 
@@ -278,11 +280,15 @@ class Transformer:
 
         return status, nodecount, edgecount
 
-    def decompress(self, ontology_path: str, ontology_name: str) -> str:
+    def decompress(
+        self, ontology_path: str, ontology_name: str, ontology_submission_id: str
+    ) -> str:
         """Decompresses a compressed ontology file.
 
         Args:
             ontology_path: A string of the path to the ontology file to decompress.
+            ontology_name: A string of the name of the ontology.
+            ontology_submission_id: A string of the submission ID of the ontology.
 
         Returns:
             The path to the decompressed file.
@@ -293,7 +299,9 @@ class Transformer:
 
         if ontology_path.endswith(".zip"):
             with zipfile.ZipFile(ontology_path, "r") as zip_ref:
-                extract_dir = os.path.join(self.input_dir, ontology_name)
+                extract_dir = os.path.join(
+                    self.input_dir, ontology_name, ontology_submission_id
+                )
                 zip_ref.extractall(extract_dir)
                 extracted_files = zip_ref.namelist()
                 if len(extracted_files) == 1:
@@ -305,7 +313,9 @@ class Transformer:
                     sys.exit(1)
         elif ontology_path.endswith(".gz"):
             with tarfile.open(ontology_path, "r:gz") as tar:
-                extract_dir = os.path.join(self.input_dir, ontology_name)
+                extract_dir = os.path.join(
+                    self.input_dir, ontology_name, ontology_submission_id
+                )
                 tar.extractall(extract_dir)
                 extracted_files = tar.getnames()
                 if len(extracted_files) == 1:
