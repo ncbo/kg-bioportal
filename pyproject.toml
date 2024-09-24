@@ -13,6 +13,7 @@ click = "^8.0.4"
 kghub-downloader = "^0.3.9"
 requests = "^2.32.3"
 sh = "^2.0.7"
+cat-merge = "^0.2.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.2"
