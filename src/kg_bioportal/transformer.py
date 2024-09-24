@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import tarfile
+import zipfile
 from typing import Tuple
 
 import yaml
@@ -178,6 +179,13 @@ class Transformer:
             f"{ontology_name}.owl",
         )
 
+        # If the downloaded file is compressed, we need to decompress it
+        if ontology_path.endswith((".gz", ".zip")):
+            new_path = self.decompress(
+                ontology_path=ontology_path, ontology_name=ontology_name
+            )
+            ontology_path = new_path
+
         # Convert
         if not robot_convert(
             robot_path=self.robot_path,
@@ -269,3 +277,43 @@ class Transformer:
             status = False
 
         return status, nodecount, edgecount
+
+    def decompress(self, ontology_path: str, ontology_name: str) -> str:
+        """Decompresses a compressed ontology file.
+
+        Args:
+            ontology_path: A string of the path to the ontology file to decompress.
+
+        Returns:
+            The path to the decompressed file.
+        """
+        new_path = self.input_dir
+
+        logging.info(f"Decompressing {ontology_path}")
+
+        if ontology_path.endswith(".zip"):
+            with zipfile.ZipFile(ontology_path, "r") as zip_ref:
+                extract_dir = os.path.join(self.input_dir, ontology_name)
+                zip_ref.extractall(extract_dir)
+                extracted_files = zip_ref.namelist()
+                if len(extracted_files) == 1:
+                    new_path = os.path.join(extract_dir, extracted_files[0])
+                else:
+                    logging.error(
+                        f"Expected one file in the zip archive, but found {len(extracted_files)}."
+                    )
+                    sys.exit(1)
+        elif ontology_path.endswith(".gz"):
+            with tarfile.open(ontology_path, "r:gz") as tar:
+                extract_dir = os.path.join(self.input_dir, ontology_name)
+                tar.extractall(extract_dir)
+                extracted_files = tar.getnames()
+                if len(extracted_files) == 1:
+                    new_path = os.path.join(extract_dir, extracted_files[0])
+                else:
+                    logging.error(
+                        f"Expected one file in the tar archive, but found {len(extracted_files)}."
+                    )
+                    sys.exit(1)
+
+        return new_path
