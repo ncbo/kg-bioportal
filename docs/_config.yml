@@ -53,6 +53,8 @@ plugins:
 
 # Ontology status table goes under here.
 totalcount: 1050
+totalnodecount: 10509205
+totaledgecount: 20055264
 ontologies:
 - edgecount: 555
   id: REGN_BRO

@@ -119,12 +119,23 @@ class Transformer:
         # Write total stats to a yaml
         logging.info("Writing total stats to total_stats.yaml.")
         # Get the count of successful transforms
+        # Plus total node and edge counts
         success_count = 0
         for onto in onto_log:
             if onto_log[onto]["status"]:
                 success_count += 1
         with open(os.path.join(self.output_dir, "total_stats.yaml"), "w") as f:
             f.write("totalcount: " + str(success_count) + "\n")
+            f.write(
+                "totalnodecount: "
+                + str(sum([onto_log[onto]["nodecount"] for onto in onto_log]))
+                + "\n"
+            )
+            f.write(
+                "totaledgecount: "
+                + str(sum([onto_log[onto]["edgecount"] for onto in onto_log]))
+                + "\n"
+            )
 
         # Dump onto_log to a yaml
         # Rearrange it a bit first
