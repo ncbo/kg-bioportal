@@ -2,7 +2,6 @@
 
 import logging
 import os
-import time
 
 import requests
 from requests.adapters import HTTPAdapter, Retry
