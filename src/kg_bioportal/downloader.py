@@ -2,7 +2,6 @@
 
 import logging
 import os
-import time
 
 import requests
 from requests.adapters import HTTPAdapter, Retry
@@ -90,7 +89,14 @@ class Downloader:
                 f"https://data.bioontology.org/ontologies/{ontology}/download"
             )
 
-            metadata = self.requests_session.get(metadata_url, headers=headers).json()
+            metadata_resp = self.requests_session.get(metadata_url, headers=headers)
+            if metadata_resp.status_code != 200:
+                logging.error(
+                    f"Failed to fetch metadata for {ontology}: HTTP {metadata_resp.status_code}"
+                )
+                self.error_ontologies.append(ontology)
+                continue
+            metadata = metadata_resp.json()
             logging.info(f"Name: {metadata['name']}")
             latest_submission = self.requests_session.get(latest_submission_url, headers=headers).json()
             if len(latest_submission) > 0:
