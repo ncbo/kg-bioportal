@@ -301,30 +301,33 @@ class Transformer:
         new_path = self.input_dir
 
         logging.info(f"Decompressing {ontology_path}")
-
-        if ontology_path.endswith(".zip"):
-            with zipfile.ZipFile(ontology_path, "r") as zip_ref:
-                extract_dir = os.path.join(self.input_dir, ontology_name)
-                zip_ref.extractall(extract_dir)
-                extracted_files = zip_ref.namelist()
-                if len(extracted_files) == 1:
-                    new_path = os.path.join(extract_dir, extracted_files[0])
-                else:
-                    logging.error(
-                        f"Expected one file in the zip archive, but found {len(extracted_files)}."
-                    )
-                    sys.exit(1)
-        elif ontology_path.endswith(".gz"):
-            with tarfile.open(ontology_path, "r:gz") as tar:
-                extract_dir = os.path.join(self.input_dir, ontology_name)
-                tar.extractall(extract_dir)
-                extracted_files = tar.getnames()
-                if len(extracted_files) == 1:
-                    new_path = os.path.join(extract_dir, extracted_files[0])
-                else:
-                    logging.error(
-                        f"Expected one file in the tar archive, but found {len(extracted_files)}."
-                    )
-                    sys.exit(1)
+        try:
+            if ontology_path.endswith(".zip"):
+                with zipfile.ZipFile(ontology_path, "r") as zip_ref:
+                    extract_dir = os.path.join(self.input_dir, ontology_name)
+                    zip_ref.extractall(extract_dir)
+                    extracted_files = zip_ref.namelist()
+                    if len(extracted_files) == 1:
+                        new_path = os.path.join(extract_dir, extracted_files[0])
+                    else:
+                        logging.error(
+                            f"Expected one file in the zip archive, but found {len(extracted_files)}."
+                        )
+                        sys.exit(1)
+            elif ontology_path.endswith(".gz"):
+                with tarfile.open(ontology_path, "r:gz") as tar:
+                    extract_dir = os.path.join(self.input_dir, ontology_name)
+                    tar.extractall(extract_dir)
+                    extracted_files = tar.getnames()
+                    if len(extracted_files) == 1:
+                        new_path = os.path.join(extract_dir, extracted_files[0])
+                    else:
+                        logging.error(
+                            f"Expected one file in the tar archive, but found {len(extracted_files)}."
+                        )
+                        sys.exit(1)
+        except tarfile.ReadError as e:
+            logging.error(f"Error when decompressing {ontology_path}: {e}")
+            return ontology_path
 
         return new_path
