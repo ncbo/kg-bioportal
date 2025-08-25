@@ -195,7 +195,14 @@ class Transformer:
             new_path = self.decompress(
                 ontology_path=ontology_path, ontology_name=ontology_name
             )
-            ontology_path = new_path
+            if new_path != ontology_path:
+                ontology_path = new_path
+            else:
+                logging.error(f"Failed to decompress {ontology_path}")
+                status = False
+                nodecount = 0
+                edgecount = 0
+                return status, nodecount, edgecount
 
         # Convert
         if not robot_convert(
