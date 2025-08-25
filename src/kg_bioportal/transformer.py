@@ -200,8 +200,6 @@ class Transformer:
             else:
                 logging.error(f"Failed to decompress {ontology_path}")
                 status = False
-                nodecount = 0
-                edgecount = 0
                 return status, nodecount, edgecount
 
         # Convert
@@ -212,6 +210,7 @@ class Transformer:
             robot_env=self.robot_env,
         ):
             status = False
+            return status, nodecount, edgecount
 
         # Relax
         relaxed_outpath = os.path.join(
@@ -227,6 +226,7 @@ class Transformer:
             robot_env=self.robot_env,
         ):
             status = False
+            return status, nodecount, edgecount
 
         # Transform to KGX nodes + edges
         txr = KGXTransformer(stream=True)
@@ -293,6 +293,7 @@ class Transformer:
                 f"Error transforming {ontology_name} to KGX nodes and edges: {e}"
             )
             status = False
+            return status, nodecount, edgecount
 
         return status, nodecount, edgecount
 
