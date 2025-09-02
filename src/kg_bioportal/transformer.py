@@ -321,7 +321,7 @@ class Transformer:
                         logging.error(
                             f"Expected one file in the zip archive, but found {len(extracted_files)}."
                         )
-                        sys.exit(1)
+                        return ontology_path
             elif ontology_path.endswith(".gz"):
                 with tarfile.open(ontology_path, "r:gz") as tar:
                     extract_dir = os.path.join(self.input_dir, ontology_name)
@@ -333,7 +333,7 @@ class Transformer:
                         logging.error(
                             f"Expected one file in the tar archive, but found {len(extracted_files)}."
                         )
-                        sys.exit(1)
+                        return ontology_path
         except tarfile.ReadError as e:
             logging.error(f"Error when decompressing {ontology_path}: {e}")
             return ontology_path
