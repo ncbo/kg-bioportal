@@ -1,15 +1,34 @@
 """CLI for KG-Bioportal."""
 
+import json
 import logging
 
 import click
 
+from kg_bioportal.config import (
+    DEFAULT_NUM_SHARDS,
+    MAX_SOURCE_MB,
+    PER_ONTOLOGY_TIMEOUT_MIN,
+    is_skiplisted,
+)
 from kg_bioportal.downloader import Downloader, ONTOLOGY_LIST_NAME
 from kg_bioportal.transformer import Transformer
 
 __all__ = [
     "main",
 ]
+
+
+def _read_acronyms(ontology_file: str) -> list:
+    """Read ontology acronyms (first column) from a TSV list, skipping the header."""
+    acronyms = []
+    with open(ontology_file, "r") as f:
+        f.readline()  # Skip the header
+        for line in f:
+            line = line.strip()
+            if line:
+                acronyms.append(line.split("\t")[0])
+    return acronyms
 
 
 @click.group()
@@ -99,8 +118,28 @@ def get_ontology_list(output_dir, api_key) -> None:
     type=str,
     help="API key for BioPortal",
 )
+@click.option(
+    "--max_source_mb",
+    default=MAX_SOURCE_MB,
+    show_default=True,
+    type=float,
+    help="Skip any ontology whose source file exceeds this many MB.",
+)
+@click.option(
+    "--use_skiplist/--no_skiplist",
+    default=True,
+    show_default=True,
+    help="Skip ontologies on the static known-giants skiplist.",
+)
 def download(
-    ontologies, ontology_file, output_dir, snippet_only, ignore_cache, api_key
+    ontologies,
+    ontology_file,
+    output_dir,
+    snippet_only,
+    ignore_cache,
+    api_key,
+    max_source_mb,
+    use_skiplist,
 ) -> None:
     """Downloads specified ontologies into data directory (default: data/raw).
 
@@ -162,6 +201,8 @@ def download(
         snippet_only=snippet_only,
         ignore_cache=ignore_cache,
         api_key=api_key,
+        max_source_mb=max_source_mb,
+        use_skiplist=use_skiplist,
     )
 
     dl.download(onto_list)
@@ -177,9 +218,16 @@ def download(
     "-c",
     is_flag=True,
     default=True,
-    help="If true, compresses the output nodes and edges to tar.gz. Defaults to True.", 
+    help="If true, compresses the output nodes and edges to tar.gz. Defaults to True.",
 )
-def transform(input_dir, output_dir, compress) -> None:
+@click.option(
+    "--timeout_min",
+    default=PER_ONTOLOGY_TIMEOUT_MIN,
+    show_default=True,
+    type=float,
+    help="Per-ontology wall-clock cap in minutes; slower transforms are skipped.",
+)
+def transform(input_dir, output_dir, compress, timeout_min) -> None:
     """Transforms all ontologies in the input directory to KGX nodes and edges.
 
     Yields two log files: total_stats.yaml and onto_stats.yaml.
@@ -195,11 +243,72 @@ def transform(input_dir, output_dir, compress) -> None:
 
     """
 
-    tx = Transformer(input_dir=input_dir, output_dir=output_dir)
+    tx = Transformer(
+        input_dir=input_dir, output_dir=output_dir, timeout_min=timeout_min
+    )
 
     tx.transform_all(compress=compress)
 
     return None
+
+
+@main.command()
+@click.option(
+    "--ontology_file",
+    "-f",
+    required=False,
+    type=click.Path(exists=True),
+    help="TSV list of ontologies (e.g. data/raw/ontologylist.tsv).",
+)
+@click.option(
+    "--ontologies",
+    "-d",
+    required=False,
+    type=str,
+    help="Space-delimited acronyms to shard instead of reading a file (for testing).",
+)
+@click.option(
+    "--num_shards",
+    "-n",
+    default=DEFAULT_NUM_SHARDS,
+    show_default=True,
+    type=int,
+    help="Number of shards to split the ontology list into.",
+)
+@click.option(
+    "--use_skiplist/--no_skiplist",
+    default=True,
+    show_default=True,
+    help="Drop ontologies on the static known-giants skiplist before sharding.",
+)
+def shard_list(ontology_file, ontologies, num_shards, use_skiplist) -> None:
+    """Splits the ontology list into N shards and prints them as JSON.
+
+    Emits a JSON array of strings, each a space-separated group of acronyms,
+    suitable for a GitHub Actions matrix. Prints ONLY the JSON to stdout so it
+    can be captured as a job output.
+    """
+    if ontologies:
+        acronyms = ontologies.split()
+    elif ontology_file:
+        acronyms = _read_acronyms(ontology_file)
+    else:
+        raise click.UsageError("Provide --ontologies or --ontology_file.")
+
+    if use_skiplist:
+        acronyms = [a for a in acronyms if not is_skiplisted(a)]
+
+    # Round-robin so heavy ontologies spread across shards rather than clumping.
+    n = max(1, min(num_shards, len(acronyms)))
+    buckets = [[] for _ in range(n)]
+    for i, acr in enumerate(acronyms):
+        buckets[i % n].append(acr)
+
+    shards = [" ".join(b) for b in buckets if b]
+    click.echo(json.dumps(shards))
+
+    return None
+
 
 # Below functions are WIP.
 

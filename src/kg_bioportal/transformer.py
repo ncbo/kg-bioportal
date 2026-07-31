@@ -1,16 +1,20 @@
 """Transformer for KG-Bioportal."""
 
+import csv
 import logging
 import os
+import signal
 import sys
 import tarfile
 import zipfile
+from contextlib import contextmanager
 from typing import Tuple
 
 import yaml
 from kgx.transformer import Transformer as KGXTransformer
 
-from kg_bioportal.downloader import ONTOLOGY_LIST_NAME
+from kg_bioportal.config import PER_ONTOLOGY_TIMEOUT_MIN
+from kg_bioportal.downloader import DOWNLOAD_REPORT_NAME, ONTOLOGY_LIST_NAME
 from kg_bioportal.robot_utils import initialize_robot, robot_convert, robot_relax
 
 # TODO: Don't repeat steps if the products already exist
@@ -19,29 +23,64 @@ from kg_bioportal.robot_utils import initialize_robot, robot_convert, robot_rela
 # TODO: Address BNodes
 # TODO: Assign IDs to edges when they lack them
 
+# Files in the input dir that are not ontologies to transform.
+_NON_ONTOLOGY_FILES = {ONTOLOGY_LIST_NAME, DOWNLOAD_REPORT_NAME}
+
+
+class TransformTimeout(Exception):
+    """Raised when a single ontology transform exceeds its wall-clock budget."""
+
+
+@contextmanager
+def deadline(seconds: int):
+    """Enforce a wall-clock deadline on a block of code.
+
+    Uses SIGALRM, so it only arms on platforms that support it (Linux, macOS)
+    and only in the main thread. Elsewhere it is a no-op. This is the outer cap
+    covering the whole ROBOT + KGX chain for one ontology; ROBOT subprocesses
+    also get their own ``_timeout`` as a backstop.
+    """
+    if not seconds or not hasattr(signal, "SIGALRM"):
+        yield
+        return
+
+    def _handler(signum, frame):
+        raise TransformTimeout()
+
+    previous = signal.signal(signal.SIGALRM, _handler)
+    signal.alarm(int(seconds))
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
+
 
 class Transformer:
 
     def __init__(
         self,
         input_dir: str = "data/raw",
-        output_dir: str = "data/tranformed",
+        output_dir: str = "data/transformed",
+        timeout_min: float = PER_ONTOLOGY_TIMEOUT_MIN,
     ) -> None:
         """Initializes the Transformer class.
 
         Also sets up ROBOT.
 
         Args:
-
             input_dir: A string pointing to the location of the raw data.
-
-            output_dir: A string pointing to the location to download data to.
+            output_dir: A string pointing to the location to write products to.
+            timeout_min: Per-ontology wall-clock cap in minutes. An ontology that
+                runs longer is killed and recorded as skipped (too_slow).
 
         Returns:
             None.
         """
         self.input_dir = input_dir
         self.output_dir = output_dir
+        self.timeout_min = timeout_min
+        self.timeout_sec = int(timeout_min * 60)
 
         # If the output directory does not exist, create it
         if not os.path.exists(self.output_dir):
@@ -57,12 +96,28 @@ class Transformer:
 
         return None
 
+    def _load_download_report(self) -> dict:
+        """Read download_report.tsv (if present) into {id: row} form.
+
+        This lets the final stats account for ontologies that were skipped or
+        errored during download and therefore never reach the transform walk.
+        """
+        report_path = os.path.join(self.input_dir, DOWNLOAD_REPORT_NAME)
+        report = {}
+        if not os.path.exists(report_path):
+            return report
+        with open(report_path, newline="") as f:
+            for row in csv.DictReader(f, delimiter="\t"):
+                report[row["id"]] = row
+        return report
+
     def transform_all(self, compress: bool) -> None:
         """Transforms all ontologies in the input directory to KGX nodes and edges.
 
         Yields two log files: total_stats.yaml and onto_stats.yaml.
         The first contains the total counts of Bioportal ontologies and transforms.
-        The second contains the counts of nodes and edges for each ontology.
+        The second contains the counts of nodes and edges for each ontology, plus
+        its status (OK / Failed / Skipped) and the reason for any skip.
 
         Args:
             compress: If True, compresses the output nodes and edges to tar.gz.
@@ -75,21 +130,33 @@ class Transformer:
             f"Transforming all ontologies in {self.input_dir} to KGX nodes and edges."
         )
 
+        download_report = self._load_download_report()
+
         # This keeps track of the status of each transform.
-        # Ontology acronym IDs are keys.
-        # Values are dictionaries of:
-        # status: True if transform was successful, otherwise False.
-        # nodecount: Number of nodes in the ontology.
-        # edgecount: Number of edges in the ontology.
+        # Ontology acronym IDs are keys. Values carry status, counts, reason,
+        # submission id, and source size.
         onto_log = {}
+
+        # Seed the log with ontologies that were skipped or errored at download
+        # time (they have no file on disk to walk).
+        for onto_id, row in download_report.items():
+            if row.get("status") in ("skipped", "error"):
+                onto_log[onto_id] = {
+                    "status": "Skipped" if row["status"] == "skipped" else "Failed",
+                    "reason": row.get("reason", ""),
+                    "nodecount": 0,
+                    "edgecount": 0,
+                    "submission_id": row.get("submission_id", "NA"),
+                    "source_bytes": int(row.get("source_bytes") or 0),
+                }
 
         filepaths = []
         for root, _dirs, files in os.walk(self.input_dir):
             for file in files:
-                if not file.endswith(ONTOLOGY_LIST_NAME):
+                if file not in _NON_ONTOLOGY_FILES:
                     filepaths.append(os.path.join(root, file))
 
-        if len(filepaths) == 0:
+        if len(filepaths) == 0 and not onto_log:
             logging.error(f"No ontologies found in {self.input_dir}.")
             sys.exit()
         else:
@@ -97,66 +164,75 @@ class Transformer:
 
         for filepath in filepaths:
             ontology_name = (os.path.relpath(filepath, self.input_dir)).split(os.sep)[0]
-            success, nodecount, edgecount = self.transform(filepath, compress)
+            report_row = download_report.get(ontology_name, {})
+            reason = ""
+            try:
+                with deadline(self.timeout_sec):
+                    success, nodecount, edgecount = self.transform(filepath, compress)
+            except TransformTimeout:
+                logging.error(
+                    f"Transform of {ontology_name} exceeded {self.timeout_min} min; skipping."
+                )
+                success, nodecount, edgecount = False, 0, 0
+                reason = "too_slow"
+
             if not success:
                 logging.error(f"Error transforming {filepath}.")
-                status = False
+                strstatus = "Skipped" if reason == "too_slow" else "Failed"
                 nodecount = 0
                 edgecount = 0
+                if not reason:
+                    reason = "transform_error"
             else:
                 logging.info(f"Transformed {filepath}.")
-                status = True
-            if status == False:
-                strstatus = "Failed"
-            else:
                 strstatus = "OK"
+
             onto_log[ontology_name] = {
                 "status": strstatus,
+                "reason": reason,
                 "nodecount": nodecount,
                 "edgecount": edgecount,
+                "submission_id": report_row.get("submission_id", "NA"),
+                "source_bytes": int(report_row.get("source_bytes") or 0),
             }
 
         # Write total stats to a yaml
         logging.info("Writing total stats to total_stats.yaml.")
-        # Get the count of successful transforms
-        # Plus total node and edge counts
-        success_count = 0
-        for onto in onto_log:
-            if onto_log[onto]["status"]:
-                success_count += 1
+        success_count = sum(1 for o in onto_log if onto_log[o]["status"] == "OK")
+        skipped_count = sum(1 for o in onto_log if onto_log[o]["status"] == "Skipped")
+        failed_count = sum(1 for o in onto_log if onto_log[o]["status"] == "Failed")
         with open(os.path.join(self.output_dir, "total_stats.yaml"), "w") as f:
             f.write("totalcount: " + str(success_count) + "\n")
+            f.write("skippedcount: " + str(skipped_count) + "\n")
+            f.write("failedcount: " + str(failed_count) + "\n")
             f.write(
                 "totalnodecount: "
-                + str(sum([onto_log[onto]["nodecount"] for onto in onto_log]))
+                + str(sum(onto_log[o]["nodecount"] for o in onto_log))
                 + "\n"
             )
             f.write(
                 "totaledgecount: "
-                + str(sum([onto_log[onto]["edgecount"] for onto in onto_log]))
+                + str(sum(onto_log[o]["edgecount"] for o in onto_log))
                 + "\n"
             )
 
         # Dump onto_log to a yaml
-        # Rearrange it a bit first
         logging.info("Writing ontology stats to onto_stats.yaml.")
         onto_stats_list = []
-        for onto in onto_log:
-            onto_stats_list.append(
-                {
-                    "id": onto,
-                    "status": onto_log[onto]["status"],
-                    "nodecount": onto_log[onto]["nodecount"],
-                    "edgecount": onto_log[onto]["edgecount"],
-                }
-            )
+        for onto in sorted(onto_log):
+            entry = {"id": onto}
+            entry.update(onto_log[onto])
+            onto_stats_list.append(entry)
         with open(os.path.join(self.output_dir, "onto_stats.yaml"), "w") as of:
-            yaml.dump({"ontologies": onto_stats_list}, of)
+            yaml.dump({"ontologies": onto_stats_list}, of, sort_keys=False)
 
         return None
 
     def transform(self, ontology_path: str, compress: bool) -> Tuple[bool, int, int]:
         """Transforms a single ontology to KGX nodes and edges.
+
+        The compressed product is written flat as ``<output_dir>/<ACRONYM>.tar.gz``
+        so it can be uploaded directly as a GitHub Release asset.
 
         Args:
             ontology_path: A string of the path to the ontology file to transform.
@@ -183,12 +259,10 @@ class Transformer:
             f"Transforming {ontology_name}, submission ID {ontology_submission_id}, to nodes and edges."
         )
 
-        owl_output_path = os.path.join(
-            self.output_dir,
-            f"{ontology_name}",
-            f"{ontology_submission_id}",
-            f"{ontology_name}.owl",
+        workdir = os.path.join(
+            self.output_dir, f"{ontology_name}", f"{ontology_submission_id}"
         )
+        owl_output_path = os.path.join(workdir, f"{ontology_name}.owl")
 
         # If the downloaded file is compressed, we need to decompress it
         if ontology_path.endswith((".gz", ".zip")):
@@ -199,8 +273,7 @@ class Transformer:
                 ontology_path = new_path
             else:
                 logging.error(f"Failed to decompress {ontology_path}")
-                status = False
-                return status, nodecount, edgecount
+                return False, nodecount, edgecount
 
         # Convert
         if not robot_convert(
@@ -208,34 +281,24 @@ class Transformer:
             input_path=ontology_path,
             output_path=owl_output_path,
             robot_env=self.robot_env,
+            timeout=self.timeout_sec,
         ):
-            status = False
-            return status, nodecount, edgecount
+            return False, nodecount, edgecount
 
         # Relax
-        relaxed_outpath = os.path.join(
-            self.output_dir,
-            f"{ontology_name}",
-            f"{ontology_submission_id}",
-            f"{ontology_name}_relaxed.owl",
-        )
+        relaxed_outpath = os.path.join(workdir, f"{ontology_name}_relaxed.owl")
         if not robot_relax(
             robot_path=self.robot_path,
             input_path=owl_output_path,
             output_path=relaxed_outpath,
             robot_env=self.robot_env,
+            timeout=self.timeout_sec,
         ):
-            status = False
-            return status, nodecount, edgecount
+            return False, nodecount, edgecount
 
         # Transform to KGX nodes + edges
         txr = KGXTransformer(stream=True)
-        outfilename = os.path.join(
-            self.output_dir,
-            f"{ontology_name}",
-            f"{ontology_submission_id}",
-            f"{ontology_name}",
-        )
+        outfilename = os.path.join(workdir, f"{ontology_name}")
         nodefilename = outfilename + "_nodes.tsv"
         edgefilename = outfilename + "_edges.tsv"
         input_args = {
@@ -267,10 +330,12 @@ class Transformer:
             with open(edgefilename, "r") as f:
                 edgecount = len(f.readlines()) - 1
 
-            # Compress if requested
+            # Compress if requested. Product is written flat at the top of the
+            # output dir as <ACRONYM>.tar.gz for direct release upload.
             if compress:
                 logging.info("Compressing nodes and edges.")
-                with tarfile.open(f"{outfilename}.tar.gz", "w:gz") as tar:
+                tar_path = os.path.join(self.output_dir, f"{ontology_name}.tar.gz")
+                with tarfile.open(tar_path, "w:gz") as tar:
                     tar.add(nodefilename, arcname=f"{ontology_name}_nodes.tsv")
                     tar.add(edgefilename, arcname=f"{ontology_name}_edges.tsv")
 
@@ -279,21 +344,17 @@ class Transformer:
 
             # Remove the owl files
             # They may not exist if the transform failed
-            try:
-                os.remove(owl_output_path)
-            except OSError:
-                pass
-            try:
-                os.remove(relaxed_outpath)
-            except OSError:
-                pass
+            for path in (owl_output_path, relaxed_outpath):
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
 
         except Exception as e:
             logging.error(
                 f"Error transforming {ontology_name} to KGX nodes and edges: {e}"
             )
-            status = False
-            return status, nodecount, edgecount
+            return False, nodecount, edgecount
 
         return status, nodecount, edgecount
 
