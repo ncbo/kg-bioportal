@@ -144,6 +144,8 @@ class Transformer:
                 onto_log[onto_id] = {
                     "status": "Skipped" if row["status"] == "skipped" else "Failed",
                     "reason": row.get("reason", ""),
+                    "name": row.get("name", ""),
+                    "version": row.get("version", ""),
                     "nodecount": 0,
                     "edgecount": 0,
                     "submission_id": row.get("submission_id", "NA"),
@@ -190,6 +192,8 @@ class Transformer:
             onto_log[ontology_name] = {
                 "status": strstatus,
                 "reason": reason,
+                "name": report_row.get("name", ""),
+                "version": report_row.get("version", ""),
                 "nodecount": nodecount,
                 "edgecount": edgecount,
                 "submission_id": report_row.get("submission_id", "NA"),
