@@ -55,6 +55,11 @@ jobs:
         run: bundle exec jekyll build
         env:
           JEKYLL_ENV: production
+          # jekyll-github-metadata (bundled in the github-pages gem) needs to
+          # know the repo; GitHub's native Pages build sets these automatically,
+          # a custom Actions build must pass them.
+          PAGES_REPO_NWO: ${{ github.repository }}
+          JEKYLL_GITHUB_TOKEN: ${{ github.token }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs/_site
