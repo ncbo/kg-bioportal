@@ -24,7 +24,7 @@ on:
       max_source_mb:
         description: "Skip ontologies whose source exceeds this many MB"
         required: false
-        default: "50"
+        default: "100"
       timeout_min:
         description: "Per-ontology wall-clock cap (minutes)"
         required: false
@@ -42,7 +42,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  MAX_SOURCE_MB: ${{ github.event.inputs.max_source_mb || '50' }}
+  MAX_SOURCE_MB: ${{ github.event.inputs.max_source_mb || '100' }}
   TIMEOUT_MIN: ${{ github.event.inputs.timeout_min || '30' }}
   NUM_SHARDS: ${{ github.event.inputs.num_shards || '20' }}
 
@@ -147,8 +147,12 @@ jobs:
         with:
           pattern: stats-*
           path: fragments
+      - name: Fetch existing stats to merge into (keeps prior results on a targeted re-run)
+        run: gh release download "${{ needs.prepare.outputs.tag }}" -p onto_stats.yaml -D base || echo "No existing stats to seed from."
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Merge stats
-        run: python .github/scripts/merge_stats.py fragments docs "$(date -u +%Y-%m-%d)"
+        run: python .github/scripts/merge_stats.py fragments docs "$(date -u +%Y-%m-%d)" base/onto_stats.yaml
       - name: Attach stats to release
         # The release is the single source of truth for stats; main is a
         # protected branch, so we do NOT commit them back to the repo. The docs

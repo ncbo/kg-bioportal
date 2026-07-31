@@ -34,20 +34,33 @@ def main():
     # Site-wide transform date (shared by all artifacts in this build), passed by
     # the workflow. Optional so the script stays runnable locally.
     transform_date = sys.argv[3] if len(sys.argv) > 3 else ""
+    # Optional existing onto_stats.yaml to seed from, so a targeted re-run of a
+    # subset of ontologies updates those entries without discarding the rest.
+    base_path = sys.argv[4] if len(sys.argv) > 4 else ""
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
     os.makedirs(output_dir, exist_ok=True)
 
-    # Collect entries from every shard fragment. Keyed by id so a later shard
-    # can't duplicate an ontology (each appears in exactly one shard anyway).
     by_id = {}
+
+    # Seed from the existing stats first (incremental / targeted re-runs).
+    if base_path and os.path.exists(base_path):
+        with open(base_path) as f:
+            base = yaml.safe_load(f) or {}
+        for entry in base.get("ontologies", []):
+            by_id[entry["id"]] = entry
+        print(f"Seeded {len(by_id)} entries from existing {base_path}.")
+
+    # Overlay this run's shard fragments (they win over the seeded entries).
     fragment_files = sorted(glob.glob(os.path.join(fragments_dir, "**", "onto_stats.yaml"), recursive=True))
+    fresh = 0
     for path in fragment_files:
         with open(path) as f:
             data = yaml.safe_load(f) or {}
         for entry in data.get("ontologies", []):
             by_id[entry["id"]] = entry
-    print(f"Merged {len(fragment_files)} fragments -> {len(by_id)} ontologies.")
+            fresh += 1
+    print(f"Merged {len(fragment_files)} fragments ({fresh} entries) -> {len(by_id)} ontologies total.")
 
     # Ensure the skiplisted giants are represented (they are removed before
     # sharding, so no shard reports them).

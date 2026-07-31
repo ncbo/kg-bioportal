@@ -11,7 +11,7 @@ import os
 
 # Skip an ontology whose downloaded source file exceeds this many megabytes.
 # Big source files mean big memory use in ROBOT and big output artifacts.
-MAX_SOURCE_MB: float = float(os.environ.get("KGBP_MAX_SOURCE_MB", 50))
+MAX_SOURCE_MB: float = float(os.environ.get("KGBP_MAX_SOURCE_MB", 100))
 
 # Hard wall-clock cap for transforming a single ontology, in minutes. If a
 # transform runs longer it is killed and recorded as skipped (too_slow), so one
