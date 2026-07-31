@@ -42,7 +42,10 @@ jobs:
         run: pip install pandas plotly pyyaml
       - uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "3.3"
+          # Ruby 3.1: the github-pages gem pins an old Liquid that calls
+          # String#tainted?, which Ruby removed in 3.2. This matches GitHub's
+          # own Pages build environment.
+          ruby-version: "3.1"
           bundler-cache: true
           working-directory: docs
       - uses: actions/configure-pages@v5
