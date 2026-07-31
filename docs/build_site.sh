@@ -26,5 +26,5 @@ python make_viz.py
 # Build KG-Registry-driven knowledge-graph pages (BioPortal-style interface).
 # Pulls the KG-Registry JSON-LD, keeps only KnowledgeGraph resources, and writes
 # a browse index + one summary page per graph into docs/graphs/.
-echo "Building knowledge-graph pages from KG-Registry."
-python kg_site/build_site.py --fetch kg_site/kgs.jsonld graphs
+echo "Building the unified graph browser (KG-Registry KGs + transformed ontologies)."
+python kg_site/build_site.py --fetch kg_site/kgs.jsonld graphs --onto-stats onto_stats.yaml

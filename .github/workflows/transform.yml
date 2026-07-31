@@ -148,7 +148,7 @@ jobs:
           pattern: stats-*
           path: fragments
       - name: Merge stats
-        run: python .github/scripts/merge_stats.py fragments docs
+        run: python .github/scripts/merge_stats.py fragments docs "$(date -u +%Y-%m-%d)"
       - name: Attach stats to release
         # The release is the single source of truth for stats; main is a
         # protected branch, so we do NOT commit them back to the repo. The docs

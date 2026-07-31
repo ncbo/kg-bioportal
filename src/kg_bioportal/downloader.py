@@ -69,11 +69,16 @@ class Downloader:
 
         return None
 
-    def _record(self, acronym, submission_id, source_bytes, path, status, reason):
+    def _record(
+        self, acronym, submission_id, source_bytes, path, status, reason,
+        name="", version="",
+    ):
         """Append a per-ontology outcome to the results list."""
         self.results.append(
             {
                 "id": acronym,
+                "name": name,
+                "version": version,
                 "submission_id": submission_id,
                 "source_bytes": source_bytes,
                 "path": path,
@@ -123,15 +128,17 @@ class Downloader:
                 self._record(ontology, "NA", 0, "", "error", "metadata_http_error")
                 continue
             metadata = metadata_resp.json()
-            logging.info(f"Name: {metadata['name']}")
+            onto_name = str(metadata.get("name") or ontology)
+            logging.info(f"Name: {onto_name}")
             latest_submission = self.requests_session.get(
                 latest_submission_url, headers=headers
             ).json()
             if len(latest_submission) > 0:
                 submission_id = latest_submission["submissionId"]
+                onto_version = str(latest_submission.get("version") or "NA")
             else:
                 logging.warning(f"No submission found for {ontology}.")
-                self._record(ontology, "NA", 0, "", "error", "no_submission")
+                self._record(ontology, "NA", 0, "", "error", "no_submission", name=onto_name)
                 continue
             logging.info(
                 f"Latest submission: {latest_submission['version']} - submission ID {submission_id} - released {latest_submission['released']}"
@@ -145,7 +152,8 @@ class Downloader:
                 )
             except requests.RequestException as e:
                 logging.warning(f"Could not download {ontology}: {e}")
-                self._record(ontology, submission_id, 0, "", "error", "download_error")
+                self._record(ontology, submission_id, 0, "", "error", "download_error",
+                             name=onto_name, version=onto_version)
                 continue
 
             try:
@@ -159,7 +167,8 @@ class Downloader:
                     f"Could not download {ontology}. Check if the ontology is downloadable."
                 )
                 download_onto.close()
-                self._record(ontology, submission_id, 0, "", "error", "not_downloadable")
+                self._record(ontology, submission_id, 0, "", "error", "not_downloadable",
+                             name=onto_name, version=onto_version)
                 continue
 
             # Size gate 1: trust Content-Length if present.
@@ -171,7 +180,8 @@ class Downloader:
                 )
                 download_onto.close()
                 self._record(
-                    ontology, submission_id, int(content_length), "", "skipped", "too_large"
+                    ontology, submission_id, int(content_length), "", "skipped", "too_large",
+                    name=onto_name, version=onto_version,
                 )
                 continue
 
@@ -206,13 +216,15 @@ class Downloader:
                 except OSError:
                     pass
                 self._record(
-                    ontology, submission_id, bytes_written, "", "skipped", "too_large"
+                    ontology, submission_id, bytes_written, "", "skipped", "too_large",
+                    name=onto_name, version=onto_version,
                 )
                 continue
 
             logging.info(f"Downloaded {ontology} ({bytes_written/1024/1024:.2f} MB).")
             self._record(
-                ontology, submission_id, bytes_written, outpath, "downloaded", ""
+                ontology, submission_id, bytes_written, outpath, "downloaded", "",
+                name=onto_name, version=onto_version,
             )
 
         self._write_report()
@@ -231,7 +243,7 @@ class Downloader:
     def _write_report(self) -> None:
         """Write per-ontology download outcomes to a TSV in the output dir."""
         report_path = os.path.join(self.output_dir, DOWNLOAD_REPORT_NAME)
-        fieldnames = ["id", "submission_id", "source_bytes", "status", "reason", "path"]
+        fieldnames = ["id", "name", "version", "submission_id", "source_bytes", "status", "reason", "path"]
         with open(report_path, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter="\t")
             writer.writeheader()

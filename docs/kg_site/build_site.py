@@ -100,6 +100,70 @@ def fmt_class(f):
     return FMT_CLASS.get(f, "kgx")
 
 # --------------------------------------------------------------------------- #
+#  unified item model (KG-Registry KGs + transformed BioPortal ontologies)
+# --------------------------------------------------------------------------- #
+# Where a transformed ontology's KGX artifact lives (a release asset).
+RELEASE_ASSET = "https://github.com/ncbo/kg-bioportal/releases/latest/download/{id}.tar.gz"
+
+def kg_to_item(r):
+    """Normalize a KG-Registry knowledge graph into a browse item."""
+    nodes, edges, *_ = kg_metrics(r)
+    rid = r["id"]
+    name = r.get("name") or rid
+    desc = (r.get("description") or "").strip()
+    doms = r.get("domains") or []
+    status = r.get("activity_status", "")
+    return {
+        "source": "kg-registry", "source_label": "KG project", "source_cls": "kgreg",
+        "id": rid, "acr": rid.upper(), "name": name,
+        "blurb": (desc[:110] + "…") if len(desc) > 110 else desc,
+        "nodes": nodes, "edges": edges, "fmts": kg_formats(r), "domains": doms,
+        "status_label": status or "—", "status_cls": "ok" if status == "active" else "warn",
+        "updated": (r.get("last_modified_date") or "")[:10],
+        "href": f"resource/{rid}/", "has_page": True, "version": "",
+    }
+
+def onto_to_item(o, transform_date):
+    """Normalize a transformed BioPortal ontology (onto_stats entry) into a browse item."""
+    oid = o["id"]
+    status = o.get("status", "")
+    ok = status == "OK"
+    name = o.get("name") or oid
+    ver = (o.get("version") or "").strip()
+    ver = "" if ver in ("NA", "") else ver
+    nodes = o.get("nodecount") if ok and isinstance(o.get("nodecount"), int) else None
+    edges = o.get("edgecount") if ok and isinstance(o.get("edgecount"), int) else None
+    blurb = "BioPortal ontology transformed to KGX"
+    if not ok:
+        blurb += f" — {status.lower()}" + (f" ({o.get('reason')})" if o.get("reason") else "")
+    return {
+        "source": "bioportal", "source_label": "BioPortal → KGX", "source_cls": "bp",
+        "id": oid, "acr": oid.upper(), "name": name,
+        "blurb": blurb,
+        "nodes": nodes, "edges": edges, "fmts": ["kgx"] if ok else [], "domains": [],
+        "status_label": status or "—", "status_cls": "ok" if ok else "warn",
+        "updated": transform_date or "",
+        "href": f"resource/{oid}/" if ok else "", "has_page": ok, "version": ver,
+        "download_url": RELEASE_ASSET.format(id=oid),
+        "bioportal_url": f"{BP}/ontologies/{oid}",
+        "submission_id": o.get("submission_id", "NA"),
+        "reason": o.get("reason", ""), "transform_date": transform_date or "",
+    }
+
+def load_ontologies(path):
+    """Load onto_stats.yaml -> list of entries. Needs PyYAML (present in the CI build)."""
+    if not path or not os.path.exists(path):
+        return []
+    try:
+        import yaml  # available in the Pages build (installed for make_viz.py)
+    except ImportError:
+        print("PyYAML not available; skipping transformed-ontology entries.")
+        return []
+    with open(path) as f:
+        data = yaml.safe_load(f) or {}
+    return data.get("ontologies", [])
+
+# --------------------------------------------------------------------------- #
 #  shared chrome
 # --------------------------------------------------------------------------- #
 def css():
@@ -149,113 +213,124 @@ def footer():
 # --------------------------------------------------------------------------- #
 #  browse page
 # --------------------------------------------------------------------------- #
-def render_browse(kgs, reverse_index):
-    # facet tallies
+def render_browse(items, kg_count, onto_count):
+    """Render the unified browse page over normalized items (KGs + ontologies)."""
     from collections import Counter
     dom_counts = Counter()
-    for r in kgs:
-        for d in (r.get("domains") or []):
+    src_counts = Counter()
+    for it in items:
+        src_counts[it["source"]] += 1
+        for d in it["domains"]:
             dom_counts[d] += 1
     top_domains = [d for d, _ in dom_counts.most_common(12)]
 
     rows = []
-    for r in sorted(kgs, key=lambda r: r.get("name", "").lower()):
-        rid = r["id"]
-        name = r.get("name") or rid
-        acr = rid.upper()
-        desc = (r.get("description") or "").strip()
-        blurb = (desc[:110] + "…") if len(desc) > 110 else desc
-        nodes, edges, ncat, npred, *_ = kg_metrics(r)
-        doms = r.get("domains") or []
-        fmts = kg_formats(r)
-        status = r.get("activity_status", "")
-        updated = (r.get("last_modified_date") or "")[:10]
-
-        dom_chips = "".join(f'<span class="chip sm">{esc(d)}</span>' for d in doms[:3])
+    for it in sorted(items, key=lambda x: x["name"].lower()):
+        acr, name, href = it["acr"], it["name"], it["href"]
         fmt_chips = "".join(
-            f'<span class="fmt {fmt_class(f)}">{esc(f)}</span>' for f in fmts[:3]
+            f'<span class="fmt {fmt_class(f)}">{esc(f)}</span>' for f in it["fmts"][:3]
         )
-        st_cls = "ok" if status == "active" else "warn"
-        search_blob = esc(" ".join([name, acr, rid] + doms + fmts).lower())
+        # chips: always the source badge, then domains (KGs) or a version chip (ontologies)
+        chips = f'<span class="src-chip {it["source_cls"]}">{esc(it["source_label"])}</span>'
+        chips += "".join(f'<span class="chip sm">{esc(d)}</span>' for d in it["domains"][:3])
+        if it["version"]:
+            chips += f'<span class="chip sm ver">v{esc(it["version"])}</span>'
+        search_blob = esc(" ".join([name, acr, it["id"], it["source_label"]] + it["domains"] + it["fmts"]).lower())
+        acr_html = (f'<a class="acr-link" href="{esc(href)}">{esc(acr)}</a>'
+                    if href else f'<span class="acr-link muted">{esc(acr)}</span>')
+        click = f"onclick=\"location.href='{esc(href)}'\"" if href else ""
 
         rows.append(f"""<tr class="krow" data-search="{search_blob}"
-             data-domains="{esc('|'.join(doms))}" data-status="{esc(status)}"
-             onclick="location.href='resource/{esc(rid)}/'">
+             data-domains="{esc('|'.join(it['domains']))}" data-source="{esc(it['source'])}" {click}>
           <td class="c-name">
-            <a class="acr-link" href="resource/{esc(rid)}/">{esc(acr)}</a>
+            {acr_html}
             <div class="nm">{esc(name)}</div>
-            <div class="blurb">{esc(blurb)}</div>
-            <div class="row-chips">{dom_chips}</div>
+            <div class="blurb">{esc(it['blurb'])}</div>
+            <div class="row-chips">{chips}</div>
           </td>
-          <td class="c-num num">{abbrev(nodes)}</td>
-          <td class="c-num num">{abbrev(edges)}</td>
+          <td class="c-num num">{abbrev(it['nodes'])}</td>
+          <td class="c-num num">{abbrev(it['edges'])}</td>
           <td class="c-fmt">{fmt_chips or '<span class="muted">—</span>'}</td>
-          <td class="c-status"><span class="stat {st_cls}">{esc(status or '—')}</span></td>
-          <td class="c-num num muted">{esc(updated)}</td>
+          <td class="c-status"><span class="stat {it['status_cls']}">{esc(it['status_label'])}</span></td>
+          <td class="c-num num muted">{esc(it['updated'])}</td>
         </tr>""")
 
-    facet_html = "".join(
+    src_order = [("kg-registry", "KG project", "kgreg"), ("bioportal", "BioPortal → KGX", "bp")]
+    src_facets = "".join(
+        f'<button class="facet" data-source="{sid}">{esc(label)}'
+        f'<span class="fc">{src_counts.get(sid, 0)}</span></button>'
+        for sid, label, _ in src_order if src_counts.get(sid)
+    )
+    dom_facets = "".join(
         f'<button class="facet" data-domain="{esc(d)}">{esc(d)}'
         f'<span class="fc">{dom_counts[d]}</span></button>' for d in top_domains
     )
 
-    return head("Browse Knowledge Graphs · KG-BioPortal") + nav("") + f"""
+    return head("Browse Graphs · KG-BioPortal") + nav("") + f"""
 <div class="wrap">
-  <div class="crumbs"><a href="index.html">Home</a><span>/</span>Knowledge Graphs</div>
+  <div class="crumbs"><a href="index.html">Home</a><span>/</span>Graphs</div>
   <div class="browse-head">
     <div>
-      <h1>Browse Knowledge Graphs</h1>
-      <p class="sub"><b class="num">{len(kgs)}</b> knowledge graphs registered · metadata from KG&#8209;Registry</p>
+      <h1>Browse Graphs</h1>
+      <p class="sub"><b class="num">{len(items)}</b> graphs · <b class="num">{kg_count}</b> KG projects (KG&#8209;Registry) + <b class="num">{onto_count}</b> transformed BioPortal ontologies</p>
     </div>
     <div class="browse-search">
       <svg width=16 height=16 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2.2 style="opacity:.5;flex:none"><circle cx=11 cy=11 r=7/><path d="M21 21l-4.3-4.3"/></svg>
-      <input id="q" placeholder="Filter by name, domain, or format…" aria-label="Filter knowledge graphs">
+      <input id="q" placeholder="Filter by name, domain, or format…" aria-label="Filter graphs">
     </div>
   </div>
 
   <div class="browse-grid">
     <aside class="facets">
-      <h3>Domains</h3>
-      <div class="facet-list">{facet_html}</div>
+      <h3>Source</h3>
+      <div class="facet-list">{src_facets}</div>
+      <h3 style="margin-top:18px">Domains</h3>
+      <div class="facet-list">{dom_facets}</div>
       <button class="facet-clear" id="clearf">Clear filters</button>
     </aside>
 
     <div class="tbl-scroll">
       <table class="browse-tbl">
         <thead><tr>
-          <th>Knowledge graph</th><th class="num">Nodes</th><th class="num">Edges</th>
+          <th>Graph</th><th class="num">Nodes</th><th class="num">Edges</th>
           <th>Formats</th><th>Status</th><th class="num">Updated</th>
         </tr></thead>
         <tbody id="krows">
           {''.join(rows)}
         </tbody>
       </table>
-      <p class="noresults" id="noresults" hidden>No knowledge graphs match your filters.</p>
+      <p class="noresults" id="noresults" hidden>No graphs match your filters.</p>
     </div>
   </div>
 </div>
 <script>
 (function(){{
   var q=document.getElementById('q'), rows=[].slice.call(document.querySelectorAll('.krow'));
-  var facets=[].slice.call(document.querySelectorAll('.facet')), active=null;
-  var nr=document.getElementById('noresults');
+  var facets=[].slice.call(document.querySelectorAll('.facet'));
+  var activeDom=null, activeSrc=null, nr=document.getElementById('noresults');
   function apply(){{
     var term=(q.value||'').trim().toLowerCase(), shown=0;
     rows.forEach(function(r){{
       var okT=!term||r.dataset.search.indexOf(term)>-1;
-      var okD=!active||('|'+r.dataset.domains+'|').indexOf('|'+active+'|')>-1;
-      var vis=okT&&okD; r.hidden=!vis; if(vis)shown++;
+      var okD=!activeDom||('|'+r.dataset.domains+'|').indexOf('|'+activeDom+'|')>-1;
+      var okS=!activeSrc||r.dataset.source===activeSrc;
+      var vis=okT&&okD&&okS; r.hidden=!vis; if(vis)shown++;
     }});
     nr.hidden=shown>0;
   }}
   q.addEventListener('input',apply);
   facets.forEach(function(f){{f.addEventListener('click',function(){{
-    if(active===f.dataset.domain){{active=null;f.classList.remove('on');}}
-    else{{facets.forEach(function(x){{x.classList.remove('on');}});active=f.dataset.domain;f.classList.add('on');}}
+    var isSrc=f.hasAttribute('data-source');
+    var group=facets.filter(function(x){{return x.hasAttribute('data-source')===isSrc;}});
+    var val=isSrc?f.dataset.source:f.dataset.domain;
+    var cur=isSrc?activeSrc:activeDom;
+    if(cur===val){{ if(isSrc)activeSrc=null; else activeDom=null; f.classList.remove('on'); }}
+    else{{ group.forEach(function(x){{x.classList.remove('on');}}); f.classList.add('on');
+           if(isSrc)activeSrc=val; else activeDom=val; }}
     apply();
   }});}});
   document.getElementById('clearf').addEventListener('click',function(){{
-    active=null;q.value='';facets.forEach(function(x){{x.classList.remove('on');}});apply();
+    activeDom=null;activeSrc=null;q.value='';facets.forEach(function(x){{x.classList.remove('on');}});apply();
   }});
 }})();
 </script>
@@ -464,6 +539,108 @@ def render_resource(r, reverse_index):
 """ + footer()
 
 # --------------------------------------------------------------------------- #
+#  ontology resource page (transformed BioPortal ontology)
+# --------------------------------------------------------------------------- #
+def render_ontology_resource(it):
+    """Summary page for a transformed BioPortal ontology (from onto_stats)."""
+    acr, name = it["acr"], it["name"]
+    nodes, edges = it["nodes"], it["edges"]
+    ver = it["version"]
+    date = it["transform_date"]
+    sub = it["submission_id"]
+
+    def metric(cls, v, k):
+        return f'<div class="metric {cls}"><div class="v">{v}</div><div class="k">{k}</div></div>'
+    metrics = (
+        metric("node", commafy(nodes), "Nodes") +
+        metric("edge", commafy(edges), "Edges") +
+        metric("cat", esc(ver or "—"), "Version") +
+        metric("pred", esc(date or "—"), "Transformed")
+    )
+
+    chips = ('<span class="chip">KGX</span>'
+             '<span class="chip">BioPortal &rarr; KGX</span>')
+    if ver:
+        chips += f'<span class="chip">v{esc(ver)}</span>'
+
+    def drow(lab, val_html):
+        return f'<div class="row"><span class="lab">{esc(lab)}</span><span class="val">{val_html}</span></div>'
+    details = "".join([
+        drow("Acronym", f'<span class="mono">{esc(acr)}</span>'),
+        drow("Status", esc(it["status_label"])),
+        drow("Version", esc(ver or "—")),
+        drow("Submission", f'<span class="mono">{esc(sub)}</span>'),
+        drow("Transformed", esc(date or "—")),
+        drow("Source", "BioPortal, transformed to KGX"),
+        drow("BioPortal", f'<a href="{esc(it["bioportal_url"])}" target="_blank" rel="noopener">ontologies/{esc(acr)}</a>'),
+    ])
+
+    fname = f"{it['id']}.tar.gz"
+    return head(f"{acr} · KG-BioPortal") + nav("../../") + f"""
+<div class="wrap">
+  <div class="crumbs"><a href="../../index.html">Home</a><span>/</span>
+    <a href="../../index.html">Graphs</a><span>/</span>{esc(acr)}</div>
+
+  <div class="head">
+    <div class="head-main">
+      <div class="acr"><h1>{esc(acr)}</h1><span class="status ok"><span class="dot"></span>{esc(it['status_label'])}</span></div>
+      <p class="fullname">{esc(name)}</p>
+      <div class="chips">{chips}</div>
+    </div>
+    <div class="head-cta">
+      <a class="btn btn-primary" href="{esc(it['download_url'])}">
+        <svg width=16 height=16 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2.2><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/></svg>
+        Download KGX</a>
+      <a class="btn btn-ghost" href="{esc(it['bioportal_url'])}" target="_blank" rel="noopener">
+        <svg width=16 height=16 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2.2><path d="M7 17L17 7M9 7h8v8"/></svg>
+        View on BioPortal</a>
+    </div>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <div class="tab on">Summary</div>
+    <div class="tab">Nodes <span class="cnt">{abbrev(nodes)}</span></div>
+    <div class="tab">Edges <span class="cnt">{abbrev(edges)}</span></div>
+    <div class="tab">Mappings</div><div class="tab">Notes</div>
+  </div>
+
+  <div class="grid">
+    <main>
+      <section class="block">
+        <div class="visline"><svg width=14 height=14 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx=12 cy=12 r=2.6/></svg> Visibility: <b>Public</b></div>
+        <p class="lead">A KGX transformation of the BioPortal ontology <b>{esc(name)}</b> ({esc(acr)}), produced by KG&#8209;Bioportal. Nodes are ontology classes; edges are the relations between them.</p>
+      </section>
+
+      <section class="block">
+        <p class="eyebrow">Graph at a glance</p>
+        <div class="metrics">{metrics}</div>
+      </section>
+
+      <section class="block">
+        <p class="eyebrow">Products &amp; downloads</p>
+        <div class="prod-list">
+          <div class="prod">
+            <span class="fmt kgx">KGX</span>
+            <div class="prod-main"><div class="t">KGX nodes &amp; edges</div><div class="f">{esc(fname)}</div></div>
+            <a class="dl" href="{esc(it['download_url'])}" aria-label="Download KGX"><svg width=18 height=18 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2.1><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M5 19h14"/></svg></a>
+          </div>
+        </div>
+        <p class="muted mt">From the latest transform release. Contains <span class="mono">{esc(acr)}_nodes.tsv</span> and <span class="mono">{esc(acr)}_edges.tsv</span>.</p>
+      </section>
+    </main>
+
+    <aside class="side">
+      <div class="card"><h3>Details</h3><div class="body">{details}</div></div>
+      <div class="card"><h3>Provenance</h3><div class="body">
+        <div class="row"><span class="lab">Transformed</span><span class="val num">{esc(date or '—')}</span></div>
+        <div class="row" style="border:0"><span class="lab">Pipeline</span><span class="val">KG&#8209;Bioportal (ROBOT &rarr; KGX)</span></div>
+      </div></div>
+    </aside>
+  </div>
+</div>
+""" + footer()
+
+# --------------------------------------------------------------------------- #
 #  build
 # --------------------------------------------------------------------------- #
 def build_reverse_index(kgs, all_by_id):
@@ -480,13 +657,40 @@ def build_reverse_index(kgs, all_by_id):
                         idx[s].append({"id": r["id"], "name": r.get("name") or r["id"]})
     return idx
 
-def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    flags = {a for a in sys.argv[1:] if a.startswith("--")}
-    src = args[0] if args else "kgs.jsonld"
-    out = args[1] if len(args) > 1 else "site"
+def read_transform_date(onto_path):
+    """Read site-wide transform_date from total_stats.yaml beside onto_stats.yaml."""
+    if not onto_path:
+        return ""
+    total = os.path.join(os.path.dirname(onto_path) or ".", "total_stats.yaml")
+    if not os.path.exists(total):
+        return ""
+    try:
+        import yaml
+    except ImportError:
+        return ""
+    with open(total) as f:
+        return str((yaml.safe_load(f) or {}).get("transform_date", "") or "")
 
-    if "--fetch" in flags or not os.path.exists(src):
+def main():
+    argv = sys.argv[1:]
+    onto_path = None
+    pos = []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--onto-stats":
+            onto_path = argv[i + 1] if i + 1 < len(argv) else None
+            i += 2
+            continue
+        if a.startswith("--"):
+            i += 1
+            continue
+        pos.append(a)
+        i += 1
+    src = pos[0] if pos else "kgs.jsonld"
+    out = pos[1] if len(pos) > 1 else "site"
+
+    if "--fetch" in argv or not os.path.exists(src):
         print(f"fetching {REGISTRY_URL} -> {src}")
         urllib.request.urlretrieve(REGISTRY_URL, src)
 
@@ -496,20 +700,43 @@ def main():
     kgs = [r for r in resources if r.get("category") == "KnowledgeGraph"]
     reverse_index = build_reverse_index(kgs, all_by_id)
 
+    # Normalize both sources into unified browse items.
+    kg_items = [kg_to_item(r) for r in kgs]
+    transform_date = read_transform_date(onto_path)
+    onto_entries = load_ontologies(onto_path)
+    onto_items = [onto_to_item(o, transform_date) for o in onto_entries]
+    items = kg_items + onto_items
+
     if os.path.exists(out):
         shutil.rmtree(out)
     os.makedirs(out, exist_ok=True)
 
     with open(os.path.join(out, "index.html"), "w") as f:
-        f.write(render_browse(kgs, reverse_index))
+        f.write(render_browse(items, len(kg_items), len(onto_items)))
 
+    # KG-Registry resource pages (rich).
     for r in kgs:
         d = os.path.join(out, "resource", r["id"])
         os.makedirs(d, exist_ok=True)
         with open(os.path.join(d, "index.html"), "w") as f:
             f.write(render_resource(r, reverse_index))
 
-    print(f"built {len(kgs)} knowledge-graph pages + browse index -> {out}/")
+    # Transformed-ontology resource pages (only successful ones get a page).
+    onto_pages = 0
+    for it in onto_items:
+        if not it["has_page"]:
+            continue
+        d = os.path.join(out, "resource", it["id"])
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "index.html"), "w") as f:
+            f.write(render_ontology_resource(it))
+        onto_pages += 1
+
+    onto_skipped = len(onto_items) - onto_pages
+    print(
+        f"built browse index ({len(items)} rows) + {len(kgs)} KG pages "
+        f"+ {onto_pages} ontology pages ({onto_skipped} ontologies listed without a page) -> {out}/"
+    )
 
 # --------------------------------------------------------------------------- #
 #  styles (inlined into every page)
@@ -594,8 +821,12 @@ text-transform:uppercase;color:var(--ink-soft);font-weight:700;padding:10px 14px
 .acr-link{font-family:var(--mono);font-weight:700;font-size:13px;letter-spacing:.2px}
 .c-name .nm{font-weight:600;margin-top:1px}
 .c-name .blurb{color:var(--ink-faint);font-size:12.5px;margin-top:3px;line-height:1.4}
-.row-chips{margin-top:7px;display:flex;gap:5px;flex-wrap:wrap}
+.row-chips{margin-top:7px;display:flex;gap:5px;flex-wrap:wrap;align-items:center}
 .chip.sm{font-size:10.5px;padding:2px 8px}
+.chip.sm.ver{font-family:var(--mono);text-transform:none}
+.src-chip{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;padding:2px 8px;border-radius:999px;border:1px solid transparent;white-space:nowrap}
+.src-chip.kgreg{background:color-mix(in srgb,var(--c-chem) 15%,transparent);color:var(--c-chem);border-color:color-mix(in srgb,var(--c-chem) 30%,transparent)}
+.src-chip.bp{background:color-mix(in srgb,var(--primary) 14%,transparent);color:var(--primary);border-color:color-mix(in srgb,var(--primary) 32%,transparent)}
 .c-num{white-space:nowrap}.c-fmt{white-space:nowrap}
 .c-fmt .fmt{margin:0 3px 3px 0}
 .stat{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;padding:3px 9px;border-radius:999px}

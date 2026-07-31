@@ -31,6 +31,9 @@ def load_known_giants(repo_root):
 def main():
     fragments_dir = sys.argv[1] if len(sys.argv) > 1 else "fragments"
     output_dir = sys.argv[2] if len(sys.argv) > 2 else "docs"
+    # Site-wide transform date (shared by all artifacts in this build), passed by
+    # the workflow. Optional so the script stays runnable locally.
+    transform_date = sys.argv[3] if len(sys.argv) > 3 else ""
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
     os.makedirs(output_dir, exist_ok=True)
@@ -55,6 +58,8 @@ def main():
                 "id": acr,
                 "status": "Skipped",
                 "reason": "skiplist",
+                "name": "",
+                "version": "",
                 "nodecount": 0,
                 "edgecount": 0,
                 "submission_id": "NA",
@@ -76,6 +81,8 @@ def main():
         f.write(f"failedcount: {failed}\n")
         f.write(f"totalnodecount: {sum(o.get('nodecount', 0) for o in ontologies)}\n")
         f.write(f"totaledgecount: {sum(o.get('edgecount', 0) for o in ontologies)}\n")
+        if transform_date:
+            f.write(f"transform_date: {transform_date}\n")
 
     print(f"OK={ok} Skipped={skipped} Failed={failed} -> {output_dir}/")
 
