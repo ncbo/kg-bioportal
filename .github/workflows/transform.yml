@@ -29,8 +29,10 @@ on:
         description: "Per-ontology wall-clock cap (minutes)"
         required: false
         default: "30"
-  schedule:
-    - cron: "0 4 1 * *"  # 04:00 UTC on the 1st of each month
+  # Monthly schedule — temporarily disabled until the workflow has been
+  # validated with a manual dry-run. Re-enable once a small run passes.
+  # schedule:
+  #   - cron: "0 4 1 * *"  # 04:00 UTC on the 1st of each month
 
 permissions:
   contents: write
