@@ -138,17 +138,35 @@ def onto_to_item(o, transform_date):
         blurb += f" — {status.lower()}" + (f" ({o.get('reason')})" if o.get("reason") else "")
     return {
         "source": "bioportal", "source_label": "BioPortal → KGX", "source_cls": "bp",
-        "id": oid, "acr": oid.upper(), "name": name,
+        "id": oid, "acr": oid.upper(), "name": name, "ok": ok,
         "blurb": blurb,
         "nodes": nodes, "edges": edges, "fmts": ["kgx"] if ok else [], "domains": [],
         "status_label": status or "—", "status_cls": "ok" if ok else "warn",
         "updated": transform_date or "",
-        "href": f"resource/{oid}/" if ok else "", "has_page": ok, "version": ver,
+        # Every transformed-ontology entry now gets a page — OK ones with the KGX
+        # download, non-OK ones collecting the metadata we do have + why there's no artifact.
+        "href": f"resource/{oid}/", "has_page": True, "version": ver,
         "download_url": RELEASE_ASSET.format(id=oid),
         "bioportal_url": f"{BP}/ontologies/{oid}",
         "submission_id": o.get("submission_id", "NA"),
         "reason": o.get("reason", ""), "transform_date": transform_date or "",
     }
+
+# Human-readable explanation for why a non-OK ontology has no KGX artifact.
+REASON_MSG = {
+    "too_large": "The source ontology exceeds the transform size limit (100 MB), so it is not "
+                 "transformed on the automated (GitHub Actions) pipeline.",
+    "too_slow": "The transform exceeded the per-ontology time limit and was stopped.",
+    "skiplist": "This ontology is known to be too large or slow for the automated pipeline and is "
+                "skipped up front.",
+    "transform_error": "The transform did not complete — ROBOT or the KGX conversion reported an error.",
+    "not_downloadable": "No downloadable source is currently available from BioPortal.",
+    "no_submission": "No submission is currently available for this ontology on BioPortal.",
+    "metadata_http_error": "BioPortal metadata for this ontology could not be retrieved.",
+    "download_error": "The source download from BioPortal failed.",
+}
+def reason_message(reason):
+    return REASON_MSG.get(reason, "This ontology has not been transformed to KGX.")
 
 def load_ontologies(path):
     """Load onto_stats.yaml -> list of entries. Needs PyYAML (present in the CI build)."""
@@ -542,40 +560,93 @@ def render_resource(r, reverse_index):
 #  ontology resource page (transformed BioPortal ontology)
 # --------------------------------------------------------------------------- #
 def render_ontology_resource(it):
-    """Summary page for a transformed BioPortal ontology (from onto_stats)."""
+    """Summary page for a transformed BioPortal ontology (OK or not) from onto_stats."""
+    ok = it["ok"]
     acr, name = it["acr"], it["name"]
     nodes, edges = it["nodes"], it["edges"]
     ver = it["version"]
     date = it["transform_date"]
     sub = it["submission_id"]
+    reason = it["reason"]
 
     def metric(cls, v, k):
         return f'<div class="metric {cls}"><div class="v">{v}</div><div class="k">{k}</div></div>'
+    fourth = (metric("pred", esc(date or "—"), "Transformed") if ok
+              else metric("pred", esc(it["status_label"]), "Status"))
     metrics = (
         metric("node", commafy(nodes), "Nodes") +
         metric("edge", commafy(edges), "Edges") +
-        metric("cat", esc(ver or "—"), "Version") +
-        metric("pred", esc(date or "—"), "Transformed")
+        metric("cat", esc(ver or "—"), "Version") + fourth
     )
 
-    chips = ('<span class="chip">KGX</span>'
-             '<span class="chip">BioPortal &rarr; KGX</span>')
+    chips = '<span class="chip">BioPortal &rarr; KGX</span>'
+    if ok:
+        chips = '<span class="chip">KGX</span>' + chips
     if ver:
         chips += f'<span class="chip">v{esc(ver)}</span>'
 
+    # header call-to-action
+    dl_svg = ('<svg width=16 height=16 viewBox="0 0 24 24" fill=none stroke=currentColor '
+              'stroke-width=2.2><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a1 1 0 0 0 '
+              '1 1h14a1 1 0 0 0 1-1v-2"/></svg>')
+    bp_svg = ('<svg width=16 height=16 viewBox="0 0 24 24" fill=none stroke=currentColor '
+              'stroke-width=2.2><path d="M7 17L17 7M9 7h8v8"/></svg>')
+    if ok:
+        cta = (f'<a class="btn btn-primary" href="{esc(it["download_url"])}">{dl_svg} Download KGX</a>'
+               f'<a class="btn btn-ghost" href="{esc(it["bioportal_url"])}" target="_blank" '
+               f'rel="noopener">{bp_svg} View on BioPortal</a>')
+    else:
+        cta = (f'<a class="btn btn-primary" href="{esc(it["bioportal_url"])}" target="_blank" '
+               f'rel="noopener">{bp_svg} View on BioPortal</a>')
+
+    # main body — lead + (download section | not-available notice)
+    if ok:
+        lead = (f'A KGX transformation of the BioPortal ontology <b>{esc(name)}</b> ({esc(acr)}), '
+                f'produced by KG&#8209;Bioportal. Nodes are ontology classes; edges are the '
+                f'relations between them.')
+        fname = f"{it['id']}.tar.gz"
+        body_section = f"""
+      <section class="block">
+        <p class="eyebrow">Products &amp; downloads</p>
+        <div class="prod-list">
+          <div class="prod">
+            <span class="fmt kgx">KGX</span>
+            <div class="prod-main"><div class="t">KGX nodes &amp; edges</div><div class="f">{esc(fname)}</div></div>
+            <a class="dl" href="{esc(it['download_url'])}" aria-label="Download KGX"><svg width=18 height=18 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2.1><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M5 19h14"/></svg></a>
+          </div>
+        </div>
+        <p class="muted mt">From the latest transform release. Contains <span class="mono">{esc(acr)}_nodes.tsv</span> and <span class="mono">{esc(acr)}_edges.tsv</span>.</p>
+      </section>"""
+    else:
+        lead = (f'<b>{esc(name)}</b> ({esc(acr)}) is a BioPortal ontology that KG&#8209;Bioportal '
+                f'has <b>not</b> transformed to KGX. {esc(reason_message(reason))}')
+        body_section = f"""
+      <section class="block">
+        <p class="eyebrow">KGX availability</p>
+        <div class="notice">
+          <div class="notice-t">No KGX artifact for this ontology</div>
+          <p>{esc(reason_message(reason))}</p>
+          <p style="margin:6px 0 0"><a href="{esc(it['bioportal_url'])}" target="_blank" rel="noopener">Get the source ontology on BioPortal &#8599;</a></p>
+        </div>
+      </section>"""
+
     def drow(lab, val_html):
         return f'<div class="row"><span class="lab">{esc(lab)}</span><span class="val">{val_html}</span></div>'
-    details = "".join([
+    detail_rows = [
         drow("Acronym", f'<span class="mono">{esc(acr)}</span>'),
         drow("Status", esc(it["status_label"])),
+    ]
+    if not ok and reason:
+        detail_rows.append(drow("Reason", f'<span class="mono">{esc(reason)}</span>'))
+    detail_rows += [
         drow("Version", esc(ver or "—")),
         drow("Submission", f'<span class="mono">{esc(sub)}</span>'),
-        drow("Transformed", esc(date or "—")),
-        drow("Source", "BioPortal, transformed to KGX"),
+        drow("Transformed", esc(date or "—") if ok else "—"),
+        drow("Source", "BioPortal ontology"),
         drow("BioPortal", f'<a href="{esc(it["bioportal_url"])}" target="_blank" rel="noopener">ontologies/{esc(acr)}</a>'),
-    ])
+    ]
+    details = "".join(detail_rows)
 
-    fname = f"{it['id']}.tar.gz"
     return head(f"{acr} · KG-BioPortal") + nav("../../") + f"""
 <div class="wrap">
   <div class="crumbs"><a href="../../index.html">Home</a><span>/</span>
@@ -583,18 +654,11 @@ def render_ontology_resource(it):
 
   <div class="head">
     <div class="head-main">
-      <div class="acr"><h1>{esc(acr)}</h1><span class="status ok"><span class="dot"></span>{esc(it['status_label'])}</span></div>
+      <div class="acr"><h1>{esc(acr)}</h1><span class="status {it['status_cls']}"><span class="dot"></span>{esc(it['status_label'])}</span></div>
       <p class="fullname">{esc(name)}</p>
       <div class="chips">{chips}</div>
     </div>
-    <div class="head-cta">
-      <a class="btn btn-primary" href="{esc(it['download_url'])}">
-        <svg width=16 height=16 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2.2><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/></svg>
-        Download KGX</a>
-      <a class="btn btn-ghost" href="{esc(it['bioportal_url'])}" target="_blank" rel="noopener">
-        <svg width=16 height=16 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2.2><path d="M7 17L17 7M9 7h8v8"/></svg>
-        View on BioPortal</a>
-    </div>
+    <div class="head-cta">{cta}</div>
   </div>
 
   <div class="tabs" role="tablist">
@@ -608,31 +672,20 @@ def render_ontology_resource(it):
     <main>
       <section class="block">
         <div class="visline"><svg width=14 height=14 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx=12 cy=12 r=2.6/></svg> Visibility: <b>Public</b></div>
-        <p class="lead">A KGX transformation of the BioPortal ontology <b>{esc(name)}</b> ({esc(acr)}), produced by KG&#8209;Bioportal. Nodes are ontology classes; edges are the relations between them.</p>
+        <p class="lead">{lead}</p>
       </section>
 
       <section class="block">
         <p class="eyebrow">Graph at a glance</p>
         <div class="metrics">{metrics}</div>
       </section>
-
-      <section class="block">
-        <p class="eyebrow">Products &amp; downloads</p>
-        <div class="prod-list">
-          <div class="prod">
-            <span class="fmt kgx">KGX</span>
-            <div class="prod-main"><div class="t">KGX nodes &amp; edges</div><div class="f">{esc(fname)}</div></div>
-            <a class="dl" href="{esc(it['download_url'])}" aria-label="Download KGX"><svg width=18 height=18 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2.1><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M5 19h14"/></svg></a>
-          </div>
-        </div>
-        <p class="muted mt">From the latest transform release. Contains <span class="mono">{esc(acr)}_nodes.tsv</span> and <span class="mono">{esc(acr)}_edges.tsv</span>.</p>
-      </section>
+{body_section}
     </main>
 
     <aside class="side">
       <div class="card"><h3>Details</h3><div class="body">{details}</div></div>
       <div class="card"><h3>Provenance</h3><div class="body">
-        <div class="row"><span class="lab">Transformed</span><span class="val num">{esc(date or '—')}</span></div>
+        <div class="row"><span class="lab">{'Transformed' if ok else 'Attempted'}</span><span class="val num">{esc(date or '—')}</span></div>
         <div class="row" style="border:0"><span class="lab">Pipeline</span><span class="val">KG&#8209;Bioportal (ROBOT &rarr; KGX)</span></div>
       </div></div>
     </aside>
@@ -721,21 +774,20 @@ def main():
         with open(os.path.join(d, "index.html"), "w") as f:
             f.write(render_resource(r, reverse_index))
 
-    # Transformed-ontology resource pages (only successful ones get a page).
-    onto_pages = 0
+    # Transformed-ontology resource pages — every entry gets a page: OK ones with
+    # the KGX download, non-OK ones collecting the metadata we have + why there's no artifact.
+    onto_ok = 0
     for it in onto_items:
-        if not it["has_page"]:
-            continue
         d = os.path.join(out, "resource", it["id"])
         os.makedirs(d, exist_ok=True)
         with open(os.path.join(d, "index.html"), "w") as f:
             f.write(render_ontology_resource(it))
-        onto_pages += 1
+        if it["ok"]:
+            onto_ok += 1
 
-    onto_skipped = len(onto_items) - onto_pages
     print(
         f"built browse index ({len(items)} rows) + {len(kgs)} KG pages "
-        f"+ {onto_pages} ontology pages ({onto_skipped} ontologies listed without a page) -> {out}/"
+        f"+ {len(onto_items)} ontology pages ({onto_ok} OK, {len(onto_items) - onto_ok} not transformed) -> {out}/"
     )
 
 # --------------------------------------------------------------------------- #
@@ -873,6 +925,9 @@ section.block{margin-bottom:26px}
 .tok.cat{color:var(--c-chem);border-color:color-mix(in srgb,var(--c-chem) 30%,transparent)}
 .tok.pred{color:var(--ink-soft);font-family:var(--mono);font-size:11.5px}
 .tok.more{color:var(--ink-faint);background:transparent;border-style:dashed}
+.notice{background:color-mix(in srgb,var(--warn) 8%,var(--panel));border:1px solid color-mix(in srgb,var(--warn) 32%,transparent);border-radius:10px;padding:14px 16px;font-size:14px}
+.notice-t{font-weight:700;color:var(--warn);margin-bottom:5px}
+.notice p{margin:0;color:var(--ink-soft)}
 .prod-list{display:flex;flex-direction:column;gap:9px}
 .prod{display:flex;align-items:center;gap:13px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
 .prod:hover{border-color:var(--border-strong)}
