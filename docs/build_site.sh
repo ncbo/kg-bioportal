@@ -4,11 +4,16 @@
 # Define paths
 JEKYLL_CONFIG_HEADER_FILE="_config_header.yml"
 JEKYLL_CONFIG_FILE="_config.yml"
-# These stats files are produced by the transform workflow (.github/workflows/
-# transform.yml -> finalize job) and committed into docs/. The old kg-hub S3
-# hosting is retired, so we read the committed copies directly instead of wget.
+# Stats are produced by the transform workflow (.github/workflows/transform.yml)
+# and published as assets on the latest GitHub Release. The old kg-hub S3 hosting
+# is retired; fetch the current copies from the release (-O forces overwrite).
+RELEASE_BASE="https://github.com/ncbo/kg-bioportal/releases/latest/download"
 TOTAL_STATS_FILE="total_stats.yaml"
 ONTO_STATUS_FILE="onto_stats.yaml"
+
+# Retrieve the most recent transform stats from the latest release.
+wget -O "$TOTAL_STATS_FILE" "$RELEASE_BASE/$TOTAL_STATS_FILE"
+wget -O "$ONTO_STATUS_FILE" "$RELEASE_BASE/$ONTO_STATUS_FILE"
 
 # Append ontology status list
 echo "Adding all lists to Jekyll config."
