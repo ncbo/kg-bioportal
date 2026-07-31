@@ -6,6 +6,8 @@ import requests
 import sh  # type: ignore
 from sh import chmod  # type: ignore
 
+from kg_bioportal.config import ROBOT_JAVA_ARGS
+
 # Note that sh module can take environment variables, see
 # https://amoffat.github.io/sh/sections/special_arguments.html#env
 
@@ -37,9 +39,11 @@ def initialize_robot(robot_path: str) -> list:
         # Make sure it's executable
         chmod("+x", "robot")
 
-    # Declare environment variables
+    # Declare environment variables. Heap/GC args come from config, which reads
+    # the ROBOT_JAVA_ARGS environment variable if set (so CI can size the heap
+    # to the runner) and otherwise falls back to a sane default.
     env = os.environ.copy()
-    env["ROBOT_JAVA_ARGS"] = "-Xmx12g -XX:+UseG1GC"  # For JDK 10 and over
+    env["ROBOT_JAVA_ARGS"] = ROBOT_JAVA_ARGS  # For JDK 10 and over
 
     try:
         robot_command = sh.Command(robot_path)
@@ -50,16 +54,20 @@ def initialize_robot(robot_path: str) -> list:
 
 
 def robot_relax(
-    robot_path: str, input_path: str, output_path: str, robot_env: dict
+    robot_path: str,
+    input_path: str,
+    output_path: str,
+    robot_env: dict,
+    timeout: int = 10800,
 ) -> bool:
     """
     Run the ROBOT relax command on a single ontology.
 
-    Has a three-hour timeout limit - process is killed if it takes this long.
     :param robot_path: Path to ROBOT files
     :param input_owl: Ontology file to be relaxed
     :param output_owl: Ontology file to be created (needs valid ROBOT suffix)
     :param robot_env: dict of environment variables, including ROBOT_JAVA_ARGS
+    :param timeout: Wall-clock limit in seconds; the process is killed if exceeded.
     :return: True if completed without errors, False if errors
     """
     success = False
@@ -77,7 +85,7 @@ def robot_relax(
             output_path,
             "-vvv",
             _env=robot_env,
-            _timeout=10800,
+            _timeout=timeout,
         )
         print("Complete.")
         success = True
@@ -87,12 +95,19 @@ def robot_relax(
     except sh.SignalException_SIGKILL as e:  # If ROBOT encounters severe error
         print(f"ROBOT crashed! {e}")
         success = False
+    except sh.TimeoutException as e:  # If ROBOT exceeded the wall-clock limit
+        print(f"ROBOT relax timed out after {timeout}s: {e}")
+        success = False
 
     return success
 
 
 def robot_convert(
-    robot_path: str, input_path: str, output_path: str, robot_env: dict
+    robot_path: str,
+    input_path: str,
+    output_path: str,
+    robot_env: dict,
+    timeout: int = 10800,
 ) -> bool:
     """
     Run a ROBOT convert command on a single ontology.
@@ -101,6 +116,7 @@ def robot_convert(
     :param input_path: Ontology file to be relaxed
     :param output_path: Ontology file to be created (needs valid ROBOT suffix)
     :param robot_env: dict of environment variables, including ROBOT_JAVA_ARGS
+    :param timeout: Wall-clock limit in seconds; the process is killed if exceeded.
     :return: True if completed without errors, False if errors
     """
     success = False
@@ -118,6 +134,7 @@ def robot_convert(
             output_path,
             "-vvv",
             _env=robot_env,
+            _timeout=timeout,
         )
         print("Complete.")
         success = True
@@ -126,6 +143,9 @@ def robot_convert(
         success = False
     except sh.SignalException_SIGKILL as e:  # If ROBOT encounters severe error
         print(f"ROBOT crashed! {e}")
+        success = False
+    except sh.TimeoutException as e:  # If ROBOT exceeded the wall-clock limit
+        print(f"ROBOT convert timed out after {timeout}s: {e}")
         success = False
 
     return success

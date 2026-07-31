@@ -4,16 +4,11 @@
 # Define paths
 JEKYLL_CONFIG_HEADER_FILE="_config_header.yml"
 JEKYLL_CONFIG_FILE="_config.yml"
-TOTAL_STATS_URL="https://kg-hub.berkeleybop.io/kg-bioportal/total_stats.yaml"
+# These stats files are produced by the transform workflow (.github/workflows/
+# transform.yml -> finalize job) and committed into docs/. The old kg-hub S3
+# hosting is retired, so we read the committed copies directly instead of wget.
 TOTAL_STATS_FILE="total_stats.yaml"
-ONTO_STATUS_URL="https://kg-hub.berkeleybop.io/kg-bioportal/onto_stats.yaml"
 ONTO_STATUS_FILE="onto_stats.yaml"
-
-# Retrieve most recent KG-Bioportal general stats
-wget -N $TOTAL_STATS_URL
-
-# Retrieve most recent KG-Bioportal ontology status
-wget -N $ONTO_STATUS_URL
 
 # Append ontology status list
 echo "Adding all lists to Jekyll config."
