@@ -1,0 +1,67 @@
+name: Deploy docs site to Pages
+
+# Builds and deploys the kg-bioportal docs site (Jekyll) to GitHub Pages.
+#
+# Unlike the old "deploy from a branch" mode, this actually runs
+# docs/build_site.sh first, which:
+#   - fetches the latest transform stats from the release,
+#   - regenerates _config.yml + the plotly figures (make_viz.py), and
+#   - generates the KG-Registry-driven browser under docs/graphs/.
+# Then Jekyll builds the site and it is deployed to Pages.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; don't cancel an in-progress one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Python deps for site generation
+        run: pip install pandas plotly pyyaml
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+          working-directory: docs
+      - uses: actions/configure-pages@v5
+      - name: Assemble site (stats, figures, KG browser)
+        run: bash build_site.sh
+      - name: Build with Jekyll
+        run: bundle exec jekyll build
+        env:
+          JEKYLL_ENV: production
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
