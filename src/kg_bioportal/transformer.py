@@ -3,6 +3,7 @@
 import csv
 import logging
 import os
+import re
 import signal
 import sys
 import tarfile
@@ -25,6 +26,61 @@ from kg_bioportal.robot_utils import initialize_robot, robot_convert, robot_rela
 
 # Files in the input dir that are not ontologies to transform.
 _NON_ONTOLOGY_FILES = {ONTOLOGY_LIST_NAME, DOWNLOAD_REPORT_NAME}
+
+# Patterns for ontology import declarations in the two XML serializations
+# BioPortal serves most often: RDF/XML (<owl:imports .../>) and OWL/XML (<Import>...</Import>).
+_IMPORT_PATTERNS = [
+    re.compile(r"[ \t]*<owl:imports\b[^>]*/>[ \t]*\n?"),
+    re.compile(r"[ \t]*<owl:imports\b[^>]*>.*?</owl:imports>[ \t]*\n?", re.S),
+    re.compile(r"[ \t]*<(?:owl:)?Import\b[^>]*>.*?</(?:owl:)?Import>[ \t]*\n?", re.S),
+]
+
+
+def strip_imports(path: str) -> str:
+    """Remove owl:imports / OWL-XML <Import> declarations from an ontology file.
+
+    ROBOT (via the OWL API) tries to resolve owl:imports over the network when it
+    loads an ontology; when an import URL is dead, slow, or unreachable from the
+    runner the whole convert/relax fails (UnloadableImportException). This is the
+    dominant KG-Bioportal transform failure. Each ontology is transformed on its
+    own, so imports are not needed — references to imported terms just become
+    dangling edges, resolved later at merge time.
+
+    Only XML serializations (RDF/XML, OWL/XML) are handled. Returns the path to a
+    cleaned sibling file, or the original path if nothing was removed / the file
+    isn't an XML serialization we recognize.
+
+    Args:
+        path: Path to the downloaded ontology file.
+
+    Returns:
+        Path to use for the transform (cleaned copy, or the original).
+    """
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    except OSError as e:
+        logging.warning(f"Could not read {path} to strip imports: {e}")
+        return path
+
+    head = text[:400].lstrip().lower()
+    if not (head.startswith("<?xml") or "<rdf:rdf" in head or "<ontology" in head):
+        return path  # not an XML serialization we handle (e.g. obo, ttl)
+
+    cleaned = text
+    removed = 0
+    for pattern in _IMPORT_PATTERNS:
+        cleaned, n = pattern.subn("", cleaned)
+        removed += n
+    if removed == 0:
+        return path
+
+    base, ext = os.path.splitext(path)
+    new_path = f"{base}_noimports{ext or '.owl'}"
+    with open(new_path, "w", encoding="utf-8") as f:
+        f.write(cleaned)
+    logging.info(f"Stripped {removed} import declaration(s) from {os.path.basename(path)}.")
+    return new_path
 
 
 class TransformTimeout(Exception):
@@ -278,6 +334,12 @@ class Transformer:
             else:
                 logging.error(f"Failed to decompress {ontology_path}")
                 return False, nodecount, edgecount
+
+        # Remove owl:imports so ROBOT doesn't try (and fail) to fetch external
+        # ontologies over the network — the dominant cause of transform errors.
+        # Each ontology is transformed standalone; references to imported terms
+        # simply become dangling edges, resolved later at merge time.
+        ontology_path = strip_imports(ontology_path)
 
         # Convert
         if not robot_convert(
