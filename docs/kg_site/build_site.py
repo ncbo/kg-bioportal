@@ -231,6 +231,21 @@ def footer():
   <div>Metadata generated from KG&#8209;Registry · Built on the BioPortal / KG&#8209;Hub stack</div>
 </div></footer></body></html>"""
 
+# Client-side tab switching for resource pages (Summary / Nodes / Edges).
+TAB_JS = """
+<script>
+(function(){
+  var tabs=[].slice.call(document.querySelectorAll('.tab[data-tab]'));
+  var panels=[].slice.call(document.querySelectorAll('.panel[data-panel]'));
+  tabs.forEach(function(t){t.addEventListener('click',function(){
+    tabs.forEach(function(x){x.classList.remove('on');});
+    t.classList.add('on');
+    panels.forEach(function(p){p.classList.toggle('on', p.dataset.panel===t.dataset.tab);});
+  });});
+})();
+</script>
+"""
+
 # --------------------------------------------------------------------------- #
 #  browse page
 # --------------------------------------------------------------------------- #
@@ -355,7 +370,7 @@ def render_browse(items, kg_count, onto_count):
   }});
 }})();
 </script>
-""" + footer()
+""" + TAB_JS + footer()
 
 # --------------------------------------------------------------------------- #
 #  resource (summary) page
@@ -486,6 +501,23 @@ def render_resource(r, reverse_index):
     updated = (r.get("last_modified_date") or "")[:10]
     dl_url = (primary_graph_product(r) or {}).get("product_url", "#")
 
+    # Node / Edge tab panels: the type lists when the registry records them,
+    # otherwise a clear note that only totals are available.
+    nodes_panel = (
+        f'<p class="eyebrow">Node categories <span class="eb-count">{ncat}</span></p>'
+        f'<div class="cloud">{cat_cloud}</div>'
+        if cats else
+        '<p class="muted">No node-type (Biolink category) breakdown is recorded for this graph.'
+        + (f' Total nodes: <span class="num">{commafy(nodes)}</span>.' if nodes else '') + '</p>'
+    )
+    edges_panel = (
+        f'<p class="eyebrow">Edge / predicate types <span class="eb-count">{npred}</span></p>'
+        f'<div class="cloud">{pred_cloud}{pred_more}</div>'
+        if preds else
+        '<p class="muted">No edge-type (predicate) breakdown is recorded for this graph.'
+        + (f' Total edges: <span class="num">{commafy(edges)}</span>.' if edges else '') + '</p>'
+    )
+
     return head(f"{acr} · KG-BioPortal") + nav("../../") + f"""
 <div class="wrap">
   <div class="crumbs"><a href="../../index.html">Home</a><span>/</span>
@@ -501,47 +533,34 @@ def render_resource(r, reverse_index):
       <a class="btn btn-primary" href="{esc(dl_url)}">
         <svg width=16 height=16 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2.2><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/></svg>
         Download graph</a>
-      <a class="btn btn-ghost" href="#">
-        <svg width=16 height=16 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2><circle cx=6 cy=6 r=2.4/><circle cx=18 cy=9 r=2.4/><circle cx=9 cy=18 r=2.4/><path d="M8 7l8 1.5M8.5 16l8-6"/></svg>
-        Explore graph</a>
     </div>
   </div>
 
   <div class="tabs" role="tablist">
-    <div class="tab on">Summary</div>
-    <div class="tab">Nodes <span class="cnt">{abbrev(nodes)}</span></div>
-    <div class="tab">Edges <span class="cnt">{abbrev(edges)}</span></div>
-    <div class="tab">Schema</div><div class="tab">Mappings</div>
-    <div class="tab">Notes</div><div class="tab">Widgets</div>
+    <button class="tab on" data-tab="summary">Summary</button>
+    <button class="tab" data-tab="nodes">Nodes <span class="cnt">{abbrev(nodes)}</span></button>
+    <button class="tab" data-tab="edges">Edges <span class="cnt">{abbrev(edges)}</span></button>
   </div>
 
   <div class="grid">
     <main>
-      <section class="block">
-        <div class="visline"><svg width=14 height=14 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx=12 cy=12 r=2.6/></svg> Visibility: <b>Public</b></div>
-        <p class="lead">{esc(desc) or "No description provided."}</p>
-      </section>
-
-      <section class="block">
-        <p class="eyebrow">Graph at a glance</p>
-        <div class="metrics">{metrics}</div>
-        {'' if (nodes or edges) else '<p class="muted mt">Node and edge counts are not reported in the registry for this graph.</p>'}
-      </section>
-
-      {f'''<section class="block">
-        <p class="eyebrow">Node categories <span class="eb-count">{ncat}</span></p>
-        <div class="cloud">{cat_cloud}</div>
-      </section>''' if cats else ''}
-
-      {f'''<section class="block">
-        <p class="eyebrow">Predicate types <span class="eb-count">{npred}</span></p>
-        <div class="cloud">{pred_cloud}{pred_more}</div>
-      </section>''' if preds else ''}
-
-      <section class="block">
-        <p class="eyebrow">Products &amp; downloads</p>
-        <div class="prod-list">{products_html}</div>
-      </section>
+      <div class="panel on" data-panel="summary">
+        <section class="block">
+          <div class="visline"><svg width=14 height=14 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx=12 cy=12 r=2.6/></svg> Visibility: <b>Public</b></div>
+          <p class="lead">{esc(desc) or "No description provided."}</p>
+        </section>
+        <section class="block">
+          <p class="eyebrow">Graph at a glance</p>
+          <div class="metrics">{metrics}</div>
+          {'' if (nodes or edges) else '<p class="muted mt">Node and edge counts are not reported in the registry for this graph.</p>'}
+        </section>
+        <section class="block">
+          <p class="eyebrow">Products &amp; downloads</p>
+          <div class="prod-list">{products_html}</div>
+        </section>
+      </div>
+      <div class="panel" data-panel="nodes"><section class="block">{nodes_panel}</section></div>
+      <div class="panel" data-panel="edges"><section class="block">{edges_panel}</section></div>
     </main>
 
     <aside class="side">
@@ -557,7 +576,7 @@ def render_resource(r, reverse_index):
     </aside>
   </div>
 </div>
-""" + footer()
+""" + TAB_JS + footer()
 
 # --------------------------------------------------------------------------- #
 #  ontology resource page (transformed BioPortal ontology)
@@ -650,6 +669,23 @@ def render_ontology_resource(it):
     ]
     details = "".join(detail_rows)
 
+    # Transformed ontologies have only totals in the index — the per-node/edge
+    # types live in the KGX download, not here. Say so plainly.
+    ont_nodes_panel = (
+        "<p class=\"muted\">Per-node-type (Biolink category) lists aren't recorded in the index for "
+        "transformed ontologies"
+        + (f' — each node carries a <span class="mono">category</span> column in the KGX download. '
+           f'Total nodes: <span class="num">{commafy(nodes)}</span>.' if ok and nodes else ".")
+        + "</p>"
+    )
+    ont_edges_panel = (
+        "<p class=\"muted\">Per-edge-type (predicate) lists aren't recorded in the index for "
+        "transformed ontologies"
+        + (f' — each edge carries <span class="mono">predicate</span> and <span class="mono">relation</span> '
+           f'columns in the KGX download. Total edges: <span class="num">{commafy(edges)}</span>.' if ok and edges else ".")
+        + "</p>"
+    )
+
     return head(f"{acr} · KG-BioPortal") + nav("../../") + f"""
 <div class="wrap">
   <div class="crumbs"><a href="../../index.html">Home</a><span>/</span>
@@ -665,24 +701,26 @@ def render_ontology_resource(it):
   </div>
 
   <div class="tabs" role="tablist">
-    <div class="tab on">Summary</div>
-    <div class="tab">Nodes <span class="cnt">{abbrev(nodes)}</span></div>
-    <div class="tab">Edges <span class="cnt">{abbrev(edges)}</span></div>
-    <div class="tab">Mappings</div><div class="tab">Notes</div>
+    <button class="tab on" data-tab="summary">Summary</button>
+    <button class="tab" data-tab="nodes">Nodes <span class="cnt">{abbrev(nodes)}</span></button>
+    <button class="tab" data-tab="edges">Edges <span class="cnt">{abbrev(edges)}</span></button>
   </div>
 
   <div class="grid">
     <main>
-      <section class="block">
-        <div class="visline"><svg width=14 height=14 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx=12 cy=12 r=2.6/></svg> Visibility: <b>Public</b></div>
-        <p class="lead">{lead}</p>
-      </section>
-
-      <section class="block">
-        <p class="eyebrow">Graph at a glance</p>
-        <div class="metrics">{metrics}</div>
-      </section>
+      <div class="panel on" data-panel="summary">
+        <section class="block">
+          <div class="visline"><svg width=14 height=14 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx=12 cy=12 r=2.6/></svg> Visibility: <b>Public</b></div>
+          <p class="lead">{lead}</p>
+        </section>
+        <section class="block">
+          <p class="eyebrow">Graph at a glance</p>
+          <div class="metrics">{metrics}</div>
+        </section>
 {body_section}
+      </div>
+      <div class="panel" data-panel="nodes"><section class="block">{ont_nodes_panel}</section></div>
+      <div class="panel" data-panel="edges"><section class="block">{ont_edges_panel}</section></div>
     </main>
 
     <aside class="side">
@@ -694,7 +732,7 @@ def render_ontology_resource(it):
     </aside>
   </div>
 </div>
-""" + footer()
+""" + TAB_JS + footer()
 
 # --------------------------------------------------------------------------- #
 #  build
@@ -855,7 +893,7 @@ h1{margin:0;font-size:30px;letter-spacing:-.6px;font-weight:800;text-wrap:balanc
 .browse-head .sub{margin:6px 0 0;color:var(--ink-soft)}
 .browse-search{display:flex;align-items:center;gap:9px;background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:10px 13px;min-width:300px;flex:1;max-width:420px}
 .browse-search input{border:0;background:transparent;color:var(--ink);font-size:14px;width:100%;outline:none}
-.browse-grid{display:grid;grid-template-columns:210px 1fr;gap:22px;padding-bottom:60px;align-items:start}
+.browse-grid{display:grid;grid-template-columns:180px minmax(0,1fr);gap:18px;padding-bottom:60px;align-items:start}
 @media(max-width:820px){.browse-grid{grid-template-columns:1fr}}
 .facets{position:sticky;top:16px}
 .facets h3{font-size:11.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--ink-faint);margin:0 0 10px}
@@ -867,12 +905,12 @@ color:var(--ink-soft);font-family:inherit;font-size:13.5px;padding:6px 10px;bord
 .facet .fc{font-family:var(--mono);font-size:11.5px;color:var(--ink-faint)}
 .facet.on .fc{color:var(--chip-ink)}
 .facet-clear{margin-top:12px;background:transparent;border:0;color:var(--link);font-size:12.5px;cursor:pointer;font-family:inherit;padding:4px 10px}
-.browse-tbl{border-collapse:collapse;width:100%;font-size:14px;min-width:680px}
-.browse-tbl thead th{position:sticky;top:0;background:var(--panel-2);text-align:left;font-size:11.5px;letter-spacing:.4px;
-text-transform:uppercase;color:var(--ink-soft);font-weight:700;padding:10px 14px;border-bottom:1px solid var(--border)}
-.browse-tbl tbody td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+.browse-tbl{border-collapse:collapse;width:100%;font-size:13.5px;min-width:0;table-layout:auto}
+.browse-tbl thead th{position:sticky;top:0;background:var(--panel-2);text-align:left;font-size:11px;letter-spacing:.3px;
+text-transform:uppercase;color:var(--ink-soft);font-weight:700;padding:9px 10px;border-bottom:1px solid var(--border)}
+.browse-tbl tbody td{padding:10px 10px;border-bottom:1px solid var(--border);vertical-align:top}
 .krow{cursor:pointer}.krow:hover{background:var(--panel)}
-.c-name{max-width:440px}
+.c-name{max-width:320px}
 .acr-link{font-family:var(--mono);font-weight:700;font-size:13px;letter-spacing:.2px}
 .c-name .nm{font-weight:600;margin-top:1px}
 .c-name .blurb{color:var(--ink-faint);font-size:12.5px;margin-top:3px;line-height:1.4}
@@ -883,7 +921,7 @@ text-transform:uppercase;color:var(--ink-soft);font-weight:700;padding:10px 14px
 .src-chip.kgreg{background:color-mix(in srgb,var(--c-chem) 15%,transparent);color:var(--c-chem);border-color:color-mix(in srgb,var(--c-chem) 30%,transparent)}
 .src-chip.bp{background:color-mix(in srgb,var(--primary) 14%,transparent);color:var(--primary);border-color:color-mix(in srgb,var(--primary) 32%,transparent)}
 .c-num{white-space:nowrap}.c-fmt{white-space:nowrap}
-.c-fmt .fmt{margin:0 3px 3px 0}
+.c-fmt .fmt{margin:0 3px 3px 0;min-width:auto;padding:3px 6px;font-size:9.5px}
 .stat{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;padding:3px 9px;border-radius:999px}
 .stat.ok{background:color-mix(in srgb,var(--prod) 15%,transparent);color:var(--prod)}
 .stat.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
@@ -905,9 +943,10 @@ text-transform:uppercase;color:var(--ink-soft);font-weight:700;padding:10px 14px
 .btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-hover)}
 .btn-ghost{background:var(--page);color:var(--ink);border-color:var(--border-strong)}.btn-ghost:hover{background:var(--panel)}
 .tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-top:2px;overflow-x:auto}
-.tab{padding:11px 15px;font-size:14px;font-weight:600;color:var(--ink-soft);border-bottom:2px solid transparent;white-space:nowrap;cursor:pointer}
+.tab{padding:11px 15px;font-size:14px;font-weight:600;color:var(--ink-soft);background:transparent;border:0;border-bottom:2px solid transparent;white-space:nowrap;cursor:pointer;font-family:inherit}
 .tab:hover{color:var(--ink)}.tab.on{color:var(--primary);border-bottom-color:var(--primary)}
 .tab .cnt{font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);margin-left:6px}
+.panel{display:none}.panel.on{display:block}
 .grid{display:grid;grid-template-columns:1fr 320px;gap:26px;padding:24px 0 60px;align-items:start}
 @media(max-width:860px){.grid{grid-template-columns:1fr}}
 section.block{margin-bottom:26px}
