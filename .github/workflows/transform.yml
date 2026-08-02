@@ -29,10 +29,12 @@ on:
         description: "Per-ontology wall-clock cap (minutes)"
         required: false
         default: "30"
-  # Monthly schedule — temporarily disabled until the workflow has been
-  # validated with a manual dry-run. Re-enable once a small run passes.
-  # schedule:
-  #   - cron: "0 4 1 * *"  # 04:00 UTC on the 1st of each month
+  # Monthly. Version-skip (in prepare) means a scheduled run only (re)transforms
+  # ontologies whose BioPortal submission changed since the last index, so each
+  # run's release stays well under the 1000-asset cap; a month with no changes is
+  # a clean no-op.
+  schedule:
+    - cron: "0 4 1 * *"  # 04:00 UTC on the 1st of each month
 
 permissions:
   contents: write
