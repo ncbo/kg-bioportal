@@ -25,15 +25,20 @@ assets**. This skill covers finding, fetching, and loading those graphs.
 
 ## Background — the data model
 
-Everything lives on the latest release of `ncbo/kg-bioportal`, reachable at stable URLs:
+Graphs are hosted **incrementally across multiple releases** (a GitHub release caps at 1000 assets),
+so the **index is authoritative** — resolve each graph through it rather than guessing a URL:
 
-- **Per-graph artifact:** `https://github.com/ncbo/kg-bioportal/releases/latest/download/<ID>.tar.gz`
-  — contains `<ID>_nodes.tsv` and `<ID>_edges.tsv`. `<ID>` is the BioPortal acronym (uppercase),
-  e.g. `GO`, `AGRO`, `UBERON`. Only successfully-transformed (status `OK`) ontologies have an asset.
-- **Inventory:** `.../releases/latest/download/onto_stats.yaml` — one entry per ontology with
-  `id, name, version, status (OK/Failed/Skipped), reason, nodecount, edgecount, submission_id`.
+- **Index (all graphs):** `https://github.com/ncbo/kg-bioportal/releases/latest/download/onto_stats.yaml`
+  — one entry per ontology: `id, name, version, status (OK/Failed/Skipped), reason, nodecount,
+  edgecount, submission_id`, and for OK entries a **`download_url`** pointing at whichever release
+  holds that graph's most recent artifact.
+- **Per-graph artifact:** the OK entry's `download_url`, e.g.
+  `.../releases/download/data-2026.08.01-42/<ID>.tar.gz` — contains `<ID>_nodes.tsv` and
+  `<ID>_edges.tsv`. `<ID>` is the BioPortal acronym (uppercase). Only `status: OK` ontologies have one.
 - **Totals:** `.../releases/latest/download/total_stats.yaml` — `totalcount, skippedcount,
   failedcount, totalnodecount, totaledgecount, transform_date`.
+
+The `scripts/` here resolve `download_url` from the index for you.
 
 Provenance: nodes have a `provided_by` column and edges a `knowledge_source` column; both currently
 hold the source file name (`<ID>_relaxed.owl`), which identifies the source ontology. A couple of
@@ -57,7 +62,7 @@ https://ncbo.github.io/kg-bioportal/graphs/ .
 python scripts/fetch_graph.py GO AGRO             # -> ./GO/GO_nodes.tsv, ./AGRO/AGRO_nodes.tsv …
 python scripts/fetch_graph.py GO -o data/graphs   # into a directory
 ```
-Or by hand: `curl -L .../releases/latest/download/GO.tar.gz | tar xz`.
+Or by hand: read `GO`'s `download_url` from the index and `curl -L <that url> | tar xz`.
 
 ### 3. Load the data
 KGX TSVs are plain tab-separated files — load them however suits the task:

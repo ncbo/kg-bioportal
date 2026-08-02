@@ -57,8 +57,11 @@ def main():
     onts.sort(key=keys[a.sort])
 
     if a.json:
+        # Each OK entry already carries its download_url (which release it lives
+        # in); fall back to the latest-release URL for older indexes.
         for o in onts:
-            o["download_url"] = ASSET.format(id=o["id"]) if o.get("status") == "OK" else None
+            if o.get("status") == "OK":
+                o.setdefault("download_url", ASSET.format(id=o["id"]))
         print(json.dumps(onts, indent=2))
         return
 
@@ -66,7 +69,8 @@ def main():
     for o in onts:
         print(f"{o['id']:24} {o.get('status', ''):8} "
               f"{fmt(o.get('nodecount')):>11} {fmt(o.get('edgecount')):>11}  {o.get('name') or ''}")
-    print(f"\n{len(onts)} graphs. Download an OK graph from: {ASSET.format(id='<ID>')}")
+    print(f"\n{len(onts)} graphs. Each OK entry's download_url (in onto_stats / --json) points at "
+          f"whichever release holds its most recent artifact.")
 
 
 if __name__ == "__main__":

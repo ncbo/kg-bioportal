@@ -146,7 +146,10 @@ def onto_to_item(o, transform_date):
         # Every transformed-ontology entry now gets a page — OK ones with the KGX
         # download, non-OK ones collecting the metadata we do have + why there's no artifact.
         "href": f"resource/{oid}/", "has_page": True, "version": ver,
-        "download_url": RELEASE_ASSET.format(id=oid),
+        # Prefer the index's per-entry download_url (points at whichever release
+        # holds this ontology's most recent artifact); fall back to the latest
+        # release for older indexes without the field.
+        "download_url": o.get("download_url") or RELEASE_ASSET.format(id=oid),
         "bioportal_url": f"{BP}/ontologies/{oid}",
         "submission_id": o.get("submission_id", "NA"),
         "reason": o.get("reason", ""), "transform_date": transform_date or "",

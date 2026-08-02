@@ -25,20 +25,27 @@ import urllib.request
 socket.setdefaulttimeout(180)  # don't hang forever on a stalled connection
 
 RELEASE = "https://github.com/ncbo/kg-bioportal/releases/latest/download"
-ASSET = RELEASE + "/{id}.tar.gz"
+ASSET = RELEASE + "/{id}.tar.gz"  # fallback only
 
 
-def all_ok_ids():
+def load_index():
+    """Map acronym -> download_url from the latest release's onto_stats index.
+
+    Graphs are hosted incrementally across releases; each OK entry records which
+    release holds its artifact.
+    """
     import yaml
     with urllib.request.urlopen(RELEASE + "/onto_stats.yaml", timeout=60) as r:
         onts = (yaml.safe_load(r.read()) or {}).get("ontologies", [])
-    return [o["id"] for o in onts if o.get("status") == "OK"]
+    return {o["id"]: (o.get("download_url") or ASSET.format(id=o["id"]))
+            for o in onts if o.get("status") == "OK"}
 
 
-def fetch_tsvs(acr, indir):
+def fetch_tsvs(acr, indir, index):
+    url = index.get(acr) or ASSET.format(id=acr)
     tmp = os.path.join(tempfile.gettempdir(), f"{acr}.tar.gz")
     try:
-        urllib.request.urlretrieve(ASSET.format(id=acr), tmp)
+        urllib.request.urlretrieve(url, tmp)
     except urllib.error.HTTPError as e:
         print(f"  skip {acr}: no asset (HTTP {e.code}) — only OK graphs are downloadable")
         return False
@@ -60,7 +67,8 @@ def main():
     ap.add_argument("--output-dir", default="merge_output")
     a = ap.parse_args()
 
-    ids = all_ok_ids() if a.all_ok else [x.upper() for x in a.acronyms]
+    index = load_index()
+    ids = sorted(index) if a.all_ok else [x.upper() for x in a.acronyms]
     if not ids:
         sys.exit("Provide one or more acronyms, or --all-ok.")
 
@@ -70,7 +78,7 @@ def main():
         sys.exit("cat-merge is required: pip install cat-merge")
 
     os.makedirs(a.input_dir, exist_ok=True)
-    got = [x for x in ids if fetch_tsvs(x, a.input_dir)]
+    got = [x for x in ids if fetch_tsvs(x, a.input_dir, index)]
     print(f"Fetched {len(got)}/{len(ids)} graphs into {a.input_dir}/")
     if not got:
         sys.exit("Nothing to merge.")

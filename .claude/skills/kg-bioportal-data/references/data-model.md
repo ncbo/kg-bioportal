@@ -1,21 +1,26 @@
 # KG-Bioportal data model reference
 
-## Where the data lives
+## Where the data lives — the index is authoritative
 
-All artifacts are assets on the **latest GitHub Release** of `ncbo/kg-bioportal`, at stable URLs:
+A GitHub release holds at most 1000 assets, so the corpus is spread across **multiple releases**:
+each transform run publishes a release holding only the graphs it (re)transformed. **Don't assume a
+fixed per-graph URL** — resolve each graph through the index.
 
 | What | URL |
 |------|-----|
-| A graph | `https://github.com/ncbo/kg-bioportal/releases/latest/download/<ID>.tar.gz` |
-| Inventory | `.../releases/latest/download/onto_stats.yaml` |
+| Index (all graphs) | `https://github.com/ncbo/kg-bioportal/releases/latest/download/onto_stats.yaml` |
 | Totals | `.../releases/latest/download/total_stats.yaml` |
+| A graph | the `download_url` recorded for it in the index (see below) |
 
-`<ID>` is the BioPortal acronym in **uppercase** (`GO`, `AGRO`, `UBERON`, `CHEBI`). Only ontologies
-with `status: OK` in `onto_stats.yaml` have a downloadable `<ID>.tar.gz`. Each tarball contains two
-files: `<ID>_nodes.tsv` and `<ID>_edges.tsv`.
+The **latest release always carries the full `onto_stats.yaml` index** covering every ontology, and
+each `status: OK` entry has a **`download_url`** pointing at whichever release actually holds its most
+recent artifact, e.g. `.../releases/download/data-2026.08.01-42/GO.tar.gz`. To get a graph: read the
+index, look up its `download_url`, download that. `<ID>` is the BioPortal acronym in **uppercase**;
+each tarball contains `<ID>_nodes.tsv` and `<ID>_edges.tsv`.
 
-The release tag is `data-YYYY.MM` (marked "latest"); a full run replaces the month's assets and a
-targeted re-run updates a subset in place.
+Release tags are unique per run (`data-YYYY.MM.DD-<run>`). Only `status: OK` ontologies have an
+artifact. (The old `.../releases/latest/download/<ID>.tar.gz` URL only works if that graph happens to
+live in the latest release — always prefer the index `download_url`.)
 
 ## `onto_stats.yaml`
 
@@ -31,6 +36,8 @@ ontologies:
   edgecount: 8691
   submission_id: '6'      # BioPortal submission id
   source_bytes: 7501012   # size of the source ontology file
+  download_url: https://github.com/ncbo/kg-bioportal/releases/download/data-2026.08.01-42/AGRO.tar.gz
+                          # OK entries only; the release+asset holding this graph's newest artifact
 ```
 
 `total_stats.yaml`:

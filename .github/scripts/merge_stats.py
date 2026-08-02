@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """Merge per-shard onto_stats.yaml fragments into repo-wide stats.
 
-Usage: merge_stats.py <fragments_dir> <output_dir>
+Usage: merge_stats.py <fragments_dir> <output_dir> [transform_date] [base_onto_stats] [release_tag]
 
 Reads every onto_stats.yaml under <fragments_dir> (one per transform shard),
-concatenates their ontology entries, adds the statically skiplisted giants as
-Skipped/skiplist rows so nothing silently vanishes, and writes merged
-onto_stats.yaml + total_stats.yaml into <output_dir>.
+optionally seeds from an existing index (<base_onto_stats>, the previous latest
+release's onto_stats — carries every ontology's download_url), overlays this
+run's results, sets each of this run's OK entries' download_url to <release_tag>,
+adds the statically skiplisted giants as Skipped/skiplist rows, and writes the
+merged onto_stats.yaml + total_stats.yaml into <output_dir>.
+
+The merged index is authoritative across releases: each OK entry's download_url
+points at whichever release holds that ontology's most recent artifact.
 
 Depends only on PyYAML. The skiplist is loaded directly from the package's
 config.py by path, so this script needs no heavy dependencies installed.
@@ -37,7 +42,14 @@ def main():
     # Optional existing onto_stats.yaml to seed from, so a targeted re-run of a
     # subset of ontologies updates those entries without discarding the rest.
     base_path = sys.argv[4] if len(sys.argv) > 4 else ""
+    # This run's release tag. Every OK ontology transformed in this run gets a
+    # download_url pointing at this release; seeded (unchanged) entries keep the
+    # download_url they already have (which release they actually live in).
+    release_tag = sys.argv[5] if len(sys.argv) > 5 else ""
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+    def asset_url(tag, onto_id):
+        return f"https://github.com/ncbo/kg-bioportal/releases/download/{tag}/{onto_id}.tar.gz"
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -58,6 +70,11 @@ def main():
         with open(path) as f:
             data = yaml.safe_load(f) or {}
         for entry in data.get("ontologies", []):
+            # This run's OK graphs live in this run's release; record where.
+            if entry.get("status") == "OK" and release_tag:
+                entry["download_url"] = asset_url(release_tag, entry["id"])
+            else:
+                entry.pop("download_url", None)  # no artifact for non-OK
             by_id[entry["id"]] = entry
             fresh += 1
     print(f"Merged {len(fragment_files)} fragments ({fresh} entries) -> {len(by_id)} ontologies total.")
