@@ -19,7 +19,28 @@ import urllib.request
 
 socket.setdefaulttimeout(180)  # don't hang forever on a stalled connection
 
-ASSET = "https://github.com/ncbo/kg-bioportal/releases/latest/download/{id}.tar.gz"
+RELEASE = "https://github.com/ncbo/kg-bioportal/releases/latest/download"
+ASSET = RELEASE + "/{id}.tar.gz"  # fallback only
+
+
+def load_index():
+    """Map acronym -> download_url from the latest release's onto_stats index.
+
+    Graphs are hosted incrementally across releases; each OK entry records which
+    release holds its artifact. Returns {} if PyYAML/index is unavailable (callers
+    then fall back to the latest-release URL).
+    """
+    try:
+        import yaml
+    except ImportError:
+        return {}
+    try:
+        with urllib.request.urlopen(RELEASE + "/onto_stats.yaml", timeout=60) as r:
+            onts = (yaml.safe_load(r.read()) or {}).get("ontologies", [])
+    except Exception:
+        return {}
+    return {o["id"]: o.get("download_url") for o in onts
+            if o.get("status") == "OK" and o.get("download_url")}
 
 
 def _safe_extract(tar, dest):
@@ -30,8 +51,8 @@ def _safe_extract(tar, dest):
         tar.extractall(dest)
 
 
-def fetch(acr, outdir, flat):
-    url = ASSET.format(id=acr)
+def fetch(acr, outdir, flat, index):
+    url = index.get(acr) or ASSET.format(id=acr)
     dest = outdir if flat else os.path.join(outdir, acr)
     os.makedirs(dest, exist_ok=True)
     tmp = os.path.join(tempfile.gettempdir(), f"{acr}.tar.gz")
@@ -55,7 +76,8 @@ def main():
     ap.add_argument("-o", "--output-dir", default=".")
     ap.add_argument("--flat", action="store_true", help="extract into output dir without per-graph subdirs")
     a = ap.parse_args()
-    ok = sum(fetch(x.upper(), a.output_dir, a.flat) for x in a.acronyms)
+    index = load_index()
+    ok = sum(fetch(x.upper(), a.output_dir, a.flat, index) for x in a.acronyms)
     print(f"{ok}/{len(a.acronyms)} graphs fetched into {a.output_dir}/")
     if ok < len(a.acronyms):
         sys.exit(1)
