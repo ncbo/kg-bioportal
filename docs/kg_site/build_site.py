@@ -215,9 +215,10 @@ def nav(root):
     {ext(f"{BP}/annotator", "Annotator")}
   </nav>
   <div class="nav-spacer"></div>
-  <div class="navsearch">
+  <div class="navsearch" data-root="{root}">
     <svg width=14 height=14 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2.4><circle cx=11 cy=11 r=7/><path d="M21 21l-4.3-4.3"/></svg>
-    <input placeholder="Search graphs &amp; nodes" aria-label=Search>
+    <input id="navq" placeholder="Search graphs…" aria-label="Search graphs" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="acdrop">
+    <div class="ac-drop" id="acdrop" role="listbox"></div>
   </div>
   <a class="navlogin" href="#">Log in</a>
 </div></div>
@@ -244,6 +245,62 @@ TAB_JS = """
     t.classList.add('on');
     panels.forEach(function(p){p.classList.toggle('on', p.dataset.panel===t.dataset.tab);});
   });});
+})();
+</script>
+"""
+
+# Nav-bar search with autocomplete. Reads a small search-index.json (all graphs)
+# from the graphs root and suggests matches; selecting one navigates to its page.
+SEARCH_JS = """
+<script>
+(function(){
+  var box=document.querySelector('.navsearch'); if(!box) return;
+  var root=box.getAttribute('data-root')||'';
+  var input=document.getElementById('navq'), drop=document.getElementById('acdrop');
+  var index=null, sel=-1;
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function load(cb){
+    if(index){cb();return;}
+    fetch(root+'search-index.json').then(function(r){return r.json();})
+      .then(function(d){index=d;cb();}).catch(function(){index=[];cb();});
+  }
+  function close(){drop.classList.remove('on');input.setAttribute('aria-expanded','false');sel=-1;}
+  function render(list){
+    if(!list.length){drop.innerHTML='<div class="ac-empty">No matching graphs</div>';}
+    else{drop.innerHTML=list.map(function(it){
+      return '<a class="ac-item" role="option" href="'+root+esc(it.h)+'">'
+        +'<span class="aid">'+esc(it.a)+'</span>'
+        +'<span class="anm">'+esc(it.n)+'</span>'
+        +'<span class="asrc">'+esc(it.s)+'</span></a>';}).join('');}
+    drop.classList.add('on');input.setAttribute('aria-expanded','true');sel=-1;
+  }
+  function search(){
+    var term=input.value.trim().toLowerCase();
+    if(!term){close();return;}
+    load(function(){
+      var pre=[],sub=[];
+      for(var i=0;i<index.length;i++){var it=index[i];
+        var a=it.a.toLowerCase(), n=it.n.toLowerCase();
+        if(a.indexOf(term)===0||n.indexOf(term)===0)pre.push(it);
+        else if((a+' '+n).indexOf(term)>-1)sub.push(it);
+      }
+      render(pre.concat(sub).slice(0,10));
+    });
+  }
+  input.addEventListener('input',search);
+  input.addEventListener('focus',function(){if(input.value.trim())search();});
+  input.addEventListener('keydown',function(e){
+    var links=[].slice.call(drop.querySelectorAll('.ac-item'));
+    if(e.key==='ArrowDown'){e.preventDefault();sel=Math.min(sel+1,links.length-1);}
+    else if(e.key==='ArrowUp'){e.preventDefault();sel=Math.max(sel-1,0);}
+    else if(e.key==='Enter'){if(sel>=0&&links[sel]){e.preventDefault();window.location.href=links[sel].getAttribute('href');}return;}
+    else if(e.key==='Escape'){close();return;}
+    else return;
+    links.forEach(function(l,i){l.classList.toggle('sel',i===sel);});
+    if(links[sel])links[sel].scrollIntoView({block:'nearest'});
+  });
+  document.addEventListener('click',function(e){if(!box.contains(e.target))close();});
 })();
 </script>
 """
@@ -376,7 +433,7 @@ def render_browse(items, kg_count, onto_count):
   }});
 }})();
 </script>
-""" + TAB_JS + footer()
+""" + SEARCH_JS + TAB_JS + footer()
 
 # --------------------------------------------------------------------------- #
 #  resource (summary) page
@@ -582,7 +639,7 @@ def render_resource(r, reverse_index):
     </aside>
   </div>
 </div>
-""" + TAB_JS + footer()
+""" + SEARCH_JS + TAB_JS + footer()
 
 # --------------------------------------------------------------------------- #
 #  ontology resource page (transformed BioPortal ontology)
@@ -738,7 +795,7 @@ def render_ontology_resource(it):
     </aside>
   </div>
 </div>
-""" + TAB_JS + footer()
+""" + SEARCH_JS + TAB_JS + footer()
 
 # --------------------------------------------------------------------------- #
 #  build
@@ -814,6 +871,15 @@ def main():
     with open(os.path.join(out, "index.html"), "w") as f:
         f.write(render_browse(items, len(kg_items), len(onto_items)))
 
+    # Search index for the nav-bar autocomplete (all browseable graphs).
+    search_index = [
+        {"a": it["acr"], "n": it["name"], "h": it["href"],
+         "s": "KG" if it["source"] == "kg-registry" else "BP"}
+        for it in items if it.get("href")
+    ]
+    with open(os.path.join(out, "search-index.json"), "w") as f:
+        json.dump(search_index, f, separators=(",", ":"))
+
     # KG-Registry resource pages (rich).
     for r in kgs:
         d = os.path.join(out, "resource", r["id"])
@@ -882,9 +948,17 @@ a{color:var(--link);text-decoration:none}a:hover{text-decoration:underline}
 .navlinks a.ext{display:inline-flex;align-items:center;gap:3px}
 .extmark{opacity:.55;flex:none}
 .nav-spacer{flex:1}
-.navsearch{display:flex;align-items:center;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.12);border-radius:7px;padding:5px 9px;gap:7px;width:190px}
+.navsearch{position:relative;display:flex;align-items:center;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.12);border-radius:7px;padding:5px 9px;gap:7px;width:210px}
 .navsearch input{background:transparent;border:0;color:#fff;font-size:13px;width:100%;outline:none}
 .navsearch input::placeholder{color:var(--nav-ink-soft)}.navsearch svg{opacity:.7;flex:none}
+.ac-drop{position:absolute;top:calc(100% + 5px);right:0;min-width:320px;max-width:min(440px,90vw);background:var(--page);border:1px solid var(--border);border-radius:9px;box-shadow:var(--shadow);max-height:340px;overflow-y:auto;z-index:60;display:none;padding:4px}
+.ac-drop.on{display:block}
+.ac-item{display:flex;gap:9px;align-items:baseline;padding:7px 9px;border-radius:6px;cursor:pointer;text-decoration:none}
+.ac-item:hover,.ac-item.sel{background:var(--panel)}
+.ac-item .aid{font-family:var(--mono);font-weight:700;font-size:12px;color:var(--primary);white-space:nowrap}
+.ac-item .anm{color:var(--ink);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ac-item .asrc{margin-left:auto;font-size:9.5px;font-weight:700;letter-spacing:.3px;color:var(--ink-faint);white-space:nowrap;text-transform:uppercase}
+.ac-empty{padding:9px 10px;color:var(--ink-faint);font-size:12.5px}
 .navlogin{background:var(--accent);color:#fff;font-size:13px;font-weight:600;padding:6px 14px;border-radius:6px}
 .navlogin:hover{filter:brightness(1.08);text-decoration:none}
 .protobar{background:repeating-linear-gradient(135deg,#d98a2b22,#d98a2b22 12px,#d98a2b11 12px,#d98a2b11 24px);border-bottom:1px solid var(--border)}
