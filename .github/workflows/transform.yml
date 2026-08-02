@@ -86,13 +86,15 @@ jobs:
         # Skip entirely when version-skip found nothing changed (empty shard set).
         if: ${{ steps.shard.outputs.shards != '[]' }}
         # Each run gets its own release holding only the ontologies it transforms
-        # (releases are incremental; a release holds <=1000 assets). NOT marked
-        # --latest here — finalize marks it latest after publishing the full index,
-        # so the seed can still read the previous latest release's index.
+        # (releases are incremental; a release holds <=1000 assets). Create it with
+        # --latest=false: gh/GitHub default make_latest=true, which would otherwise
+        # make this (still-index-less) release "latest" and break finalize's seed
+        # download of the PREVIOUS index. finalize marks this release latest at the
+        # end, once it holds the full index.
         run: |
           TAG="data-$(date -u +%Y.%m.%d)-${GITHUB_RUN_NUMBER}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          gh release create "$TAG" \
+          gh release create "$TAG" --latest=false \
             --title "KGX transforms $TAG" \
             --notes "BioPortal ontologies transformed to KGX nodes/edges in this run. Assets are <ACRONYM>.tar.gz. The onto_stats.yaml here is the full cross-release index."
         env:
