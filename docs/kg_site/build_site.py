@@ -220,7 +220,6 @@ def nav(root):
     <input id="navq" placeholder="Search graphs…" aria-label="Search graphs" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="acdrop">
     <div class="ac-drop" id="acdrop" role="listbox"></div>
   </div>
-  <a class="navlogin" href="#">Log in</a>
 </div></div>
 <div class="protobar"><div class="protobar-in">
   <span class="proto-pill">Prototype</span>
@@ -959,8 +958,6 @@ a{color:var(--link);text-decoration:none}a:hover{text-decoration:underline}
 .ac-item .anm{color:var(--ink);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ac-item .asrc{margin-left:auto;font-size:9.5px;font-weight:700;letter-spacing:.3px;color:var(--ink-faint);white-space:nowrap;text-transform:uppercase}
 .ac-empty{padding:9px 10px;color:var(--ink-faint);font-size:12.5px}
-.navlogin{background:var(--accent);color:#fff;font-size:13px;font-weight:600;padding:6px 14px;border-radius:6px}
-.navlogin:hover{filter:brightness(1.08);text-decoration:none}
 .protobar{background:repeating-linear-gradient(135deg,#d98a2b22,#d98a2b22 12px,#d98a2b11 12px,#d98a2b11 24px);border-bottom:1px solid var(--border)}
 .protobar-in{max-width:1180px;margin:0 auto;padding:6px 22px;font-size:12.5px;color:var(--ink-soft);display:flex;align-items:center;gap:8px}
 .proto-pill{background:var(--edge);color:#fff;font-weight:700;font-size:10.5px;letter-spacing:.5px;padding:2px 7px;border-radius:4px;text-transform:uppercase}
