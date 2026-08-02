@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 
 import click
 
@@ -29,6 +30,46 @@ def _read_acronyms(ontology_file: str) -> list:
             if line:
                 acronyms.append(line.split("\t")[0])
     return acronyms
+
+
+def _read_ontology_submissions(ontology_file: str) -> dict:
+    """Read {acronym: submission_id} from the ontology list TSV.
+
+    Columns are: id, name, current_version, submission_id.
+    """
+    subs = {}
+    with open(ontology_file, "r") as f:
+        f.readline()  # Skip the header
+        for line in f:
+            line = line.rstrip("\n")
+            if not line.strip():
+                continue
+            cols = line.split("\t")
+            acr = cols[0].strip()
+            sub = cols[3].strip() if len(cols) > 3 else ""
+            subs[acr] = sub
+    return subs
+
+
+def _load_index_submissions(index_path: str) -> dict:
+    """Read {acronym: submission_id} from an onto_stats.yaml index.
+
+    Only entries with a concrete submission_id are returned (skiplisted / no-
+    submission entries use 'NA' and are excluded), so a later run always treats
+    those as needing a transform.
+    """
+    import yaml
+
+    if not index_path or not os.path.exists(index_path):
+        return {}
+    with open(index_path) as f:
+        data = yaml.safe_load(f) or {}
+    out = {}
+    for entry in data.get("ontologies", []):
+        sub = str(entry.get("submission_id") or "").strip()
+        if sub and sub != "NA":
+            out[entry["id"]] = sub
+    return out
 
 
 @click.group()
@@ -281,19 +322,46 @@ def transform(input_dir, output_dir, compress, timeout_min) -> None:
     show_default=True,
     help="Drop ontologies on the static known-giants skiplist before sharding.",
 )
-def shard_list(ontology_file, ontologies, num_shards, use_skiplist) -> None:
+@click.option(
+    "--index",
+    "index_path",
+    required=False,
+    type=click.Path(),
+    help="Path to the current onto_stats.yaml index. If given (with --ontology_file), "
+    "only ontologies whose BioPortal submission_id differs from the index are sharded "
+    "(version-skip); unchanged ones carry forward via the finalize seed.",
+)
+def shard_list(ontology_file, ontologies, num_shards, use_skiplist, index_path) -> None:
     """Splits the ontology list into N shards and prints them as JSON.
 
     Emits a JSON array of strings, each a space-separated group of acronyms,
     suitable for a GitHub Actions matrix. Prints ONLY the JSON to stdout so it
     can be captured as a job output.
     """
+    current_subs = {}
     if ontologies:
-        acronyms = ontologies.split()
+        acronyms = ontologies.split()  # explicit list: never version-skipped
     elif ontology_file:
-        acronyms = _read_acronyms(ontology_file)
+        current_subs = _read_ontology_submissions(ontology_file)
+        acronyms = list(current_subs)
     else:
         raise click.UsageError("Provide --ontologies or --ontology_file.")
+
+    # Version-skip: only (re)transform ontologies that are new or whose BioPortal
+    # submission changed vs the current index. Applies only to the full list.
+    if index_path and current_subs:
+        index_subs = _load_index_submissions(index_path)
+        if index_subs:
+            before = len(acronyms)
+            acronyms = [
+                a for a in acronyms
+                if index_subs.get(a) != current_subs.get(a)
+            ]
+            click.echo(
+                f"version-skip: {before - len(acronyms)} unchanged skipped, "
+                f"{len(acronyms)} to transform.",
+                err=True,
+            )
 
     if use_skiplist:
         acronyms = [a for a in acronyms if not is_skiplisted(a)]

@@ -64,17 +64,27 @@ jobs:
         run: kgbioportal get-ontology-list -o data/raw -k "$NCBO_API_KEY"
         env:
           NCBO_API_KEY: ${{ secrets.NCBO_API_KEY }}
+      - name: Fetch the current index (for version-skip on a full run)
+        if: ${{ github.event.inputs.ontologies == '' }}
+        run: gh release download -p onto_stats.yaml -D prev || echo "No index yet; will transform all."
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Compute shards
         id: shard
+        # Explicit ontologies input: transform exactly those (no version-skip).
+        # Full list: version-skip against the current index — only new/changed
+        # BioPortal submissions are (re)transformed; unchanged graphs carry forward.
         run: |
           if [ -n "${{ github.event.inputs.ontologies }}" ]; then
             SHARDS=$(kgbioportal shard-list -d "${{ github.event.inputs.ontologies }}" -n "$NUM_SHARDS")
           else
-            SHARDS=$(kgbioportal shard-list -f data/raw/ontologylist.tsv -n "$NUM_SHARDS")
+            SHARDS=$(kgbioportal shard-list -f data/raw/ontologylist.tsv -n "$NUM_SHARDS" --index prev/onto_stats.yaml)
           fi
           echo "shards=$SHARDS" >> "$GITHUB_OUTPUT"
       - name: Create release
         id: rel
+        # Skip entirely when version-skip found nothing changed (empty shard set).
+        if: ${{ steps.shard.outputs.shards != '[]' }}
         # Each run gets its own release holding only the ontologies it transforms
         # (releases are incremental; a release holds <=1000 assets). NOT marked
         # --latest here — finalize marks it latest after publishing the full index,
@@ -91,6 +101,8 @@ jobs:
 
   transform:
     needs: prepare
+    # Nothing to do when version-skip produced an empty shard set.
+    if: ${{ needs.prepare.outputs.shards != '[]' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -136,7 +148,8 @@ jobs:
 
   finalize:
     needs: [prepare, transform]
-    if: always()
+    # Run whenever there was work (even if some shards failed); skip a no-op run.
+    if: ${{ always() && needs.prepare.outputs.shards != '[]' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
