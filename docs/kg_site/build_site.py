@@ -133,11 +133,13 @@ def onto_to_item(o, transform_date):
     ver = "" if ver in ("NA", "") else ver
     nodes = o.get("nodecount") if ok and isinstance(o.get("nodecount"), int) else None
     edges = o.get("edgecount") if ok and isinstance(o.get("edgecount"), int) else None
-    blurb = "BioPortal ontology transformed to KGX"
-    if not ok:
-        blurb += f" — {status.lower()}" + (f" ({o.get('reason')})" if o.get("reason") else "")
+    if ok:
+        blurb = "BioPortal ontology transformed to KGX"
+    else:
+        blurb = "BioPortal ontology — " + (status.lower() or "not transformed") + (
+            f" ({o.get('reason')})" if o.get("reason") else "")
     return {
-        "source": "bioportal", "source_label": "BioPortal → KGX", "source_cls": "bp",
+        "source": "bioportal", "source_label": "BioPortal ontology", "source_cls": "bp",
         "id": oid, "acr": oid.upper(), "name": name, "ok": ok,
         "blurb": blurb,
         "nodes": nodes, "edges": edges, "fmts": ["kgx"] if ok else [], "domains": [],
@@ -291,7 +293,7 @@ def render_browse(items, kg_count, onto_count):
           <td class="c-num num muted">{esc(it['updated'])}</td>
         </tr>""")
 
-    src_order = [("kg-registry", "KG project", "kgreg"), ("bioportal", "BioPortal → KGX", "bp")]
+    src_order = [("kg-registry", "KG project", "kgreg"), ("bioportal", "BioPortal ontology", "bp")]
     src_facets = "".join(
         f'<button class="facet" data-source="{sid}">{esc(label)}'
         f'<span class="fc">{src_counts.get(sid, 0)}</span></button>'
@@ -302,13 +304,17 @@ def render_browse(items, kg_count, onto_count):
         f'<span class="fc">{dom_counts[d]}</span></button>' for d in top_domains
     )
 
+    # Only OK ontologies are actual transforms; the rest are listed for reference.
+    onto_ok = sum(1 for it in items if it["source"] == "bioportal" and it.get("ok"))
+    onto_other = onto_count - onto_ok
+
     return head("Browse Graphs · KG-BioPortal") + nav("") + f"""
 <div class="wrap">
   <div class="crumbs"><a href="index.html">Home</a><span>/</span>Graphs</div>
   <div class="browse-head">
     <div>
       <h1>Browse Graphs</h1>
-      <p class="sub"><b class="num">{len(items)}</b> graphs · <b class="num">{kg_count}</b> KG projects (KG&#8209;Registry) + <b class="num">{onto_count}</b> transformed BioPortal ontologies</p>
+      <p class="sub"><b class="num">{onto_ok}</b> BioPortal ontologies transformed to KGX + <b class="num">{kg_count}</b> KG projects (KG&#8209;Registry)<span class="muted"> · {onto_other} more ontologies listed (failed or skipped)</span></p>
     </div>
     <div class="browse-search">
       <svg width=16 height=16 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2.2 style="opacity:.5;flex:none"><circle cx=11 cy=11 r=7/><path d="M21 21l-4.3-4.3"/></svg>
@@ -601,9 +607,9 @@ def render_ontology_resource(it):
         metric("cat", esc(ver or "—"), "Version") + fourth
     )
 
-    chips = '<span class="chip">BioPortal &rarr; KGX</span>'
-    if ok:
-        chips = '<span class="chip">KGX</span>' + chips
+    # "KGX" only where a transform actually succeeded; otherwise just the source.
+    chips = ('<span class="chip">KGX</span><span class="chip">BioPortal ontology</span>'
+             if ok else '<span class="chip">BioPortal ontology</span>')
     if ver:
         chips += f'<span class="chip">v{esc(ver)}</span>'
 
