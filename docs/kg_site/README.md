@@ -11,12 +11,13 @@ and writes:
 graphs/
   index.html                    # browse page — every KG, with filter + domain facets
   summary/index.html            # site-wide statistics + top-10 figures
+  about/index.html              # what KG-Bioportal is
   resource/<id>/index.html      # one summary page per graph
 ```
 
-`graphs/` is the site's front door: `https://ncbo.github.io/kg-bioportal/` redirects here,
-and the statistics that used to live on that Jekyll landing page are now the Summary page,
-linked from the nav bar.
+`graphs/` is the site's front door: `https://ncbo.github.io/kg-bioportal/` and
+`/kg-bioportal/about/` both redirect into it. The statistics and prose that used to live
+on those Jekyll pages are now the Summary and About pages, linked from the nav bar.
 
 Each page is self-contained (CSS inlined, no external assets) and carries no Jekyll
 front matter, so Jekyll copies it through verbatim.

@@ -212,6 +212,7 @@ def nav(root, active="browse"):
   <nav class="navlinks">
     <a href="{root}index.html"{on("browse")}>Browse</a>
     <a href="{root}summary/"{on("summary")}>Summary</a>
+    <a href="{root}about/"{on("about")}>About</a>
     {ext(f"{BP}/search", "Search")}
     {ext(f"{BP}/mappings", "Mappings")}
     {ext(f"{BP}/recommender", "Recommender")}
@@ -549,6 +550,77 @@ def render_summary(totals, kg_count, onto_items):
         <div class="row"><span class="lab">Ontologies</span><span class="val">BioPortal (ROBOT &rarr; KGX)</span></div>
         <div class="row" style="border:0"><span class="lab">KG projects</span><span class="val">KG&#8209;Registry</span></div>
         <div class="uploaded" style="padding-top:9px"><a href="https://github.com/ncbo/kg-bioportal/releases/latest">Release with these stats &#8599;</a></div>
+      </div></div>
+    </aside>
+  </div>
+</div>
+""" + SEARCH_JS + footer()
+
+# --------------------------------------------------------------------------- #
+#  about page
+# --------------------------------------------------------------------------- #
+KGX_SPEC = "https://github.com/biolink/kgx/blob/master/specification/kgx-format.md"
+
+def render_about():
+    """What KG-Bioportal is, in the browser's own chrome (was docs/about.markdown)."""
+    return head("About · KG-BioPortal") + nav("../", active="about") + f"""
+<div class="wrap">
+  <div class="crumbs"><a href="../index.html">Home</a><span>/</span>About</div>
+
+  <div class="browse-head">
+    <div>
+      <h1>About KG&#8209;Bioportal</h1>
+      <p class="sub">BioPortal's ontologies, transformed into knowledge graphs.</p>
+    </div>
+  </div>
+
+  <div class="grid">
+    <main>
+      <div class="prose">
+        <h2>What is KG&#8209;Bioportal?</h2>
+        <p>KG&#8209;Bioportal is a version of the set of ontologies on
+          <a href="{BP}" target="_blank" rel="noopener">BioPortal</a> in which ontologies have been
+          transformed to graph nodes and edges in the
+          <a href="{KGX_SPEC}" target="_blank" rel="noopener">KGX format</a>. This means it is a
+          collection of entities and relations, with the classes in each ontology serving as the
+          entities and the connections between ontologies becoming relations. Where possible,
+          entities and relations are categorized using Biolink Model, so entries in
+          <a href="{BP}/ontologies/NCBITAXON" target="_blank" rel="noopener">NCBI Taxonomy</a> are
+          categorized as
+          <a href="https://biolink.github.io/biolink-model/docs/OrganismTaxon.html" target="_blank"
+             rel="noopener">biolink:OrganismTaxon</a>, and so on.</p>
+
+        <h2>How is it made?</h2>
+        <p>KG&#8209;Bioportal is made by careful transformation of each ontology from the
+          <a href="https://data.bioontology.org/" target="_blank" rel="noopener">BioPortal API</a>.
+          Ontology files from BioPortal are transformed to a common format before being converted
+          to nodes and edges. The
+          <a href="../summary/">Summary</a> page reports how many ontologies came through the most
+          recent run, and how large the resulting graphs are.</p>
+
+        <h2>How is it useful?</h2>
+        <p>KG&#8209;Bioportal supports a holistic examination of a broad collection of hierarchical
+          relationships in biology and biomedicine. Because all ontologies are in a common format
+          and data model, they may be merged in a modular fashion and analysed by graph traversal.
+          This enables a growing collection of informative graph machine learning approaches.</p>
+
+        <h2>What is in the browser?</h2>
+        <p>The <a href="../index.html">graph browser</a> lists two kinds of entry side by side: the
+          BioPortal ontologies KG&#8209;Bioportal has transformed to KGX, which you can download
+          here, and knowledge-graph projects registered in
+          <a href="https://kghub.org/kg-registry/" target="_blank" rel="noopener">KG&#8209;Registry</a>.
+          Each entry is tagged by source and carries its node and edge counts, version, and
+          download link.</p>
+      </div>
+    </main>
+
+    <aside class="side">
+      <div class="card"><h3>Elsewhere</h3><div class="body">
+        <div class="row"><span class="lab">Browse</span><span class="val"><a href="../index.html">All graphs</a></span></div>
+        <div class="row"><span class="lab">Summary</span><span class="val"><a href="../summary/">Collection statistics</a></span></div>
+        <div class="row"><span class="lab">BioPortal</span><span class="val"><a href="{BP}" target="_blank" rel="noopener">bioportal.bioontology.org</a></span></div>
+        <div class="row"><span class="lab">Code</span><span class="val"><a href="https://github.com/ncbo/kg-bioportal" target="_blank" rel="noopener">ncbo/kg-bioportal</a></span></div>
+        <div class="row" style="border:0"><span class="lab">Downloads</span><span class="val"><a href="https://github.com/ncbo/kg-bioportal/releases/latest" target="_blank" rel="noopener">Latest release</a></span></div>
       </div></div>
     </aside>
   </div>
@@ -997,6 +1069,11 @@ def main():
     with open(os.path.join(out, "summary", "index.html"), "w") as f:
         f.write(render_summary(totals, len(kg_items), onto_items))
 
+    # About page — the prose that used to be the Jekyll docs/about.markdown.
+    os.makedirs(os.path.join(out, "about"), exist_ok=True)
+    with open(os.path.join(out, "about", "index.html"), "w") as f:
+        f.write(render_about())
+
     # Search index for the nav-bar autocomplete (all browseable graphs).
     search_index = [
         {"a": it["acr"], "n": it["name"], "h": it["href"],
@@ -1166,6 +1243,11 @@ section.block{margin-bottom:26px}
 .metric .k{font-size:12px;color:var(--ink-soft);margin-top:3px}
 .metric.node{border-top:3px solid var(--node)}.metric.edge{border-top:3px solid var(--edge)}
 .metric.cat{border-top:3px solid var(--c-chem)}.metric.pred{border-top:3px solid var(--primary)}
+/* prose (about) */
+.prose{max-width:68ch}
+.prose h2{font-size:19px;font-weight:700;letter-spacing:-.2px;margin:26px 0 8px;text-wrap:balance}
+.prose h2:first-child{margin-top:0}
+.prose p{margin:0 0 12px;color:var(--ink-soft);font-size:15px}
 /* summary charts */
 .barchart{display:flex;flex-direction:column;gap:6px}
 .bar-row{display:grid;grid-template-columns:118px minmax(0,1fr) 52px;align-items:center;gap:11px;
