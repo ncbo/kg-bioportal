@@ -33,12 +33,39 @@ the stats with a reason, rather than failing the build:
   (e.g. NCBITAXON, SNOMEDCT, RXNORM, GAZ, PR, NCIT, …). See `KNOWN_GIANTS` in
   [`src/kg_bioportal/config.py`](src/kg_bioportal/config.py).
 - **`too_large`** — the downloaded source exceeded the size gate
-  (`--max_source_mb`, default 50 MB).
+  (`--max_source_mb`, default 100 MB).
 - **`too_slow`** — the transform exceeded the per-ontology wall-clock cap
   (`--timeout_min`, default 30 min).
 
 These thresholds are tunable via config, CLI flags, or the environment
 (`KGBP_MAX_SOURCE_MB`, `KGBP_TIMEOUT_MIN`).
+
+## What BioPortal won't give us, and why
+
+Some ontologies never reach the transform because BioPortal doesn't serve a
+source file. The download endpoint's status code says which case it is, and
+each gets its own reason:
+
+- **`license_restricted`** (HTTP 401/403) — the ontology is only available
+  under a license we don't hold, typically UMLS. **Not a failure**: there is
+  nothing to fix and nothing to retry.
+- **`no_download_file`** (HTTP 404) — BioPortal has a record and a submission,
+  but no source file is attached to it.
+- **`download_http_error`** (any other non-2xx) — an unexpected response; the
+  code is recorded so it can be told apart from the above.
+- **`not_downloadable`** (2xx, no `Content-Disposition`) — BioPortal answered,
+  but not with a file. The genuinely ambiguous remainder.
+- **`no_submission`** — the ontology record exists but has no submission.
+- **`metadata_http_error`** — the ontology's metadata couldn't be retrieved.
+
+The response code is kept in the `http_status` field of both
+`download_report.tsv` and the affected `onto_stats.yaml` entries.
+
+`total_stats.yaml` counts license-restricted ontologies on their own
+`licensedcount` line, and **excludes them from `failedcount`** — they are
+unavailable by design, so counting them as failures overstates how much of the
+pipeline is broken. Their `onto_stats.yaml` entries still read `status: Failed`,
+since no KGX artifact exists for them either way.
 
 ## How the build runs
 

@@ -133,8 +133,13 @@ def onto_to_item(o, transform_date):
     ver = "" if ver in ("NA", "") else ver
     nodes = o.get("nodecount") if ok and isinstance(o.get("nodecount"), int) else None
     edges = o.get("edgecount") if ok and isinstance(o.get("edgecount"), int) else None
+    # License-restricted entries are stored as Failed (there is no artifact) but
+    # nothing about them is broken, so don't call them failed to a reader.
+    licensed = o.get("reason") == "license_restricted"
     if ok:
         blurb = "BioPortal ontology transformed to KGX"
+    elif licensed:
+        blurb = "BioPortal ontology — not available under our license"
     else:
         blurb = "BioPortal ontology — " + (status.lower() or "not transformed") + (
             f" ({o.get('reason')})" if o.get("reason") else "")
@@ -143,7 +148,8 @@ def onto_to_item(o, transform_date):
         "id": oid, "acr": oid.upper(), "name": name, "ok": ok,
         "blurb": blurb,
         "nodes": nodes, "edges": edges, "fmts": ["kgx"] if ok else [], "domains": [],
-        "status_label": status or "—", "status_cls": "ok" if ok else "warn",
+        "status_label": "Licensed" if licensed else (status or "—"),
+        "status_cls": "ok" if ok else "warn",
         "updated": transform_date or "",
         # Every transformed-ontology entry now gets a page — OK ones with the KGX
         # download, non-OK ones collecting the metadata we do have + why there's no artifact.
@@ -166,6 +172,13 @@ REASON_MSG = {
                 "skipped up front.",
     "transform_error": "The transform did not complete — ROBOT or the KGX conversion reported an error.",
     "not_downloadable": "No downloadable source is currently available from BioPortal.",
+    "license_restricted": "This ontology is only available under a license we do not hold "
+                          "(typically a UMLS licence), so BioPortal does not serve its source "
+                          "file to the pipeline. It is not transformed by design, and there is "
+                          "nothing to retry.",
+    "no_download_file": "BioPortal has a record for this ontology but no source file is attached "
+                        "to its latest submission.",
+    "download_http_error": "The source download from BioPortal returned an unexpected response.",
     "no_submission": "No submission is currently available for this ontology on BioPortal.",
     "metadata_http_error": "BioPortal metadata for this ontology could not be retrieved.",
     "download_error": "The source download from BioPortal failed.",
@@ -465,7 +478,11 @@ def render_summary(totals, kg_count, onto_items):
     skipped = totals.get("skippedcount")
     if not isinstance(failed, int) or not isinstance(skipped, int):
         failed, skipped = len(onto_items) - onto_ok, 0
-    attempted = onto_ok + failed + skipped
+    # Ontologies BioPortal won't serve us for licensing reasons. Absent from
+    # stats written before that distinction existed, hence the default.
+    licensed = totals.get("licensedcount")
+    licensed = licensed if isinstance(licensed, int) else 0
+    attempted = onto_ok + failed + skipped + licensed
     nodes = totals.get("totalnodecount")
     edges = totals.get("totaledgecount")
     if not isinstance(nodes, int):
@@ -493,11 +510,12 @@ def render_summary(totals, kg_count, onto_items):
     status_block = f"""
         <section class="block">
           <p class="eyebrow">Transform status <span class="eb-count">{commafy(attempted)} ontologies</span></p>
-          <div class="stack">{seg('ok', onto_ok)}{seg('fail', failed)}{seg('skip', skipped)}</div>
+          <div class="stack">{seg('ok', onto_ok)}{seg('fail', failed)}{seg('skip', skipped)}{seg('lic', licensed)}</div>
           <div class="keys">{key('ok', onto_ok, 'Transformed')}{key('fail', failed, 'Failed')}
-            {key('skip', skipped, 'Skipped')}</div>
-          <p class="muted mt">Failed and skipped ontologies are still listed in the
-            <a href="../index.html">browser</a>, each with the reason it has no KGX artifact.</p>
+            {key('skip', skipped, 'Skipped')}{key('lic', licensed, 'Licensed') if licensed else ''}</div>
+          <p class="muted mt">Failed, skipped and license-restricted ontologies are still listed in
+            the <a href="../index.html">browser</a>, each with the reason it has no KGX artifact.
+            Licensed ones are counted apart from failures: they are unavailable by design, not broken.</p>
         </section>"""
 
     def top_rows(field):
@@ -1263,11 +1281,13 @@ padding:3px 5px;border-radius:7px;color:var(--ink)}
 .stack{display:flex;gap:2px;height:16px;border-radius:4px;overflow:hidden;background:var(--panel-2)}
 .stack .seg{display:block;height:100%}
 .seg.ok{background:var(--prod)}.seg.fail{background:var(--warn)}.seg.skip{background:var(--ink-faint)}
+.seg.lic{background:var(--primary)}
 .keys{display:flex;flex-wrap:wrap;gap:16px;margin-top:10px;font-size:12.5px;color:var(--ink-soft)}
 .key{display:inline-flex;align-items:center;gap:6px}
 .key b{color:var(--ink)}
 .sw{width:9px;height:9px;border-radius:2px;flex:none}
 .sw.ok{background:var(--prod)}.sw.fail{background:var(--warn)}.sw.skip{background:var(--ink-faint)}
+.sw.lic{background:var(--primary)}
 .cloud{display:flex;flex-wrap:wrap;gap:6px}
 .tok{font-size:12px;padding:4px 9px;border-radius:6px;border:1px solid var(--border);background:var(--panel)}
 .tok.cat{color:var(--c-chem);border-color:color-mix(in srgb,var(--c-chem) 30%,transparent)}
