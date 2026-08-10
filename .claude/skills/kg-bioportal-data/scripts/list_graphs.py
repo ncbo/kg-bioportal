@@ -23,7 +23,9 @@ except ImportError:
     sys.exit("PyYAML required: pip install pyyaml")
 
 RELEASE = "https://github.com/ncbo/kg-bioportal/releases/latest/download"
-ASSET = RELEASE + "/{id}.tar.gz"
+
+# There is no RELEASE + "/<ID>.tar.gz": releases are incremental and no single one
+# holds every artifact, so each entry's own download_url is the only reliable answer.
 
 
 def load_stats():
@@ -57,11 +59,9 @@ def main():
     onts.sort(key=keys[a.sort])
 
     if a.json:
-        # Each OK entry already carries its download_url (which release it lives
-        # in); fall back to the latest-release URL for older indexes.
-        for o in onts:
-            if o.get("status") == "OK":
-                o.setdefault("download_url", ASSET.format(id=o["id"]))
+        # Each OK entry carries its own download_url (which release it lives in).
+        # Entries without one come from an index predating the field; report that
+        # honestly rather than inventing a URL that would 404.
         print(json.dumps(onts, indent=2))
         return
 
@@ -69,8 +69,13 @@ def main():
     for o in onts:
         print(f"{o['id']:24} {o.get('status', ''):8} "
               f"{fmt(o.get('nodecount')):>11} {fmt(o.get('edgecount')):>11}  {o.get('name') or ''}")
+    unresolved = sum(1 for o in onts
+                     if o.get("status") == "OK" and not o.get("download_url"))
     print(f"\n{len(onts)} graphs. Each OK entry's download_url (in onto_stats / --json) points at "
-          f"whichever release holds its most recent artifact.")
+          f"whichever release holds its most recent artifact; "
+          f"graph_urls.tsv on the latest release is the same mapping for shell use.")
+    if unresolved:
+        print(f"{unresolved} OK entries have no recorded download_url.")
 
 
 if __name__ == "__main__":

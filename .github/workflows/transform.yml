@@ -181,7 +181,10 @@ jobs:
         # The index (onto_stats/total_stats) is authoritative and lives on every
         # release; each OK entry's download_url points at whichever release holds
         # its most recent artifact. The docs site fetches these from latest.
-        run: gh release upload "${{ needs.prepare.outputs.tag }}" docs/onto_stats.yaml docs/total_stats.yaml --clobber
+        # graph_urls.tsv is the same acronym -> artifact mapping in a form a
+        # shell can resolve, since no single release can hold every artifact
+        # (GitHub caps a release at 1000 assets; there are more than that).
+        run: gh release upload "${{ needs.prepare.outputs.tag }}" docs/onto_stats.yaml docs/total_stats.yaml docs/graph_urls.tsv --clobber
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Mark this run's release as latest

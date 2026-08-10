@@ -20,21 +20,33 @@ import urllib.request
 socket.setdefaulttimeout(180)  # don't hang forever on a stalled connection
 
 RELEASE = "https://github.com/ncbo/kg-bioportal/releases/latest/download"
-ASSET = RELEASE + "/{id}.tar.gz"  # fallback only
+
+# Releases are incremental and no single one holds every artifact (GitHub caps a
+# release at 1000 assets), so RELEASE + "/<ID>.tar.gz" 404s for nearly every
+# ontology. Always resolve through the index.
 
 
 def load_index():
-    """Map acronym -> download_url from the latest release's onto_stats index.
+    """Map acronym -> download_url, from the latest release.
 
-    Graphs are hosted incrementally across releases; each OK entry records which
-    release holds its artifact. Returns {} if PyYAML/index is unavailable (callers
-    then fall back to the latest-release URL).
+    graph_urls.tsv is the resolver and needs no third-party parser; onto_stats.yaml
+    is the same mapping with everything else attached, used only as a fallback for
+    releases published before the TSV existed.
     """
     try:
-        import yaml
-    except ImportError:
-        return {}
+        with urllib.request.urlopen(RELEASE + "/graph_urls.tsv", timeout=60) as r:
+            rows = r.read().decode("utf-8").splitlines()
+        index = {}
+        for line in rows[1:]:  # skip header
+            parts = line.split("\t")
+            if len(parts) == 2 and parts[1]:
+                index[parts[0]] = parts[1]
+        if index:
+            return index
+    except Exception:
+        pass
     try:
+        import yaml
         with urllib.request.urlopen(RELEASE + "/onto_stats.yaml", timeout=60) as r:
             onts = (yaml.safe_load(r.read()) or {}).get("ontologies", [])
     except Exception:
@@ -52,7 +64,11 @@ def _safe_extract(tar, dest):
 
 
 def fetch(acr, outdir, flat, index):
-    url = index.get(acr) or ASSET.format(id=acr)
+    url = index.get(acr)
+    if not url:
+        print(f"{acr}: not in the index — no KGX artifact is published for it "
+              f"(it may have failed, been skipped, or not exist).", file=sys.stderr)
+        return False
     dest = outdir if flat else os.path.join(outdir, acr)
     os.makedirs(dest, exist_ok=True)
     tmp = os.path.join(tempfile.gettempdir(), f"{acr}.tar.gz")

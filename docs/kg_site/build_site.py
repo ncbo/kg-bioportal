@@ -103,7 +103,13 @@ def fmt_class(f):
 #  unified item model (KG-Registry KGs + transformed BioPortal ontologies)
 # --------------------------------------------------------------------------- #
 # Where a transformed ontology's KGX artifact lives (a release asset).
-RELEASE_ASSET = "https://github.com/ncbo/kg-bioportal/releases/latest/download/{id}.tar.gz"
+# Where to send someone when the index doesn't say where an artifact lives.
+# There is deliberately no `releases/latest/download/<ID>.tar.gz` fallback:
+# releases are incremental and no single release holds every artifact, so that
+# URL 404s for nearly every ontology. The index's per-entry download_url is the
+# only reliable answer; without one we link to the releases page rather than
+# hand out a link we know is broken.
+RELEASES_PAGE = "https://github.com/ncbo/kg-bioportal/releases"
 
 def kg_to_item(r):
     """Normalize a KG-Registry knowledge graph into a browse item."""
@@ -154,10 +160,11 @@ def onto_to_item(o, transform_date):
         # Every transformed-ontology entry now gets a page — OK ones with the KGX
         # download, non-OK ones collecting the metadata we do have + why there's no artifact.
         "href": f"resource/{oid}/", "has_page": True, "version": ver,
-        # Prefer the index's per-entry download_url (points at whichever release
-        # holds this ontology's most recent artifact); fall back to the latest
-        # release for older indexes without the field.
-        "download_url": o.get("download_url") or RELEASE_ASSET.format(id=oid),
+        # The index's per-entry download_url points at whichever release holds
+        # this ontology's most recent artifact. Empty for entries from an index
+        # predating the field; the page then omits the download rather than
+        # guessing a URL (see RELEASES_PAGE).
+        "download_url": o.get("download_url") or "",
         "bioportal_url": f"{BP}/ontologies/{oid}",
         "submission_id": o.get("submission_id", "NA"),
         "reason": o.get("reason", ""), "transform_date": transform_date or "",
@@ -886,7 +893,7 @@ def render_ontology_resource(it):
               '1 1h14a1 1 0 0 0 1-1v-2"/></svg>')
     bp_svg = ('<svg width=16 height=16 viewBox="0 0 24 24" fill=none stroke=currentColor '
               'stroke-width=2.2><path d="M7 17L17 7M9 7h8v8"/></svg>')
-    if ok:
+    if ok and it["download_url"]:
         cta = (f'<a class="btn btn-primary" href="{esc(it["download_url"])}">{dl_svg} Download KGX</a>'
                f'<a class="btn btn-ghost" href="{esc(it["bioportal_url"])}" target="_blank" '
                f'rel="noopener">{bp_svg} View on BioPortal</a>')
@@ -894,8 +901,8 @@ def render_ontology_resource(it):
         cta = (f'<a class="btn btn-primary" href="{esc(it["bioportal_url"])}" target="_blank" '
                f'rel="noopener">{bp_svg} View on BioPortal</a>')
 
-    # main body — lead + (download section | not-available notice)
-    if ok:
+    # main body — lead + (download section | location-unknown | not-available notice)
+    if ok and it["download_url"]:
         lead = (f'A KGX transformation of the BioPortal ontology <b>{esc(name)}</b> ({esc(acr)}), '
                 f'produced by KG&#8209;Bioportal. Nodes are ontology classes; edges are the '
                 f'relations between them.')
@@ -910,7 +917,24 @@ def render_ontology_resource(it):
             <a class="dl" href="{esc(it['download_url'])}" aria-label="Download KGX"><svg width=18 height=18 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2.1><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M5 19h14"/></svg></a>
           </div>
         </div>
-        <p class="muted mt">From the latest transform release. Contains <span class="mono">{esc(acr)}_nodes.tsv</span> and <span class="mono">{esc(acr)}_edges.tsv</span>.</p>
+        <p class="muted mt">Contains <span class="mono">{esc(acr)}_nodes.tsv</span> and <span class="mono">{esc(acr)}_edges.tsv</span>. Releases are incremental, so this points at whichever release most recently rebuilt this ontology.</p>
+      </section>"""
+    elif ok:
+        # Transformed, but the index doesn't record where the artifact lives.
+        # Send them to the releases page rather than a URL we know 404s.
+        lead = (f'A KGX transformation of the BioPortal ontology <b>{esc(name)}</b> ({esc(acr)}), '
+                f'produced by KG&#8209;Bioportal. Nodes are ontology classes; edges are the '
+                f'relations between them.')
+        body_section = f"""
+      <section class="block">
+        <p class="eyebrow">Products &amp; downloads</p>
+        <div class="notice">
+          <div class="notice-t">Artifact location not recorded</div>
+          <p>This ontology transformed successfully, but the index does not say which
+             release holds its artifact. Look for <span class="mono">{esc(acr)}.tar.gz</span>
+             on the <a href="{esc(RELEASES_PAGE)}" target="_blank" rel="noopener">releases page</a>,
+             or check <span class="mono">graph_urls.tsv</span> on the latest release.</p>
+        </div>
       </section>"""
     else:
         lead = (f'<b>{esc(name)}</b> ({esc(acr)}) is a BioPortal ontology that KG&#8209;Bioportal '

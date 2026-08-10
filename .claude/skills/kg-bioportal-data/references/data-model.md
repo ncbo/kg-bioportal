@@ -18,9 +18,23 @@ recent artifact, e.g. `.../releases/download/data-2026.08.01-42/GO.tar.gz`. To g
 index, look up its `download_url`, download that. `<ID>` is the BioPortal acronym in **uppercase**;
 each tarball contains `<ID>_nodes.tsv` and `<ID>_edges.tsv`.
 
+The latest release also carries **`graph_urls.tsv`** — the same `<ID>` → artifact-URL mapping as a
+two-column TSV with one header line. Prefer it when you don't need the rest of the index or don't
+want a YAML parser:
+
+```bash
+BASE=https://github.com/ncbo/kg-bioportal/releases/latest/download
+URL=$(curl -sL "$BASE/graph_urls.tsv" | awk -F'\t' '$1=="AGRO"{print $2}')
+curl -LO "$URL"
+```
+
 Release tags are unique per run (`data-YYYY.MM.DD-<run>`). Only `status: OK` ontologies have an
-artifact. (The old `.../releases/latest/download/<ID>.tar.gz` URL only works if that graph happens to
-live in the latest release — always prefer the index `download_url`.)
+artifact.
+
+> `.../releases/latest/download/<ID>.tar.gz` does **not** work and never reliably did. `latest` is
+> just the most recent run's release, holding only that run's artifacts, and no single release can
+> hold them all (GitHub caps a release at 1000 assets; there are more transformed ontologies than
+> that). Always resolve through `graph_urls.tsv` or the index's `download_url`.
 
 ## `onto_stats.yaml`
 
