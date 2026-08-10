@@ -2,3 +2,6 @@
 data
 __pycache__/
 .DS_Store
+# BioPortal / NCBO API key — the transform reads it from the NCBO_API_KEY
+# secret in CI; a local copy must never be committed.
+ncbo_key
