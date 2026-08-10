@@ -10,8 +10,13 @@ and writes:
 ```
 graphs/
   index.html                    # browse page — every KG, with filter + domain facets
+  summary/index.html            # site-wide statistics + top-10 figures
   resource/<id>/index.html      # one summary page per graph
 ```
+
+`graphs/` is the site's front door: `https://ncbo.github.io/kg-bioportal/` redirects here,
+and the statistics that used to live on that Jekyll landing page are now the Summary page,
+linked from the nav bar.
 
 Each page is self-contained (CSS inlined, no external assets) and carries no Jekyll
 front matter, so Jekyll copies it through verbatim.
@@ -30,6 +35,8 @@ No third-party dependencies (Python standard library only).
 
 ## Notes
 
+- **Summary page** figures are inline CSS bars drawn from `onto_stats.yaml`/`total_stats.yaml`
+  (the same release assets the browse page uses) — no charting library, no external requests.
 - **Metrics** (nodes, edges, node categories, predicate types) come from each graph's
   `GraphProduct` records. Only ~21 of 154 graphs report counts today; the rest degrade
   gracefully to "—".
