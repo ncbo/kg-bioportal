@@ -1,39 +1,19 @@
 ---
-layout: default
 title: KG-Bioportal
 ---
-
-<div class="content">
-    <div class="col-md-12">
-
-      <h3>Browse the graphs</h3>
-      <p>
-        <a href="{{ '/graphs/' | relative_url }}"><strong>Open the KG-Bioportal graph browser &rarr;</strong></a>
-        &mdash; a BioPortal-style interface listing both the BioPortal ontologies transformed to
-        KGX (downloadable here) and external knowledge-graph projects registered in
-        <a href="https://kghub.org/kg-registry/">KG-Registry</a>. Because the transformed ontologies
-        are themselves KGX graphs, they live in the same browser; each entry is tagged by source and
-        shows node/edge counts, version, and a download link.
-      </p>
-      <br>
-
-      <h3>Learn more about KG-Bioportal</h3>
-        <li><a href="https://ncbo.github.io/kg-bioportal/about">Learn more about KG-Bioportal</a></li>
-        <li><a href="https://bioportal.bioontology.org/">Visit BioPortal</a></li>
-        <li><a href="https://github.com/ncbo/kg-bioportal">See the KG-Bioportal GitHub repository</a></li>
-        <br>
-
-      <h3>KG-Bioportal Overview</h3>
-      <p>The collection includes graph files for {{ site.totalcount }} ontologies.{% if site.transform_date %} Last transformed on {{ site.transform_date }}.{% endif %}</p>
-
-      <p>In all, this includes {{ site.totalnodecount }} ontology classes as nodes and {{ site.totaledgecount }} relations between classes as edges.</p>
-
-      {% include fig1.html %}
-      {% include fig2.html %}
-      <br>
-
-      <p>For the full, searchable list of every transformed ontology and knowledge graph &mdash; with
-      status, versions, and downloads &mdash; use the
-      <a href="{{ '/graphs/' | relative_url }}">graph browser</a>.</p>
-    </div>
-  </div>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>KG-Bioportal</title>
+  <!-- The graph browser is the single front door for KG-Bioportal; what used to
+       live here (the summary statistics and figures) is now the browser's
+       Summary page. Keep this URL working by sending it straight there. -->
+  <link rel="canonical" href="{{ '/graphs/' | absolute_url }}">
+  <meta http-equiv="refresh" content="0; url={{ '/graphs/' | relative_url }}">
+  <script>location.replace({{ '/graphs/' | relative_url | jsonify }});</script>
+</head>
+<body>
+  <p>Redirecting to the <a href="{{ '/graphs/' | relative_url }}">KG-Bioportal graph browser</a>…</p>
+</body>
+</html>

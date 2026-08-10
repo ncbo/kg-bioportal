@@ -199,16 +199,20 @@ def head(title):
 
 BP = "https://bioportal.bioontology.org"  # link out to the real BioPortal services
 
-def nav(root):
+def nav(root, active="browse"):
     def ext(href, label):
         return (f'<a href="{href}" target="_blank" rel="noopener" class="ext">'
                 f'{label}<svg class="extmark" width=9 height=9 viewBox="0 0 24 24" fill=none '
                 f'stroke=currentColor stroke-width=2.6><path d="M7 17L17 7M9 7h8v8"/></svg></a>')
+    def on(name):
+        return ' class="on"' if active == name else ""
     return f"""
 <div class="nav"><div class="nav-in">
   <a class="brand" href="{root}index.html">KG&#8209;<span class="kg">Bio</span>Portal</a>
   <nav class="navlinks">
-    <a href="{root}index.html" class="on">Browse</a>
+    <a href="{root}index.html"{on("browse")}>Browse</a>
+    <a href="{root}summary/"{on("summary")}>Summary</a>
+    <a href="{root}about/"{on("about")}>About</a>
     {ext(f"{BP}/search", "Search")}
     {ext(f"{BP}/mappings", "Mappings")}
     {ext(f"{BP}/recommender", "Recommender")}
@@ -433,6 +437,195 @@ def render_browse(items, kg_count, onto_count):
 }})();
 </script>
 """ + SEARCH_JS + TAB_JS + footer()
+
+# --------------------------------------------------------------------------- #
+#  summary page (site-wide statistics — was the old Jekyll landing page)
+# --------------------------------------------------------------------------- #
+def bar_chart(rows, kind, unit):
+    """Horizontal bars for a ranked top-N list. rows: [(label, value, href)]."""
+    if not rows:
+        return '<p class="muted">No counts are available yet.</p>'
+    top = max(v for _, v, _ in rows) or 1
+    bars = []
+    for label, v, href in rows:
+        pct = max(v / top * 100, 0.8)
+        bars.append(
+            f'<a class="bar-row" href="{esc(href)}" title="{esc(label)}: {commafy(v)} {unit}">'
+            f'<span class="bar-lab mono">{esc(label)}</span>'
+            f'<span class="bar-track"><span class="bar-fill {kind}" style="width:{pct:.2f}%"></span></span>'
+            f'<span class="bar-val num">{abbrev(v)}</span></a>'
+        )
+    return f'<div class="barchart">{"".join(bars)}</div>'
+
+def render_summary(totals, kg_count, onto_items):
+    """Site-wide summary: headline counts, transform status, and top-10 charts."""
+    ok_ontos = [it for it in onto_items if it.get("ok")]
+    onto_ok = len(ok_ontos)
+    failed = totals.get("failedcount")
+    skipped = totals.get("skippedcount")
+    if not isinstance(failed, int) or not isinstance(skipped, int):
+        failed, skipped = len(onto_items) - onto_ok, 0
+    attempted = onto_ok + failed + skipped
+    nodes = totals.get("totalnodecount")
+    edges = totals.get("totaledgecount")
+    if not isinstance(nodes, int):
+        nodes = sum(it["nodes"] or 0 for it in ok_ontos)
+    if not isinstance(edges, int):
+        edges = sum(it["edges"] or 0 for it in ok_ontos)
+    date = str(totals.get("transform_date", "") or "")
+
+    def metric(cls, v, k):
+        return f'<div class="metric {cls}"><div class="v">{v}</div><div class="k">{k}</div></div>'
+    metrics = (
+        metric("cat", commafy(onto_ok), "Ontologies as KGX") +
+        metric("node", commafy(nodes), "Nodes") +
+        metric("edge", commafy(edges), "Edges") +
+        metric("pred", commafy(kg_count), "KG projects listed")
+    )
+
+    # Transform status: one part-to-whole bar over every ontology we attempt.
+    def seg(cls, n):
+        return (f'<span class="seg {cls}" style="width:{n / (attempted or 1) * 100:.2f}%"></span>'
+                if n else "")
+    def key(cls, n, label):
+        return (f'<span class="key"><span class="sw {cls}"></span>{label}'
+                f'<b class="num">{commafy(n)}</b></span>')
+    status_block = f"""
+        <section class="block">
+          <p class="eyebrow">Transform status <span class="eb-count">{commafy(attempted)} ontologies</span></p>
+          <div class="stack">{seg('ok', onto_ok)}{seg('fail', failed)}{seg('skip', skipped)}</div>
+          <div class="keys">{key('ok', onto_ok, 'Transformed')}{key('fail', failed, 'Failed')}
+            {key('skip', skipped, 'Skipped')}</div>
+          <p class="muted mt">Failed and skipped ontologies are still listed in the
+            <a href="../index.html">browser</a>, each with the reason it has no KGX artifact.</p>
+        </section>"""
+
+    def top_rows(field):
+        ranked = sorted((it for it in ok_ontos if isinstance(it[field], int)),
+                        key=lambda it: it[field], reverse=True)[:10]
+        return [(it["acr"], it[field], f'../resource/{it["id"]}/') for it in ranked]
+
+    return head("Summary · KG-BioPortal") + nav("../", active="summary") + f"""
+<div class="wrap">
+  <div class="crumbs"><a href="../index.html">Home</a><span>/</span>Summary</div>
+
+  <div class="browse-head">
+    <div>
+      <h1>Summary</h1>
+      <p class="sub">BioPortal ontologies transformed to KGX, alongside the knowledge-graph
+        projects registered in <a href="https://kghub.org/kg-registry/">KG&#8209;Registry</a>.
+        {f'Ontologies last transformed on <span class="num">{esc(date)}</span>.' if date else ''}</p>
+    </div>
+  </div>
+
+  <div class="grid">
+    <main>
+      <section class="block">
+        <p class="eyebrow">The collection at a glance</p>
+        <div class="metrics">{metrics}</div>
+        <p class="muted mt">Node and edge totals cover the transformed ontologies only; each
+          ontology is transformed on its own, so nodes shared between ontologies are counted once
+          per ontology.</p>
+      </section>
+{status_block}
+      <section class="block">
+        <p class="eyebrow">Largest ontologies by node count</p>
+        {bar_chart(top_rows('nodes'), 'node', 'nodes')}
+      </section>
+      <section class="block">
+        <p class="eyebrow">Largest ontologies by edge count</p>
+        {bar_chart(top_rows('edges'), 'edge', 'edges')}
+      </section>
+    </main>
+
+    <aside class="side">
+      <div class="card"><h3>Where to go next</h3><div class="body">
+        <div class="row"><span class="lab">Browse</span><span class="val"><a href="../index.html">All graphs</a></span></div>
+        <div class="row"><span class="lab">About</span><span class="val"><a href="../../about/">What KG&#8209;Bioportal is</a></span></div>
+        <div class="row"><span class="lab">BioPortal</span><span class="val"><a href="{BP}" target="_blank" rel="noopener">bioportal.bioontology.org</a></span></div>
+        <div class="row" style="border:0"><span class="lab">Code</span><span class="val"><a href="https://github.com/ncbo/kg-bioportal" target="_blank" rel="noopener">ncbo/kg-bioportal</a></span></div>
+      </div></div>
+      <div class="card"><h3>Provenance</h3><div class="body">
+        <div class="row"><span class="lab">Transformed</span><span class="val num">{esc(date or '—')}</span></div>
+        <div class="row"><span class="lab">Ontologies</span><span class="val">BioPortal (ROBOT &rarr; KGX)</span></div>
+        <div class="row" style="border:0"><span class="lab">KG projects</span><span class="val">KG&#8209;Registry</span></div>
+        <div class="uploaded" style="padding-top:9px"><a href="https://github.com/ncbo/kg-bioportal/releases/latest">Release with these stats &#8599;</a></div>
+      </div></div>
+    </aside>
+  </div>
+</div>
+""" + SEARCH_JS + footer()
+
+# --------------------------------------------------------------------------- #
+#  about page
+# --------------------------------------------------------------------------- #
+KGX_SPEC = "https://github.com/biolink/kgx/blob/master/specification/kgx-format.md"
+
+def render_about():
+    """What KG-Bioportal is, in the browser's own chrome (was docs/about.markdown)."""
+    return head("About · KG-BioPortal") + nav("../", active="about") + f"""
+<div class="wrap">
+  <div class="crumbs"><a href="../index.html">Home</a><span>/</span>About</div>
+
+  <div class="browse-head">
+    <div>
+      <h1>About KG&#8209;Bioportal</h1>
+      <p class="sub">BioPortal's ontologies, transformed into knowledge graphs.</p>
+    </div>
+  </div>
+
+  <div class="grid">
+    <main>
+      <div class="prose">
+        <h2>What is KG&#8209;Bioportal?</h2>
+        <p>KG&#8209;Bioportal is a version of the set of ontologies on
+          <a href="{BP}" target="_blank" rel="noopener">BioPortal</a> in which ontologies have been
+          transformed to graph nodes and edges in the
+          <a href="{KGX_SPEC}" target="_blank" rel="noopener">KGX format</a>. This means it is a
+          collection of entities and relations, with the classes in each ontology serving as the
+          entities and the connections between ontologies becoming relations. Where possible,
+          entities and relations are categorized using Biolink Model, so entries in
+          <a href="{BP}/ontologies/NCBITAXON" target="_blank" rel="noopener">NCBI Taxonomy</a> are
+          categorized as
+          <a href="https://biolink.github.io/biolink-model/docs/OrganismTaxon.html" target="_blank"
+             rel="noopener">biolink:OrganismTaxon</a>, and so on.</p>
+
+        <h2>How is it made?</h2>
+        <p>KG&#8209;Bioportal is made by careful transformation of each ontology from the
+          <a href="https://data.bioontology.org/" target="_blank" rel="noopener">BioPortal API</a>.
+          Ontology files from BioPortal are transformed to a common format before being converted
+          to nodes and edges. The
+          <a href="../summary/">Summary</a> page reports how many ontologies came through the most
+          recent run, and how large the resulting graphs are.</p>
+
+        <h2>How is it useful?</h2>
+        <p>KG&#8209;Bioportal supports a holistic examination of a broad collection of hierarchical
+          relationships in biology and biomedicine. Because all ontologies are in a common format
+          and data model, they may be merged in a modular fashion and analysed by graph traversal.
+          This enables a growing collection of informative graph machine learning approaches.</p>
+
+        <h2>What is in the browser?</h2>
+        <p>The <a href="../index.html">graph browser</a> lists two kinds of entry side by side: the
+          BioPortal ontologies KG&#8209;Bioportal has transformed to KGX, which you can download
+          here, and knowledge-graph projects registered in
+          <a href="https://kghub.org/kg-registry/" target="_blank" rel="noopener">KG&#8209;Registry</a>.
+          Each entry is tagged by source and carries its node and edge counts, version, and
+          download link.</p>
+      </div>
+    </main>
+
+    <aside class="side">
+      <div class="card"><h3>Elsewhere</h3><div class="body">
+        <div class="row"><span class="lab">Browse</span><span class="val"><a href="../index.html">All graphs</a></span></div>
+        <div class="row"><span class="lab">Summary</span><span class="val"><a href="../summary/">Collection statistics</a></span></div>
+        <div class="row"><span class="lab">BioPortal</span><span class="val"><a href="{BP}" target="_blank" rel="noopener">bioportal.bioontology.org</a></span></div>
+        <div class="row"><span class="lab">Code</span><span class="val"><a href="https://github.com/ncbo/kg-bioportal" target="_blank" rel="noopener">ncbo/kg-bioportal</a></span></div>
+        <div class="row" style="border:0"><span class="lab">Downloads</span><span class="val"><a href="https://github.com/ncbo/kg-bioportal/releases/latest" target="_blank" rel="noopener">Latest release</a></span></div>
+      </div></div>
+    </aside>
+  </div>
+</div>
+""" + SEARCH_JS + footer()
 
 # --------------------------------------------------------------------------- #
 #  resource (summary) page
@@ -813,19 +1006,19 @@ def build_reverse_index(kgs, all_by_id):
                         idx[s].append({"id": r["id"], "name": r.get("name") or r["id"]})
     return idx
 
-def read_transform_date(onto_path):
-    """Read site-wide transform_date from total_stats.yaml beside onto_stats.yaml."""
+def load_total_stats(onto_path):
+    """Read site-wide totals from total_stats.yaml beside onto_stats.yaml."""
     if not onto_path:
-        return ""
+        return {}
     total = os.path.join(os.path.dirname(onto_path) or ".", "total_stats.yaml")
     if not os.path.exists(total):
-        return ""
+        return {}
     try:
         import yaml
     except ImportError:
-        return ""
+        return {}
     with open(total) as f:
-        return str((yaml.safe_load(f) or {}).get("transform_date", "") or "")
+        return yaml.safe_load(f) or {}
 
 def main():
     argv = sys.argv[1:]
@@ -858,7 +1051,8 @@ def main():
 
     # Normalize both sources into unified browse items.
     kg_items = [kg_to_item(r) for r in kgs]
-    transform_date = read_transform_date(onto_path)
+    totals = load_total_stats(onto_path)
+    transform_date = str(totals.get("transform_date", "") or "")
     onto_entries = load_ontologies(onto_path)
     onto_items = [onto_to_item(o, transform_date) for o in onto_entries]
     items = kg_items + onto_items
@@ -869,6 +1063,16 @@ def main():
 
     with open(os.path.join(out, "index.html"), "w") as f:
         f.write(render_browse(items, len(kg_items), len(onto_items)))
+
+    # Summary page — the site-wide statistics that used to be the Jekyll landing page.
+    os.makedirs(os.path.join(out, "summary"), exist_ok=True)
+    with open(os.path.join(out, "summary", "index.html"), "w") as f:
+        f.write(render_summary(totals, len(kg_items), onto_items))
+
+    # About page — the prose that used to be the Jekyll docs/about.markdown.
+    os.makedirs(os.path.join(out, "about"), exist_ok=True)
+    with open(os.path.join(out, "about", "index.html"), "w") as f:
+        f.write(render_about())
 
     # Search index for the nav-bar autocomplete (all browseable graphs).
     search_index = [
@@ -1039,6 +1243,31 @@ section.block{margin-bottom:26px}
 .metric .k{font-size:12px;color:var(--ink-soft);margin-top:3px}
 .metric.node{border-top:3px solid var(--node)}.metric.edge{border-top:3px solid var(--edge)}
 .metric.cat{border-top:3px solid var(--c-chem)}.metric.pred{border-top:3px solid var(--primary)}
+/* prose (about) */
+.prose{max-width:68ch}
+.prose h2{font-size:19px;font-weight:700;letter-spacing:-.2px;margin:26px 0 8px;text-wrap:balance}
+.prose h2:first-child{margin-top:0}
+.prose p{margin:0 0 12px;color:var(--ink-soft);font-size:15px}
+/* summary charts */
+.barchart{display:flex;flex-direction:column;gap:6px}
+.bar-row{display:grid;grid-template-columns:118px minmax(0,1fr) 52px;align-items:center;gap:11px;
+padding:3px 5px;border-radius:7px;color:var(--ink)}
+.bar-row:hover{background:var(--panel);text-decoration:none}
+.bar-lab{font-size:12px;font-weight:700;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-row:hover .bar-lab{color:var(--primary)}
+.bar-track{background:var(--panel-2);border-radius:4px;height:14px}
+.bar-fill{display:block;height:100%;border-radius:0 4px 4px 0;min-width:2px}
+.bar-fill.node{background:var(--node)}.bar-fill.edge{background:var(--edge)}
+.bar-val{font-size:12px;color:var(--ink-soft);text-align:right}
+@media(max-width:520px){.bar-row{grid-template-columns:88px minmax(0,1fr) 46px;gap:8px}}
+.stack{display:flex;gap:2px;height:16px;border-radius:4px;overflow:hidden;background:var(--panel-2)}
+.stack .seg{display:block;height:100%}
+.seg.ok{background:var(--prod)}.seg.fail{background:var(--warn)}.seg.skip{background:var(--ink-faint)}
+.keys{display:flex;flex-wrap:wrap;gap:16px;margin-top:10px;font-size:12.5px;color:var(--ink-soft)}
+.key{display:inline-flex;align-items:center;gap:6px}
+.key b{color:var(--ink)}
+.sw{width:9px;height:9px;border-radius:2px;flex:none}
+.sw.ok{background:var(--prod)}.sw.fail{background:var(--warn)}.sw.skip{background:var(--ink-faint)}
 .cloud{display:flex;flex-wrap:wrap;gap:6px}
 .tok{font-size:12px;padding:4px 9px;border-radius:6px;border:1px solid var(--border);background:var(--panel)}
 .tok.cat{color:var(--c-chem);border-color:color-mix(in srgb,var(--c-chem) 30%,transparent)}

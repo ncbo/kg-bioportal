@@ -19,12 +19,9 @@ wget -O "$ONTO_STATUS_FILE" "$RELEASE_BASE/$ONTO_STATUS_FILE"
 echo "Adding all lists to Jekyll config."
 cat $JEKYLL_CONFIG_HEADER_FILE $TOTAL_STATS_FILE $ONTO_STATUS_FILE > $JEKYLL_CONFIG_FILE
 
-# Make figures
-echo "Producing figures."
-python make_viz.py
-
 # Build KG-Registry-driven knowledge-graph pages (BioPortal-style interface).
 # Pulls the KG-Registry JSON-LD, keeps only KnowledgeGraph resources, and writes
-# a browse index + one summary page per graph into docs/graphs/.
+# a browse index, a site-wide Summary page (statistics + figures), and one summary
+# page per graph into docs/graphs/.
 echo "Building the unified graph browser (KG-Registry KGs + transformed ontologies)."
 python kg_site/build_site.py --fetch kg_site/kgs.jsonld graphs --onto-stats onto_stats.yaml

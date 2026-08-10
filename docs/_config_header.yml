@@ -40,7 +40,6 @@ exclude:
   - Gemfile.lock
   - vendor/
   - build_site.sh
-  - make_viz.py
   - kg_site/
   - onto_stats.yaml
   - total_stats.yaml

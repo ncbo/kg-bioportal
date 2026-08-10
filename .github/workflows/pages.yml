@@ -5,8 +5,9 @@ name: Deploy docs site to Pages
 # Unlike the old "deploy from a branch" mode, this actually runs
 # docs/build_site.sh first, which:
 #   - fetches the latest transform stats from the release,
-#   - regenerates _config.yml + the plotly figures (make_viz.py), and
-#   - generates the KG-Registry-driven browser under docs/graphs/.
+#   - regenerates _config.yml, and
+#   - generates the KG-Registry-driven browser (browse + summary pages)
+#     under docs/graphs/.
 # Then Jekyll builds the site and it is deployed to Pages.
 
 on:
@@ -39,7 +40,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install Python deps for site generation
-        run: pip install pandas plotly pyyaml
+        run: pip install pyyaml
       - uses: ruby/setup-ruby@v1
         with:
           # Ruby 3.1: the github-pages gem pins an old Liquid that calls
@@ -49,7 +50,7 @@ jobs:
           bundler-cache: true
           working-directory: docs
       - uses: actions/configure-pages@v5
-      - name: Assemble site (stats, figures, KG browser)
+      - name: Assemble site (stats, KG browser)
         run: bash build_site.sh
       - name: Build with Jekyll
         run: bundle exec jekyll build
