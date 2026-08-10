@@ -3,11 +3,17 @@
 import csv
 import logging
 import os
+from typing import Union
 
 import requests
 from requests.adapters import HTTPAdapter, Retry
 
-from kg_bioportal.config import MAX_SOURCE_MB, is_skiplisted
+from kg_bioportal.config import (
+    LICENSE_RESTRICTED_REASON,
+    LICENSE_STATUSES,
+    MAX_SOURCE_MB,
+    is_skiplisted,
+)
 
 ONTOLOGY_LIST_NAME = "ontologylist.tsv"
 
@@ -71,9 +77,14 @@ class Downloader:
 
     def _record(
         self, acronym, submission_id, source_bytes, path, status, reason,
-        name="", version="",
+        name="", version="", http_status: Union[int, str] = "",
     ):
-        """Append a per-ontology outcome to the results list."""
+        """Append a per-ontology outcome to the results list.
+
+        ``http_status`` is the response code from BioPortal, recorded for the
+        outcomes that hinge on it so the reason can be audited later without
+        re-running the download.
+        """
         self.results.append(
             {
                 "id": acronym,
@@ -84,8 +95,23 @@ class Downloader:
                 "path": path,
                 "status": status,
                 "reason": reason,
+                "http_status": http_status,
             }
         )
+
+    @staticmethod
+    def _body_snippet(response) -> str:
+        """First line of an error response body, for the log.
+
+        BioPortal explains itself in the body ("You must accept the license
+        terms..."), which is the quickest way to tell a licensing refusal from
+        anything else. Best effort only — never let this raise.
+        """
+        try:
+            text = " ".join(response.text[:200].split())
+        except Exception:  # noqa: BLE001 - diagnostics must not break the download
+            return ""
+        return text
 
     def download(self, onto_list: list = []) -> list:
         """Downloads data files from list of ontologies into data directory.
@@ -125,7 +151,8 @@ class Downloader:
                 logging.error(
                     f"Failed to fetch metadata for {ontology}: HTTP {metadata_resp.status_code}"
                 )
-                self._record(ontology, "NA", 0, "", "error", "metadata_http_error")
+                self._record(ontology, "NA", 0, "", "error", "metadata_http_error",
+                             http_status=metadata_resp.status_code)
                 continue
             metadata = metadata_resp.json()
             onto_name = str(metadata.get("name") or ontology)
@@ -156,6 +183,30 @@ class Downloader:
                              name=onto_name, version=onto_version)
                 continue
 
+            # Why we didn't get a file matters, and the status code is the only
+            # thing that distinguishes the cases. Without this check every one of
+            # them looks like "not_downloadable", which lumps licensed
+            # terminologies (working as intended) in with broken records.
+            code = download_onto.status_code
+            if not download_onto.ok:
+                if code in LICENSE_STATUSES:
+                    reason = LICENSE_RESTRICTED_REASON
+                    note = "license does not cover this API key"
+                elif code == 404:
+                    reason = "no_download_file"
+                    note = "no source file attached to the submission"
+                else:
+                    reason = "download_http_error"
+                    note = "unexpected response"
+                logging.warning(
+                    f"Not downloading {ontology}: HTTP {code} ({note}). "
+                    f"{self._body_snippet(download_onto)}"
+                )
+                download_onto.close()
+                self._record(ontology, submission_id, 0, "", "error", reason,
+                             name=onto_name, version=onto_version, http_status=code)
+                continue
+
             try:
                 onto_filename = (
                     download_onto.headers["Content-Disposition"]
@@ -163,12 +214,14 @@ class Downloader:
                     .replace('"', "")
                 )
             except KeyError:
+                # A 2xx with no filename: BioPortal answered, but not with a file.
                 logging.warning(
-                    f"Could not download {ontology}. Check if the ontology is downloadable."
+                    f"Could not download {ontology}: HTTP {code} with no Content-Disposition. "
+                    f"Check if the ontology is downloadable."
                 )
                 download_onto.close()
                 self._record(ontology, submission_id, 0, "", "error", "not_downloadable",
-                             name=onto_name, version=onto_version)
+                             name=onto_name, version=onto_version, http_status=code)
                 continue
 
             # Size gate 1: trust Content-Length if present.
@@ -231,11 +284,19 @@ class Downloader:
 
         skipped = [r for r in self.results if r["status"] == "skipped"]
         errored = [r for r in self.results if r["status"] == "error"]
+        licensed = [r for r in errored if r["reason"] == LICENSE_RESTRICTED_REASON]
         if skipped:
             logging.warning(f"Skipped {len(skipped)} ontologies (too large / skiplist).")
-        if errored:
+        if licensed:
+            # Not a failure: we simply aren't licensed for these. Reported apart
+            # from the errors so a run's real problems stay visible.
+            logging.info(
+                f"{len(licensed)} ontologies are license-restricted: {[r['id'] for r in licensed]}"
+            )
+        if len(errored) > len(licensed):
             logging.warning(
-                f"Encountered errors downloading: {[r['id'] for r in errored]}"
+                "Encountered errors downloading: "
+                f"{[r['id'] for r in errored if r['reason'] != LICENSE_RESTRICTED_REASON]}"
             )
 
         return self.results
@@ -243,7 +304,8 @@ class Downloader:
     def _write_report(self) -> None:
         """Write per-ontology download outcomes to a TSV in the output dir."""
         report_path = os.path.join(self.output_dir, DOWNLOAD_REPORT_NAME)
-        fieldnames = ["id", "name", "version", "submission_id", "source_bytes", "status", "reason", "path"]
+        fieldnames = ["id", "name", "version", "submission_id", "source_bytes", "status", "reason",
+                      "http_status", "path"]
         with open(report_path, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter="\t")
             writer.writeheader()

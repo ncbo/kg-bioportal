@@ -24,13 +24,17 @@ import sys
 import yaml
 
 
-def load_known_giants(repo_root):
-    """Import KNOWN_GIANTS from src/kg_bioportal/config.py without installing the package."""
+def load_config(repo_root):
+    """Import src/kg_bioportal/config.py without installing the package.
+
+    Keeps the skiplist and the license-restricted reason string in one place
+    rather than duplicating them here.
+    """
     config_path = os.path.join(repo_root, "src", "kg_bioportal", "config.py")
     spec = importlib.util.spec_from_file_location("kgbp_config", config_path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return sorted(module.KNOWN_GIANTS)
+    return module
 
 
 def main():
@@ -47,6 +51,7 @@ def main():
     # download_url they already have (which release they actually live in).
     release_tag = sys.argv[5] if len(sys.argv) > 5 else ""
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    config = load_config(repo_root)
 
     def asset_url(tag, onto_id):
         return f"https://github.com/ncbo/kg-bioportal/releases/download/{tag}/{onto_id}.tar.gz"
@@ -81,7 +86,7 @@ def main():
 
     # Ensure the skiplisted giants are represented (they are removed before
     # sharding, so no shard reports them).
-    for acr in load_known_giants(repo_root):
+    for acr in sorted(config.KNOWN_GIANTS):
         by_id.setdefault(
             acr,
             {
@@ -104,17 +109,23 @@ def main():
 
     ok = sum(1 for o in ontologies if o.get("status") == "OK")
     skipped = sum(1 for o in ontologies if o.get("status") == "Skipped")
-    failed = sum(1 for o in ontologies if o.get("status") == "Failed")
+    # License-restricted entries stay status Failed (no artifact exists) but are
+    # counted separately and excluded from failedcount — see transformer.py.
+    licensed = sum(
+        1 for o in ontologies if o.get("reason") == config.LICENSE_RESTRICTED_REASON
+    )
+    failed = sum(1 for o in ontologies if o.get("status") == "Failed") - licensed
     with open(os.path.join(output_dir, "total_stats.yaml"), "w") as f:
         f.write(f"totalcount: {ok}\n")
         f.write(f"skippedcount: {skipped}\n")
         f.write(f"failedcount: {failed}\n")
+        f.write(f"licensedcount: {licensed}\n")
         f.write(f"totalnodecount: {sum(o.get('nodecount', 0) for o in ontologies)}\n")
         f.write(f"totaledgecount: {sum(o.get('edgecount', 0) for o in ontologies)}\n")
         if transform_date:
             f.write(f"transform_date: {transform_date}\n")
 
-    print(f"OK={ok} Skipped={skipped} Failed={failed} -> {output_dir}/")
+    print(f"OK={ok} Skipped={skipped} Failed={failed} Licensed={licensed} -> {output_dir}/")
 
 
 if __name__ == "__main__":

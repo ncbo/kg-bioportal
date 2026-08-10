@@ -14,7 +14,7 @@ from typing import Tuple
 import yaml
 from kgx.transformer import Transformer as KGXTransformer
 
-from kg_bioportal.config import PER_ONTOLOGY_TIMEOUT_MIN
+from kg_bioportal.config import LICENSE_RESTRICTED_REASON, PER_ONTOLOGY_TIMEOUT_MIN
 from kg_bioportal.downloader import DOWNLOAD_REPORT_NAME, ONTOLOGY_LIST_NAME
 from kg_bioportal.robot_utils import initialize_robot, robot_convert, robot_relax
 
@@ -81,6 +81,37 @@ def strip_imports(path: str) -> str:
         f.write(cleaned)
     logging.info(f"Stripped {removed} import declaration(s) from {os.path.basename(path)}.")
     return new_path
+
+
+def summarize(onto_log: dict) -> dict:
+    """Roll a per-ontology log up into the fields of total_stats.yaml.
+
+    License-restricted ontologies get their own count and are *excluded* from
+    ``failedcount``. They keep ``status: Failed`` in onto_stats (no artifact
+    exists for them either way), but nothing about them is broken and no rerun
+    will change that, so counting them as failures overstates how much of the
+    pipeline needs fixing.
+
+    Args:
+        onto_log: {acronym: entry} as built by ``transform_all``.
+
+    Returns:
+        Ordered mapping of total_stats.yaml field name to value.
+    """
+    def by_status(status):
+        return sum(1 for e in onto_log.values() if e["status"] == status)
+
+    licensed = sum(
+        1 for e in onto_log.values() if e.get("reason") == LICENSE_RESTRICTED_REASON
+    )
+    return {
+        "totalcount": by_status("OK"),
+        "skippedcount": by_status("Skipped"),
+        "failedcount": by_status("Failed") - licensed,
+        "licensedcount": licensed,
+        "totalnodecount": sum(e["nodecount"] for e in onto_log.values()),
+        "totaledgecount": sum(e["edgecount"] for e in onto_log.values()),
+    }
 
 
 class TransformTimeout(Exception):
@@ -197,7 +228,7 @@ class Transformer:
         # time (they have no file on disk to walk).
         for onto_id, row in download_report.items():
             if row.get("status") in ("skipped", "error"):
-                onto_log[onto_id] = {
+                entry = {
                     "status": "Skipped" if row["status"] == "skipped" else "Failed",
                     "reason": row.get("reason", ""),
                     "name": row.get("name", ""),
@@ -207,6 +238,12 @@ class Transformer:
                     "submission_id": row.get("submission_id", "NA"),
                     "source_bytes": int(row.get("source_bytes") or 0),
                 }
+                # Only download outcomes have a status code; don't clutter the
+                # other entries with an empty field.
+                http_status = row.get("http_status") or ""
+                if http_status:
+                    entry["http_status"] = int(http_status)
+                onto_log[onto_id] = entry
 
         filepaths = []
         for root, _dirs, files in os.walk(self.input_dir):
@@ -258,23 +295,10 @@ class Transformer:
 
         # Write total stats to a yaml
         logging.info("Writing total stats to total_stats.yaml.")
-        success_count = sum(1 for o in onto_log if onto_log[o]["status"] == "OK")
-        skipped_count = sum(1 for o in onto_log if onto_log[o]["status"] == "Skipped")
-        failed_count = sum(1 for o in onto_log if onto_log[o]["status"] == "Failed")
+        totals = summarize(onto_log)
         with open(os.path.join(self.output_dir, "total_stats.yaml"), "w") as f:
-            f.write("totalcount: " + str(success_count) + "\n")
-            f.write("skippedcount: " + str(skipped_count) + "\n")
-            f.write("failedcount: " + str(failed_count) + "\n")
-            f.write(
-                "totalnodecount: "
-                + str(sum(onto_log[o]["nodecount"] for o in onto_log))
-                + "\n"
-            )
-            f.write(
-                "totaledgecount: "
-                + str(sum(onto_log[o]["edgecount"] for o in onto_log))
-                + "\n"
-            )
+            for key, value in totals.items():
+                f.write(f"{key}: {value}\n")
 
         # Dump onto_log to a yaml
         logging.info("Writing ontology stats to onto_stats.yaml.")

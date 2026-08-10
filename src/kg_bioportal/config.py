@@ -61,3 +61,17 @@ KNOWN_GIANTS: frozenset = frozenset(
 def is_skiplisted(acronym: str) -> bool:
     """True if the ontology is on the static skiplist of known giants."""
     return acronym.strip().upper() in KNOWN_GIANTS
+
+
+# --- Download outcomes ----------------------------------------------------- #
+
+# Recorded when BioPortal declines to serve the source file because the
+# ontology is under a license we don't hold (UMLS-derived terminologies and
+# friends). This is not a failure of the pipeline: there is nothing to fix and
+# nothing to retry, so it is counted separately from the ontologies that broke.
+LICENSE_RESTRICTED_REASON: str = "license_restricted"
+
+# HTTP statuses on the download endpoint that mean "you may not have this file"
+# rather than "this file does not exist". 401 is included because a request
+# without sufficient credentials is the same situation from our side.
+LICENSE_STATUSES: frozenset = frozenset({401, 403})
