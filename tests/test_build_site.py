@@ -91,15 +91,29 @@ class TestDownloadLinks(TestCase):
             "an entry with a download_url must not fall back to the latest release",
         )
 
-    def test_missing_download_url_falls_back_to_latest(self):
-        # Known gap (#147): `latest` only holds the assets of the most recent
-        # run, so this fallback 404s for nearly every ontology. Reachable for
-        # entries carried forward from an index predating download_url.
+    def test_missing_download_url_is_not_guessed(self):
+        # Fixed in #147: `latest` holds only the most recent run's assets, so a
+        # `releases/latest/download/<ID>.tar.gz` fallback 404s for nearly every
+        # ontology. An entry with no recorded URL must offer none.
         it = item("ABD", "OK")
-        self.assertIn(
-            "releases/latest/download", it["download_url"],
-            "known gap (#147): the fallback still points at an unreliable URL",
-        )
+        self.assertEqual(it["download_url"], "")
+
+    def test_no_rendered_page_links_at_the_latest_download_pattern(self):
+        for it in (item("ABD", "OK", download_url=self.INDEX_URL),
+                   item("ABD", "OK"),
+                   item("NDDF", "Failed", "license_restricted")):
+            page = bs.render_ontology_resource(it)
+            self.assertNotIn("releases/latest/download", page)
+
+    def test_page_without_a_url_points_at_the_releases_page(self):
+        page = bs.render_ontology_resource(item("ABD", "OK"))
+        self.assertIn("Artifact location not recorded", page)
+        self.assertIn(bs.RELEASES_PAGE, page)
+
+    def test_page_with_a_url_offers_the_download(self):
+        page = bs.render_ontology_resource(item("ABD", "OK", download_url=self.INDEX_URL))
+        self.assertIn(self.INDEX_URL, page)
+        self.assertNotIn("Artifact location not recorded", page)
 
 
 class TestSummaryCounts(TestCase):

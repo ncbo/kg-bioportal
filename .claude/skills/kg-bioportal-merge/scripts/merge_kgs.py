@@ -25,7 +25,10 @@ import urllib.request
 socket.setdefaulttimeout(180)  # don't hang forever on a stalled connection
 
 RELEASE = "https://github.com/ncbo/kg-bioportal/releases/latest/download"
-ASSET = RELEASE + "/{id}.tar.gz"  # fallback only
+
+# There is no RELEASE + "/<ID>.tar.gz": releases are incremental and no single one
+# holds every artifact (GitHub caps a release at 1000 assets), so that URL 404s for
+# nearly every ontology. Always resolve through the index.
 
 
 def load_index():
@@ -37,12 +40,15 @@ def load_index():
     import yaml
     with urllib.request.urlopen(RELEASE + "/onto_stats.yaml", timeout=60) as r:
         onts = (yaml.safe_load(r.read()) or {}).get("ontologies", [])
-    return {o["id"]: (o.get("download_url") or ASSET.format(id=o["id"]))
-            for o in onts if o.get("status") == "OK"}
+    return {o["id"]: o["download_url"] for o in onts
+            if o.get("status") == "OK" and o.get("download_url")}
 
 
 def fetch_tsvs(acr, indir, index):
-    url = index.get(acr) or ASSET.format(id=acr)
+    url = index.get(acr)
+    if not url:
+        print(f"  skip {acr}: not in the index — no KGX artifact is published for it")
+        return False
     tmp = os.path.join(tempfile.gettempdir(), f"{acr}.tar.gz")
     try:
         urllib.request.urlretrieve(url, tmp)

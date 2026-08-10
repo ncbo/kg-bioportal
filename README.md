@@ -10,18 +10,40 @@ assets on this repository's [Releases](../../releases).
 ## Getting the graphs
 
 Each transformed ontology is a `<ACRONYM>.tar.gz` release asset containing
-`<ACRONYM>_nodes.tsv` and `<ACRONYM>_edges.tsv`. The latest build is always
-reachable at a stable URL:
+`<ACRONYM>_nodes.tsv` and `<ACRONYM>_edges.tsv`.
 
+Releases are **incremental**: a run publishes only the ontologies it transformed,
+so an artifact lives in whichever release most recently rebuilt it, and there is
+no release that holds them all — GitHub caps a release at 1000 assets, and there
+are more transformed ontologies than that. So look the artifact up rather than
+guessing its URL. Three files are published on **every** release for this, which
+makes `releases/latest/download/<that file>` a stable entry point:
+
+| File | What it is |
+|---|---|
+| `graph_urls.tsv` | `<ACRONYM>` → artifact URL. Two columns, one header line. |
+| `onto_stats.yaml` | Full per-ontology index: status, reason, node/edge counts, `download_url`. |
+| `total_stats.yaml` | Site-wide totals. |
+
+To fetch one ontology:
+
+```bash
+BASE=https://github.com/ncbo/kg-bioportal/releases/latest/download
+URL=$(curl -sL "$BASE/graph_urls.tsv" | awk -F'\t' '$1=="AGRO"{print $2}')
+curl -LO "$URL"
 ```
-https://github.com/ncbo/kg-bioportal/releases/latest/download/<ACRONYM>.tar.gz
+
+To fetch all of them:
+
+```bash
+curl -sL "$BASE/graph_urls.tsv" | tail -n +2 | cut -f2 | xargs -n1 -P4 curl -sLO
 ```
 
-For example, AGRO: `.../releases/latest/download/AGRO.tar.gz`.
+From Python, read `download_url` off the entry you want in `onto_stats.yaml`.
 
-Per-ontology status and node/edge counts live in `onto_stats.yaml`
-(and totals in `total_stats.yaml`), attached to the release and committed under
-`docs/`.
+> **Note:** `releases/latest/download/<ACRONYM>.tar.gz` does *not* work, despite
+> looking like it should. `latest` is just the most recent run's release, which
+> holds only that run's handful of artifacts.
 
 ## What gets skipped, and why
 

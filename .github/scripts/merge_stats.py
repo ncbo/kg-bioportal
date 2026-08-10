@@ -8,10 +8,14 @@ optionally seeds from an existing index (<base_onto_stats>, the previous latest
 release's onto_stats — carries every ontology's download_url), overlays this
 run's results, sets each of this run's OK entries' download_url to <release_tag>,
 adds the statically skiplisted giants as Skipped/skiplist rows, and writes the
-merged onto_stats.yaml + total_stats.yaml into <output_dir>.
+merged onto_stats.yaml + total_stats.yaml + graph_urls.tsv into <output_dir>.
 
 The merged index is authoritative across releases: each OK entry's download_url
-points at whichever release holds that ontology's most recent artifact.
+points at whichever release holds that ontology's most recent artifact. There is
+no release that holds them all — GitHub caps a release at 1000 assets and there
+are more transformed ontologies than that — so resolving through the index is
+the only way to find an artifact. graph_urls.tsv is that same mapping in a form
+a shell can read without a YAML parser.
 
 Depends only on PyYAML. The skiplist is loaded directly from the package's
 config.py by path, so this script needs no heavy dependencies installed.
@@ -107,6 +111,22 @@ def main():
     with open(os.path.join(output_dir, "onto_stats.yaml"), "w") as f:
         yaml.dump({"ontologies": ontologies}, f, sort_keys=False)
 
+    # Shell-readable resolver: acronym -> the release that actually holds its
+    # artifact. Published on every release so `latest/download/graph_urls.tsv`
+    # is a stable entry point even though `latest/download/<ACRONYM>.tar.gz`
+    # cannot be (no single release can hold every artifact).
+    resolvable = [o for o in ontologies if o.get("status") == "OK" and o.get("download_url")]
+    with open(os.path.join(output_dir, "graph_urls.tsv"), "w") as f:
+        f.write("id\tdownload_url\n")
+        for o in resolvable:
+            f.write(f"{o['id']}\t{o['download_url']}\n")
+    missing = [
+        o["id"] for o in ontologies
+        if o.get("status") == "OK" and not o.get("download_url")
+    ]
+    if missing:
+        print(f"WARNING: {len(missing)} OK ontologies have no download_url: {missing[:10]}")
+
     ok = sum(1 for o in ontologies if o.get("status") == "OK")
     skipped = sum(1 for o in ontologies if o.get("status") == "Skipped")
     # License-restricted entries stay status Failed (no artifact exists) but are
@@ -125,7 +145,10 @@ def main():
         if transform_date:
             f.write(f"transform_date: {transform_date}\n")
 
-    print(f"OK={ok} Skipped={skipped} Failed={failed} Licensed={licensed} -> {output_dir}/")
+    print(
+        f"OK={ok} Skipped={skipped} Failed={failed} Licensed={licensed} "
+        f"resolvable={len(resolvable)} -> {output_dir}/"
+    )
 
 
 if __name__ == "__main__":

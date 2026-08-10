@@ -69,6 +69,13 @@ class MergeStatsTestCase(TestCase):
             totals = yaml.safe_load(f)
         return index, totals
 
+    def read_manifest(self):
+        """graph_urls.tsv as {id: url}, asserting the header is intact."""
+        with open(os.path.join(self.out, "graph_urls.tsv")) as f:
+            lines = f.read().splitlines()
+        self.assertEqual(lines[0], "id\tdownload_url")
+        return dict(line.split("\t") for line in lines[1:])
+
 
 class TestDownloadUrlInvariants(MergeStatsTestCase):
     """Where each artifact lives must survive a run that didn't rebuild it.
@@ -120,6 +127,65 @@ class TestDownloadUrlInvariants(MergeStatsTestCase):
             "download_url", index["WAS_OK"],
             "a now-failing ontology must not keep pointing at an old artifact",
         )
+
+
+class TestGraphUrlsManifest(MergeStatsTestCase):
+    """The shell-readable resolver published alongside the index (#147).
+
+    `releases/latest/download/<ACRONYM>.tar.gz` cannot work -- no single release
+    holds every artifact -- so `latest/download/graph_urls.tsv` is the stable
+    entry point that replaces it.
+    """
+
+    def test_manifest_covers_every_resolvable_graph(self):
+        base = self.write_base([entry("OLD", download_url=asset(PREV_TAG, "OLD"))])
+        self.write_fragment([entry("FRESH")])
+        index, _ = self.run_merge(base)
+        manifest = self.read_manifest()
+        expected = {oid for oid, o in index.items()
+                    if o["status"] == "OK" and o.get("download_url")}
+        self.assertEqual(set(manifest), expected)
+
+    def test_manifest_urls_match_the_index(self):
+        base = self.write_base([entry("OLD", download_url=asset(PREV_TAG, "OLD"))])
+        self.write_fragment([entry("FRESH")])
+        index, _ = self.run_merge(base)
+        for oid, url in self.read_manifest().items():
+            self.assertEqual(url, index[oid]["download_url"])
+
+    def test_manifest_spans_releases(self):
+        # The whole point: one file resolving artifacts that live in different
+        # releases, which is what makes a single stable URL impossible.
+        base = self.write_base([entry("OLD", download_url=asset(PREV_TAG, "OLD"))])
+        self.write_fragment([entry("FRESH")])
+        self.run_merge(base)
+        manifest = self.read_manifest()
+        self.assertEqual(manifest["OLD"], asset(PREV_TAG, "OLD"))
+        self.assertEqual(manifest["FRESH"], asset(THIS_TAG, "FRESH"))
+
+    def test_manifest_excludes_non_ok_entries(self):
+        self.write_fragment([
+            entry("GOOD"),
+            entry("BAD", status="Failed", reason="transform_error"),
+            entry("LIC", status="Failed", reason="license_restricted"),
+            entry("BIG", status="Skipped", reason="too_large"),
+        ])
+        self.run_merge()
+        self.assertEqual(set(self.read_manifest()), {"GOOD"})
+
+    def test_manifest_never_uses_the_latest_download_pattern(self):
+        self.write_fragment([entry("FRESH")])
+        self.run_merge()
+        with open(os.path.join(self.out, "graph_urls.tsv")) as f:
+            self.assertNotIn("releases/latest/download", f.read())
+
+    def test_manifest_is_written_even_when_nothing_transformed(self):
+        # A run over undownloadable ontologies produces no artifacts, but the
+        # manifest must still be published or `latest` loses the resolver.
+        base = self.write_base([entry("OLD", download_url=asset(PREV_TAG, "OLD"))])
+        self.write_fragment([entry("NDDF", status="Failed", reason="license_restricted")])
+        self.run_merge(base)
+        self.assertEqual(self.read_manifest(), {"OLD": asset(PREV_TAG, "OLD")})
 
 
 class TestSeedAndOverlay(MergeStatsTestCase):
