@@ -5,3 +5,6 @@ __pycache__/
 # BioPortal / NCBO API key — the transform reads it from the NCBO_API_KEY
 # secret in CI; a local copy must never be committed.
 ncbo_key
+# ROBOT is downloaded into the repo root on first transform (robot.jar is ~90 MB).
+robot
+robot.jar
