@@ -1,20 +1,26 @@
 """Transformer for KG-Bioportal."""
 
 import csv
+import gzip
 import logging
 import os
 import re
+import shutil
 import signal
 import sys
 import tarfile
 import zipfile
 from contextlib import contextmanager
-from typing import Tuple
+from typing import List, Optional, Tuple
 
 import yaml
 from kgx.transformer import Transformer as KGXTransformer
 
-from kg_bioportal.config import LICENSE_RESTRICTED_REASON, PER_ONTOLOGY_TIMEOUT_MIN
+from kg_bioportal.config import (
+    LICENSE_RESTRICTED_REASON,
+    MAX_SOURCE_MB,
+    PER_ONTOLOGY_TIMEOUT_MIN,
+)
 from kg_bioportal.downloader import DOWNLOAD_REPORT_NAME, ONTOLOGY_LIST_NAME
 from kg_bioportal.kgx_patches import patch_mixed_type_sorting
 from kg_bioportal.robot_utils import initialize_robot, robot_convert, robot_relax
@@ -119,8 +125,117 @@ def summarize(onto_log: dict) -> dict:
     }
 
 
+# Extensions BioPortal sources actually arrive in. Used to find the ontology
+# among an archive's members; order carries no preference.
+_ONTOLOGY_EXTS = frozenset(
+    {".owl", ".rdf", ".ttl", ".obo", ".owx", ".n3", ".nt", ".xml", ".omn", ".ofn"}
+)
+
+# Archive members that are never the ontology: macOS bundles zip metadata, and
+# some submissions carry a licence or readme alongside the source.
+_JUNK_PREFIXES = ("__MACOSX/", "._")
+
+
+def _extract_all(archive, dest: str) -> None:
+    """Extract every member, preferring the 'data' filter where available.
+
+    The filter became available in Python 3.12 and is the default from 3.14; ask
+    for it explicitly so behaviour doesn't change under us, and fall back for
+    the older interpreters this package still supports.
+    """
+    try:
+        archive.extractall(dest, filter="data")
+    except TypeError:
+        archive.extractall(dest)
+
+
+def _archive_stem(archive_path: str) -> str:
+    """``…/PatientSafetyIncident.zip`` -> ``patientsafetyincident``."""
+    base = os.path.basename(archive_path)
+    for suffix in (".gz", ".zip"):
+        if base.lower().endswith(suffix):
+            base = base[: -len(suffix)]
+            break
+    if base.lower().endswith(".tar"):
+        base = base[: -len(".tar")]
+    return os.path.splitext(base)[0].lower()
+
+
+def pick_ontology_member(
+    members: List[Tuple[str, int]], ontology_name: str, archive_path: str = ""
+) -> Optional[str]:
+    """Choose the ontology file from an archive's members.
+
+    Several BioPortal submissions ship the ontology alongside its imports, a
+    licence, or a project file — OCRE has six members, ICPS twenty-five.
+    Refusing those outright (as this used to) loses the ontology entirely.
+
+    Size alone is not a good enough signal: ICPS ships a 340 kB ``Countries.owl``
+    next to the 126 kB ``PatientSafetyIncident.owl`` that is actually the
+    ontology. What names the subject is the archive itself. So prefer, in order:
+
+    1. a member named after the archive — ``PatientSafetyIncident.zip`` holds
+       ``PatientSafetyIncident.owl``;
+    2. a member named after the acronym — ``OCRe.zip`` holds ``OCRe.owl``;
+    3. the largest file carrying an ontology extension;
+    4. the largest file of any kind, since the extension may simply be missing
+       (BioPortal serves extensionless sources).
+
+    Ties break on name, so the choice is deterministic across runs.
+
+    Args:
+        members: ``(path, size)`` for each file in the archive, paths relative
+            to the extraction directory.
+        ontology_name: The ontology's acronym.
+        archive_path: Path to the archive, for rule 1. Optional so the rule
+            simply doesn't apply when the caller has no name to offer.
+
+    Returns:
+        The chosen member path, or None if the archive holds nothing usable.
+    """
+    def is_junk(name):
+        base = os.path.basename(name)
+        return not base or name.startswith(_JUNK_PREFIXES) or base.startswith(_JUNK_PREFIXES)
+
+    candidates = [(n, s) for n, s in members if not is_junk(n)]
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0][0]
+
+    # Largest first, then by name for a stable tie-break.
+    def rank(item):
+        name, size = item
+        return (-size, name)
+
+    def stem(name):
+        return os.path.splitext(os.path.basename(name))[0].lower()
+
+    for wanted in (_archive_stem(archive_path) if archive_path else "", ontology_name.lower()):
+        if not wanted:
+            continue
+        matches = [(n, s) for n, s in candidates if stem(n) == wanted]
+        if matches:
+            return sorted(matches, key=rank)[0][0]
+
+    ontology_files = [
+        (n, s) for n, s in candidates if os.path.splitext(n)[1].lower() in _ONTOLOGY_EXTS
+    ]
+    return sorted(ontology_files or candidates, key=rank)[0][0]
+
+
 class TransformTimeout(Exception):
     """Raised when a single ontology transform exceeds its wall-clock budget."""
+
+
+class SourceTooLarge(Exception):
+    """Raised when a decompressed source exceeds the size gate.
+
+    The downloader's gate weighs the file as served, which for a compressed
+    source says nothing useful: ROR is 14 MB gzipped and 141 MB unpacked, HGNC-NR
+    7.8 MB and 170 MB. Both are past the limit that exists to keep the runner
+    alive, and neither could be caught until decompression made them visible.
+    """
 
 
 @contextmanager
@@ -155,6 +270,7 @@ class Transformer:
         input_dir: str = "data/raw",
         output_dir: str = "data/transformed",
         timeout_min: float = PER_ONTOLOGY_TIMEOUT_MIN,
+        max_source_mb: float = MAX_SOURCE_MB,
     ) -> None:
         """Initializes the Transformer class.
 
@@ -165,6 +281,9 @@ class Transformer:
             output_dir: A string pointing to the location to write products to.
             timeout_min: Per-ontology wall-clock cap in minutes. An ontology that
                 runs longer is killed and recorded as skipped (too_slow).
+            max_source_mb: Size gate re-applied to a *decompressed* source, which
+                the downloader's gate could not weigh. Over this, the ontology is
+                recorded as skipped (too_large) instead of being handed to ROBOT.
 
         Returns:
             None.
@@ -173,6 +292,8 @@ class Transformer:
         self.output_dir = output_dir
         self.timeout_min = timeout_min
         self.timeout_sec = int(timeout_min * 60)
+        self.max_source_mb = max_source_mb
+        self.max_source_bytes = int(max_source_mb * 1024 * 1024)
 
         # If the output directory does not exist, create it
         if not os.path.exists(self.output_dir):
@@ -275,10 +396,19 @@ class Transformer:
                 )
                 success, nodecount, edgecount = False, 0, 0
                 reason = "too_slow"
+            except SourceTooLarge as e:
+                logging.warning(f"Skipping {ontology_name}: {e}.")
+                success, nodecount, edgecount = False, 0, 0
+                reason = "too_large"
 
             if not success:
-                logging.error(f"Error transforming {filepath}.")
-                strstatus = "Skipped" if reason == "too_slow" else "Failed"
+                strstatus = "Skipped" if reason in ("too_slow", "too_large") else "Failed"
+                # A deliberate skip is not an error; saying so in the log made
+                # the two indistinguishable when reading a run afterwards.
+                if strstatus == "Failed":
+                    logging.error(f"Error transforming {filepath}.")
+                else:
+                    logging.info(f"Skipped {filepath} ({reason}).")
                 nodecount = 0
                 edgecount = 0
                 if not reason:
@@ -363,6 +493,16 @@ class Transformer:
             else:
                 logging.error(f"Failed to decompress {ontology_path}")
                 return False, nodecount, edgecount
+
+            # Re-apply the size gate now that we can see the real size. The
+            # downloader weighed the compressed file, which understates a
+            # gzipped ontology by an order of magnitude.
+            unpacked = os.path.getsize(ontology_path)
+            if self.max_source_bytes and unpacked > self.max_source_bytes:
+                raise SourceTooLarge(
+                    f"{ontology_name} unpacks to {unpacked / 1024 / 1024:.1f} MB "
+                    f"(> {self.max_source_mb} MB limit)"
+                )
 
         # Remove owl:imports so ROBOT doesn't try (and fail) to fetch external
         # ontologies over the network — the dominant cause of transform errors.
@@ -454,44 +594,64 @@ class Transformer:
         return status, nodecount, edgecount
 
     def decompress(self, ontology_path: str, ontology_name: str) -> str:
-        """Decompresses a compressed ontology file.
+        """Decompresses a downloaded ontology archive.
+
+        Handles the three shapes BioPortal actually serves: a zip, a gzipped
+        tarball, and a bare gzipped file. Archives holding several members are
+        unpacked in full and the ontology is picked out of them (see
+        ``pick_ontology_member``) rather than being refused.
 
         Args:
-            ontology_path: A string of the path to the ontology file to decompress.
+            ontology_path: Path to the compressed file.
+            ontology_name: The ontology's acronym, used to name the extraction
+                directory and to recognise the ontology among several members.
 
         Returns:
-            The path to the decompressed file.
+            Path to the file to transform, or ``ontology_path`` unchanged if the
+            archive could not be decompressed — which the caller reads as failure.
         """
-        new_path = self.input_dir
-
         logging.info(f"Decompressing {ontology_path}")
+        extract_dir = os.path.join(self.input_dir, ontology_name)
+
         try:
             if ontology_path.endswith(".zip"):
                 with zipfile.ZipFile(ontology_path, "r") as zip_ref:
-                    extract_dir = os.path.join(self.input_dir, ontology_name)
-                    zip_ref.extractall(extract_dir)
-                    extracted_files = zip_ref.namelist()
-                    if len(extracted_files) == 1:
-                        new_path = os.path.join(extract_dir, extracted_files[0])
-                    else:
-                        logging.error(
-                            f"Expected one file in the zip archive, but found {len(extracted_files)}."
-                        )
-                        return ontology_path
+                    _extract_all(zip_ref, extract_dir)
+                    members = [
+                        (i.filename, i.file_size)
+                        for i in zip_ref.infolist()
+                        if not i.is_dir()
+                    ]
+            elif tarfile.is_tarfile(ontology_path):
+                # A .tar.gz (or any tarball); is_tarfile sniffs the content, so
+                # this no longer depends on the file being named .tar.gz.
+                with tarfile.open(ontology_path) as tar:
+                    _extract_all(tar, extract_dir)
+                    members = [(m.name, m.size) for m in tar.getmembers() if m.isfile()]
             elif ontology_path.endswith(".gz"):
-                with tarfile.open(ontology_path, "r:gz") as tar:
-                    extract_dir = os.path.join(self.input_dir, ontology_name)
-                    tar.extractall(extract_dir)
-                    extracted_files = tar.getnames()
-                    if len(extracted_files) == 1:
-                        new_path = os.path.join(extract_dir, extracted_files[0])
-                    else:
-                        logging.error(
-                            f"Expected one file in the tar archive, but found {len(extracted_files)}."
-                        )
-                        return ontology_path
-        except tarfile.ReadError as e:
+                # A bare gzipped ontology, not a tarball. Opening this with
+                # tarfile — as this used to — fails with "invalid header".
+                os.makedirs(extract_dir, exist_ok=True)
+                member = os.path.basename(ontology_path)[: -len(".gz")] or ontology_name
+                out_path = os.path.join(extract_dir, member)
+                with gzip.open(ontology_path, "rb") as src, open(out_path, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                members = [(member, os.path.getsize(out_path))]
+            else:
+                logging.error(f"Not a recognised archive: {ontology_path}")
+                return ontology_path
+        except (tarfile.TarError, zipfile.BadZipFile, EOFError, OSError) as e:
+            # gzip.BadGzipFile is an OSError. Whatever the archive's problem,
+            # it is this ontology's failure and not the run's.
             logging.error(f"Error when decompressing {ontology_path}: {e}")
             return ontology_path
 
-        return new_path
+        chosen = pick_ontology_member(members, ontology_name, ontology_path)
+        if chosen is None:
+            logging.error(f"No ontology file found inside {ontology_path} ({len(members)} members).")
+            return ontology_path
+        if len(members) > 1:
+            logging.info(
+                f"{ontology_name}: chose {chosen} from {len(members)} archive members."
+            )
+        return os.path.join(extract_dir, chosen)
