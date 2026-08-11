@@ -16,7 +16,12 @@ from kgx.transformer import Transformer as KGXTransformer
 
 from kg_bioportal.config import LICENSE_RESTRICTED_REASON, PER_ONTOLOGY_TIMEOUT_MIN
 from kg_bioportal.downloader import DOWNLOAD_REPORT_NAME, ONTOLOGY_LIST_NAME
+from kg_bioportal.kgx_patches import patch_mixed_type_sorting
 from kg_bioportal.robot_utils import initialize_robot, robot_convert, robot_relax
+
+# Applied at import so it is in place for any use of the KGX transform, not just
+# the ones that go through Transformer. See kgx_patches for what and why.
+patch_mixed_type_sorting()
 
 # TODO: Don't repeat steps if the products already exist
 # TODO: Fix KGX hijacking logging
