@@ -268,7 +268,15 @@ def download(
     type=float,
     help="Per-ontology wall-clock cap in minutes; slower transforms are skipped.",
 )
-def transform(input_dir, output_dir, compress, timeout_min) -> None:
+@click.option(
+    "--max_source_mb",
+    default=MAX_SOURCE_MB,
+    show_default=True,
+    type=float,
+    help="Skip an ontology whose decompressed source exceeds this many MB. "
+    "The download-time gate can only weigh the compressed file.",
+)
+def transform(input_dir, output_dir, compress, timeout_min, max_source_mb) -> None:
     """Transforms all ontologies in the input directory to KGX nodes and edges.
 
     Yields two log files: total_stats.yaml and onto_stats.yaml.
@@ -285,7 +293,10 @@ def transform(input_dir, output_dir, compress, timeout_min) -> None:
     """
 
     tx = Transformer(
-        input_dir=input_dir, output_dir=output_dir, timeout_min=timeout_min
+        input_dir=input_dir,
+        output_dir=output_dir,
+        timeout_min=timeout_min,
+        max_source_mb=max_source_mb,
     )
 
     tx.transform_all(compress=compress)

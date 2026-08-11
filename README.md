@@ -54,8 +54,10 @@ the stats with a reason, rather than failing the build:
 - **`skiplist`** — a known giant, skipped up front with no download attempt
   (e.g. NCBITAXON, SNOMEDCT, RXNORM, GAZ, PR, NCIT, …). See `KNOWN_GIANTS` in
   [`src/kg_bioportal/config.py`](src/kg_bioportal/config.py).
-- **`too_large`** — the downloaded source exceeded the size gate
-  (`--max_source_mb`, default 100 MB).
+- **`too_large`** — the source exceeded the size gate (`--max_source_mb`,
+  default 100 MB). Checked twice: on the file as downloaded, and again after
+  decompression, since a gzipped source understates its real size by an order
+  of magnitude (ROR is 14 MB gzipped and 135 MB unpacked).
 - **`too_slow`** — the transform exceeded the per-ontology wall-clock cap
   (`--timeout_min`, default 30 min).
 

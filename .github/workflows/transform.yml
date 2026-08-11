@@ -129,7 +129,7 @@ jobs:
         env:
           NCBO_API_KEY: ${{ secrets.NCBO_API_KEY }}
       - name: Transform shard
-        run: kgbioportal -v transform -i data/raw -o data/transformed --timeout_min "$TIMEOUT_MIN"
+        run: kgbioportal -v transform -i data/raw -o data/transformed --timeout_min "$TIMEOUT_MIN" --max_source_mb "$MAX_SOURCE_MB"
         env:
           ROBOT_JAVA_ARGS: "-Xmx13g -XX:+UseG1GC"
       - name: Upload KGX artifacts to release
