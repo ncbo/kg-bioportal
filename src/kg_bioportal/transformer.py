@@ -531,6 +531,15 @@ class Transformer:
         ):
             return False, nodecount, edgecount
 
+        # Strip imports again, this time from ROBOT's output. ROBOT keeps the
+        # owl:imports triples in what it writes, and KGX's OwlSource dereferences
+        # every one of them over the network as it parses — so a transform that
+        # got this far could still die on whatever a remote server happened to
+        # return, and an ontology that succeeded silently absorbed whatever was
+        # at those URLs that day. Stripping here makes the KGX step hermetic.
+        # ROBOT always writes RDF/XML for a .owl output, so the stripper applies.
+        kgx_input_path = strip_imports(relaxed_outpath)
+
         # Transform to KGX nodes + edges
         txr = KGXTransformer(stream=True)
         outfilename = os.path.join(workdir, f"{ontology_name}")
@@ -538,7 +547,7 @@ class Transformer:
         edgefilename = outfilename + "_edges.tsv"
         input_args = {
             "format": "owl",
-            "filename": [relaxed_outpath],
+            "filename": [kgx_input_path],
         }
         output_args = {
             "format": "tsv",
@@ -579,7 +588,7 @@ class Transformer:
 
             # Remove the owl files
             # They may not exist if the transform failed
-            for path in (owl_output_path, relaxed_outpath):
+            for path in (owl_output_path, relaxed_outpath, kgx_input_path):
                 try:
                     os.remove(path)
                 except OSError:
