@@ -94,6 +94,77 @@ def strip_imports(path: str) -> str:
     return new_path
 
 
+# An xml:lang attribute in either XML serialization, single- or double-quoted.
+_XML_LANG_ATTR = re.compile(r"""\s+xml:lang\s*=\s*(["'])(.*?)\1""", re.S)
+
+# What counts as a language tag. This is rdflib 7's own rule (term.py,
+# _lang_tag_regex) rather than the stricter BCP 47 shape, which caps each subtag
+# at eight characters: rdflib is the only consumer of the file we sanitize, so
+# matching its rule exactly strips every tag that would abort the parse and not
+# one more. A tag like "portuguese" is not BCP 47, but rdflib accepts it and the
+# ontologies carrying it build today.
+_LANG_TAG_SHAPE = re.compile(r"^[a-zA-Z]+(?:-[a-zA-Z0-9]+)*$")
+
+
+def strip_invalid_lang_tags(path: str, ontology_name: str = "") -> str:
+    """Drop xml:lang attributes whose values aren't language tags.
+
+    rdflib validates the language tag on every Literal it builds and raises
+    rather than warning, so a single bogus ``xml:lang`` anywhere in the file
+    aborts the entire KGX parse and loses the ontology (#140). Nothing on the
+    BioPortal side validates these, and the values seen in the wild are not near
+    misses — an email domain, a Medium article slug — so there is nothing to
+    repair. Dropping the attribute keeps the literal, untagged.
+
+    An empty ``xml:lang=""`` is left alone: in XML that resets the language
+    inherited from an ancestor element, and rdflib reads it as no tag at all.
+
+    Args:
+        path: Path to an RDF/XML or OWL/XML ontology file.
+        ontology_name: Acronym, used only to make the log line actionable.
+
+    Returns:
+        Path to use for the transform (cleaned copy, or the original).
+    """
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    except OSError as e:
+        logging.warning(f"Could not read {path} to check language tags: {e}")
+        return path
+
+    if "xml:lang" not in text:
+        return path
+
+    removed: List[str] = []
+
+    def drop_if_invalid(match: "re.Match") -> str:
+        value = match.group(2)
+        if value == "" or _LANG_TAG_SHAPE.match(value):
+            return match.group(0)
+        removed.append(value)
+        return ""
+
+    cleaned = _XML_LANG_ATTR.sub(drop_if_invalid, text)
+    if not removed:
+        return path
+
+    base, ext = os.path.splitext(path)
+    new_path = f"{base}_langfix{ext or '.owl'}"
+    with open(new_path, "w", encoding="utf-8") as f:
+        f.write(cleaned)
+
+    # One line per distinct value, not per occurrence: these repeat in the
+    # hundreds. Named loudly enough to report back to the ontology's maintainers.
+    label = ontology_name or os.path.basename(path)
+    for value in sorted(set(removed)):
+        logging.warning(
+            f"{label}: removed invalid xml:lang={value!r} "
+            f"({removed.count(value)} occurrence(s)); rdflib rejects it as a language tag."
+        )
+    return new_path
+
+
 def summarize(onto_log: dict) -> dict:
     """Roll a per-ontology log up into the fields of total_stats.yaml.
 
@@ -538,7 +609,12 @@ class Transformer:
         # return, and an ontology that succeeded silently absorbed whatever was
         # at those URLs that day. Stripping here makes the KGX step hermetic.
         # ROBOT always writes RDF/XML for a .owl output, so the stripper applies.
-        kgx_input_path = strip_imports(relaxed_outpath)
+        stripped_path = strip_imports(relaxed_outpath)
+
+        # Same pass, same reason: rdflib raises on an invalid xml:lang instead of
+        # warning, so one typo'd attribute in the source takes the whole ontology
+        # down at parse time. By here the file is always RDF/XML from ROBOT.
+        kgx_input_path = strip_invalid_lang_tags(stripped_path, ontology_name)
 
         # Transform to KGX nodes + edges
         txr = KGXTransformer(stream=True)
@@ -588,7 +664,12 @@ class Transformer:
 
             # Remove the owl files
             # They may not exist if the transform failed
-            for path in (owl_output_path, relaxed_outpath, kgx_input_path):
+            for path in (
+                owl_output_path,
+                relaxed_outpath,
+                stripped_path,
+                kgx_input_path,
+            ):
                 try:
                     os.remove(path)
                 except OSError:
