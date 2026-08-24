@@ -712,6 +712,95 @@ _SERIALIZATION_ERRORS = (
 FALLBACK_SERIALIZATION = ".ttl"
 
 
+# ROBOT errors that mean the file could not be read at all -- not that some
+# step went wrong with it. When convert says this, the file is the source
+# exactly as BioPortal served it, and nothing on our side will change the
+# outcome (#142). The same words from relax are about our own intermediate
+# (#141), which is why only the convert stage consults this.
+_LOAD_FAILURE_MARKERS = (
+    "INVALID ONTOLOGY FILE ERROR",
+    "Could not load a valid ontology",
+    "UnparsableOntologyException",
+)
+
+# The onto_stats reason for those, so they stop sitting in the same bucket as
+# failures we can do something about.
+INVALID_SOURCE_REASON = "invalid_source"
+
+# Ceiling on the syntax check below. It runs only for an ontology that has
+# already failed, but rdflib holds the whole graph in memory and the per-
+# ontology deadline is still ticking, so a giant source is reported unchecked
+# rather than risking the diagnosis turning into a timeout.
+MAX_SYNTAX_CHECK_MB = 25
+
+# rdflib format for each serialization the sniffer recognizes. OBO is not RDF,
+# so there is nothing rdflib can say about it.
+_RDFLIB_FORMATS = {"xml": "xml", "turtle": "turtle"}
+
+# An HTML document arriving under an ontology's name -- an error page served in
+# place of the file. Worth naming outright: rdflib's RDF/XML parser reads
+# arbitrary XML, so it will happily report "valid XML, 3 triples" for a 404 page
+# and the diagnosis would reassure where it should not.
+_HTML_DOCUMENT = re.compile(r"^\s*(?:<!doctype\s+html|<html[\s>])", re.I)
+
+
+def is_load_failure(error: str) -> bool:
+    """Whether ROBOT could not read the file at all, as opposed to failing over it."""
+    return any(marker in error for marker in _LOAD_FAILURE_MARKERS)
+
+
+def diagnose_source(path: str, max_mb: float = MAX_SYNTAX_CHECK_MB) -> str:
+    """Say why a source ROBOT refused is unusable, in terms someone can act on.
+
+    ROBOT reports the same thing for a file that is not valid RDF and for one
+    that is valid RDF it will not accept as an ontology, and #142 wants those
+    told apart: the first is a bug report to the ontology's maintainers, with a
+    line number; the second is a file that might yet be readable another way.
+    rdflib answers the question directly, and it is already a dependency.
+
+    Returns:
+        A phrase to append to the recorded detail, or "" when nothing can be
+        said (an unrecognized serialization, a file too large to check, or
+        rdflib itself failing for an unrelated reason).
+    """
+    try:
+        size_mb = os.path.getsize(path) / 1024 / 1024
+    except OSError:
+        return ""
+    if max_mb and size_mb > max_mb:
+        return f"source not syntax-checked ({size_mb:.1f} MB)"
+
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    except OSError:
+        return ""
+
+    if _HTML_DOCUMENT.match(text[:4096].lstrip("\ufeff")):
+        return "source is an HTML document, not an ontology"
+
+    rdflib_format = _RDFLIB_FORMATS.get(_sniff_serialization(text) or "")
+    if not rdflib_format:
+        return "source is not an RDF serialization we can check"
+
+    try:
+        import rdflib
+    except ImportError:  # pragma: no cover - rdflib ships with kgx
+        return ""
+
+    graph = rdflib.Graph()
+    try:
+        graph.parse(path, format=rdflib_format)
+    except Exception as e:
+        # The line and column live in the message; they are what an upstream
+        # report needs, so keep the message rather than just the type.
+        return f"source is not valid {rdflib_format}: {type(e).__name__}: {e}"
+    return (
+        f"source is valid {rdflib_format} ({len(graph)} triples) that ROBOT "
+        "will not load as an ontology"
+    )
+
+
 def is_serialization_failure(error: str) -> bool:
     """Whether a ROBOT error is the output format's fault rather than the input's."""
     return any(marker in error for marker in _SERIALIZATION_ERRORS)
@@ -749,10 +838,16 @@ class TransformOutcome(NamedTuple):
     edgecount: int = 0
     stage: str = ""
     detail: str = ""
+    # Set only when the stage does not describe the failure: a source ROBOT
+    # cannot load is not "the convert step went wrong", it is a file we were
+    # never going to be able to transform (#142).
+    reason: str = ""
 
     @classmethod
-    def failed(cls, stage: str, detail: str = "") -> "TransformOutcome":
-        return cls(False, 0, 0, stage, summarize_detail(detail))
+    def failed(
+        cls, stage: str, detail: str = "", reason: str = ""
+    ) -> "TransformOutcome":
+        return cls(False, 0, 0, stage, summarize_detail(detail), reason)
 
 
 def summarize_detail(text: str, limit: int = MAX_DETAIL_CHARS) -> str:
@@ -962,7 +1057,7 @@ class Transformer:
                 if not reason:
                     # Name the stage that lost it, so the next audit is a grep of
                     # onto_stats.yaml rather than an archaeology of expiring logs.
-                    reason = reason_for_stage(outcome.stage)
+                    reason = outcome.reason or reason_for_stage(outcome.stage)
                     detail = outcome.detail
             else:
                 logging.info(f"Transformed {filepath}.")
@@ -1092,6 +1187,18 @@ class Transformer:
             )
             converted = convert_to(intermediate_path)
         if not converted:
+            if is_load_failure(converted.error):
+                # convert's input is the source as BioPortal served it, so this
+                # is a file we were never going to transform. Say which kind of
+                # unusable it is, and record it apart from the failures that are
+                # ours to fix (#142).
+                diagnosis = diagnose_source(ontology_path)
+                logging.error(f"{ontology_name}: unusable source. {diagnosis}")
+                return TransformOutcome.failed(
+                    "convert",
+                    f"{converted.error} ({diagnosis})" if diagnosis else converted.error,
+                    reason=INVALID_SOURCE_REASON,
+                )
             return TransformOutcome.failed("convert", converted.error)
 
         # ROBOT can write a character into its own output that no XML parser will

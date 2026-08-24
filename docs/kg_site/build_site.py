@@ -189,6 +189,9 @@ REASON_MSG = {
                              "step).",
     "transform_error_kgx": "The ontology converted, but the KGX step failed to turn it into nodes "
                            "and edges.",
+    "invalid_source": "The source file BioPortal serves for this ontology cannot be read as an "
+                      "ontology at all — it is malformed, or it is not the kind of file it claims "
+                      "to be. Nothing on this side can fix it; it needs correcting at the source.",
     "not_downloadable": "No downloadable source is currently available from BioPortal.",
     "license_restricted": "This ontology is only available under a license we do not hold "
                           "(typically a UMLS licence), so BioPortal does not serve its source "

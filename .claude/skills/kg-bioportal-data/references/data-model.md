@@ -44,8 +44,13 @@ ontologies:
   name: AGRonomy Ontology # human name from BioPortal
   version: '2023-08-14'   # BioPortal submission version string ('NA' if none)
   status: OK              # OK | Failed | Skipped
-  reason: ''              # why non-OK: transform_error_<stage> | too_large |
-                          #   too_slow | skiplist | not_downloadable | no_submission.
+  reason: ''              # why non-OK: transform_error_<stage> | invalid_source |
+                          #   too_large | too_slow | skiplist | not_downloadable |
+                          #   no_submission.
+                          #   invalid_source: the file BioPortal serves cannot be read
+                          #   as an ontology at all; `detail` says whether it is broken
+                          #   RDF (with the parse error) or valid RDF that ROBOT will
+                          #   not load. Not fixable on this side.
                           #   <stage> is decompress | convert | relax | kgx — which
                           #   step lost the ontology. Entries from runs before this
                           #   was recorded carry a bare `transform_error`.
