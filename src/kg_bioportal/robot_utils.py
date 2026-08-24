@@ -58,6 +58,24 @@ _THROWABLE = re.compile(r"\b[\w.$]*(?:Exception|Error|ERROR)\b")
 _MAX_ERROR_LINES = 200
 
 
+def _output_written(output_path: str) -> str:
+    """Why a ROBOT command's output is unusable, or "" if it is fine.
+
+    A command that exits 0 having written nothing is not a success, and saying
+    so here keeps the blame with the step that produced the file rather than the
+    next one to read it (#141). It is not hypothetical that the next step would
+    swallow it: ROBOT reads a zero-byte file as a valid *empty* ontology, so an
+    empty intermediate transforms all the way to a graph with nothing in it.
+    """
+    if not os.path.exists(output_path):
+        return (f"ROBOT exited cleanly but wrote no output file "
+                f"({os.path.basename(output_path)})")
+    if os.path.getsize(output_path) == 0:
+        return (f"ROBOT exited cleanly but wrote an empty output file "
+                f"({os.path.basename(output_path)})")
+    return ""
+
+
 def _error_text(e: Exception) -> str:
     """The line of a ROBOT failure worth keeping.
 
@@ -162,6 +180,10 @@ def robot_relax(
             _timeout=timeout,
         )
         logging.info("Complete.")
+        unusable = _output_written(output_path)
+        if unusable:
+            logging.error(unusable)
+            return RobotResult(False, unusable)
         return RobotResult(True)
     # SignalException subclasses ErrorReturnCode, so it has to be caught first
     # or a kill reads as an ordinary nonzero exit and reports a stderr that a
@@ -215,6 +237,10 @@ def robot_convert(
             _timeout=timeout,
         )
         logging.info("Complete.")
+        unusable = _output_written(output_path)
+        if unusable:
+            logging.error(unusable)
+            return RobotResult(False, unusable)
         return RobotResult(True)
     # SignalException subclasses ErrorReturnCode, so it has to be caught first
     # or a kill reads as an ordinary nonzero exit and reports a stderr that a
