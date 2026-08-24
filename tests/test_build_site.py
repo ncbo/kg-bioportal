@@ -30,7 +30,7 @@ class TestReasonMessages(TestCase):
     REASONS = [
         "too_large", "too_slow", "skiplist", "transform_error",
         "transform_error_decompress", "transform_error_convert",
-        "transform_error_relax", "transform_error_kgx",
+        "transform_error_relax", "transform_error_kgx", "invalid_source",
         "not_downloadable", "license_restricted", "no_download_file",
         "download_http_error", "no_submission", "metadata_http_error",
         "download_error",
