@@ -168,6 +168,7 @@ def onto_to_item(o, transform_date):
         "bioportal_url": f"{BP}/ontologies/{oid}",
         "submission_id": o.get("submission_id", "NA"),
         "reason": o.get("reason", ""), "detail": o.get("detail", ""),
+        "malformed_literals": o.get("malformed_literals", 0),
         "transform_date": transform_date or "",
     }
 
@@ -975,6 +976,13 @@ def render_ontology_resource(it):
     # is the difference between "it failed" and knowing what to fix.
     if not ok and it.get("detail"):
         detail_rows.append(drow("Detail", f'<span class="mono">{esc(it["detail"])}</span>'))
+    # A data-quality fact about the source, not a problem with the transform:
+    # literals whose lexical form does not match the datatype they declare.
+    if it.get("malformed_literals"):
+        detail_rows.append(drow(
+            "Malformed literals",
+            f'{commafy(it["malformed_literals"])} <span class="muted">'
+            "(lexical form does not match the declared datatype; kept as written)</span>"))
     detail_rows += [
         drow("Version", esc(ver or "—")),
         drow("Submission", f'<span class="mono">{esc(sub)}</span>'),

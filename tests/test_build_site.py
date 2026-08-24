@@ -110,6 +110,23 @@ class TestFailureDetail(TestCase):
         self.assertNotIn("<http://x/y>", html)
         self.assertIn("&lt;http://x/y&gt;", html)
 
+    def test_malformed_literal_counts_are_shown(self):
+        html = bs.render_ontology_resource(item(
+            "BDPM", "OK", nodecount=41274, edgecount=253806,
+            malformed_literals=36710))
+        self.assertIn("Malformed literals", html)
+        self.assertIn("36,710", html)
+
+    def test_the_literal_count_is_not_presented_as_a_failure(self):
+        # The graph is fine; the values are kept as written.
+        html = bs.render_ontology_resource(item(
+            "BDPM", "OK", nodecount=1, edgecount=1, malformed_literals=5))
+        self.assertIn("kept as written", html)
+
+    def test_an_ontology_with_no_bad_literals_shows_no_such_row(self):
+        html = bs.render_ontology_resource(item("AGRO", "OK", nodecount=5, edgecount=6))
+        self.assertNotIn("Malformed literals", html)
+
     def test_an_ok_ontology_shows_no_detail_row(self):
         html = bs.render_ontology_resource(item("AGRO", "OK", nodecount=5, edgecount=6))
         self.assertNotIn(">Detail<", html)
