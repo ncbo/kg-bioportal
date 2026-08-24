@@ -16,6 +16,7 @@ from typing import Any, Callable, Iterable, List, Optional
 _mixed_type_sorts = 0
 
 _patched = False
+_owl_format_patched = False
 
 
 def mixed_type_sort_count() -> int:
@@ -80,4 +81,69 @@ def patch_mixed_type_sorting() -> bool:
     kgx_utils.sorted = _safe_sorted
     _patched = True
     logging.debug("Patched kgx.utils.kgx_utils.sorted for mixed-type property values.")
+    return True
+
+
+def owl_source_format(filename: str, requested: Optional[str]) -> str:
+    """The rdflib format KGX should read ``filename`` with.
+
+    ``OwlSource.parse`` maps its default format ("owl") straight to "xml", so
+    KGX reads every file as RDF/XML whatever it actually is. That is fine until
+    RDF/XML cannot hold the ontology: three ontologies cannot be serialized to
+    it at all (#139), so their intermediate is Turtle, and KGX then tries to
+    read Turtle with an XML parser.
+
+    Resolving the format from the file name instead is a no-op for everything
+    that works today -- rdflib's own ``guess_format`` maps .owl to "xml", which
+    is exactly what the hardcoded value says -- and correct for the rest.
+
+    Args:
+        filename: The file KGX is about to parse.
+        requested: The format KGX was asked for; "owl" or None mean "work it out".
+
+    Returns:
+        An rdflib format name.
+    """
+    if requested not in (None, "owl"):
+        return requested  # an explicit format the caller meant; leave it alone
+
+    import rdflib.util
+
+    return rdflib.util.guess_format(filename) or "xml"
+
+
+def patch_owl_source_format() -> bool:
+    """Make KGX's OwlSource read a file in the format the file is actually in.
+
+    Wraps ``OwlSource.parse`` rather than reimplementing it: the format is
+    resolved on the way in, and everything else stays KGX's code, so the patch
+    holds across KGX versions and stops mattering once upstream stops hardcoding
+    the format.
+
+    Returns:
+        True if the patch was applied, False if it was already in place.
+    """
+    global _owl_format_patched
+    if _owl_format_patched:
+        return False
+
+    try:
+        from kgx.source.owl_source import OwlSource
+    except ImportError as e:
+        # A patch that cannot be applied has to leave the pipeline exactly as it
+        # found it. Raising here would run at import of the transformer and cost
+        # every ontology, to fix three.
+        logging.warning(f"Could not patch KGX's OwlSource format handling: {e}")
+        return False
+
+    original_parse = OwlSource.parse
+
+    def parse(self, filename: str, format: str = "owl", **kwargs: Any):
+        return original_parse(
+            self, filename, format=owl_source_format(filename, format), **kwargs
+        )
+
+    OwlSource.parse = parse
+    _owl_format_patched = True
+    logging.debug("Patched kgx.source.OwlSource.parse to honour the file's format.")
     return True

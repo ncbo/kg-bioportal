@@ -22,12 +22,13 @@ from kg_bioportal.config import (
     PER_ONTOLOGY_TIMEOUT_MIN,
 )
 from kg_bioportal.downloader import DOWNLOAD_REPORT_NAME, ONTOLOGY_LIST_NAME
-from kg_bioportal.kgx_patches import patch_mixed_type_sorting
+from kg_bioportal.kgx_patches import patch_mixed_type_sorting, patch_owl_source_format
 from kg_bioportal.robot_utils import initialize_robot, robot_convert, robot_relax
 
 # Applied at import so it is in place for any use of the KGX transform, not just
 # the ones that go through Transformer. See kgx_patches for what and why.
 patch_mixed_type_sorting()
+patch_owl_source_format()
 
 # TODO: Don't repeat steps if the products already exist
 # TODO: Fix KGX hijacking logging
@@ -694,6 +695,28 @@ def pick_ontology_member(
     return sorted(ontology_files or candidates, key=rank)[0][0]
 
 
+# ROBOT errors that mean "the ontology loaded, but this serialization cannot
+# express it". The source is fine; RDF/XML is the problem -- most often an IRI
+# whose local part is not a legal XML element name, which RDF/XML has no way to
+# write. Both spellings ROBOT uses are here: it reports the failure to save as
+# ONTOLOGY STORAGE ERROR, and the offending IRI as INVALID ELEMENT ERROR.
+_SERIALIZATION_ERRORS = (
+    "ONTOLOGY STORAGE ERROR",
+    "INVALID ELEMENT ERROR",
+    "OWLOntologyStorageException",
+)
+
+# What to write instead when RDF/XML cannot hold the ontology. Turtle can write
+# any IRI (it falls back to <...>), and stays RDF all the way to the KGX step --
+# where OWL functional syntax would only move the same wall one step later.
+FALLBACK_SERIALIZATION = ".ttl"
+
+
+def is_serialization_failure(error: str) -> bool:
+    """Whether a ROBOT error is the output format's fault rather than the input's."""
+    return any(marker in error for marker in _SERIALIZATION_ERRORS)
+
+
 # How much of a failure message to keep in the stats. Long enough for a ROBOT
 # exception with its cause chain, short enough that onto_stats.yaml stays
 # readable with a few hundred failures in it.
@@ -1045,29 +1068,70 @@ class Transformer:
         ontology_path = strip_imports(ontology_path)
 
         # Convert
-        converted = robot_convert(
-            robot_path=self.robot_path,
-            input_path=ontology_path,
-            output_path=owl_output_path,
-            robot_env=self.robot_env,
-            timeout=self.timeout_sec,
-        )
+        def convert_to(output_path):
+            return robot_convert(
+                robot_path=self.robot_path,
+                input_path=ontology_path,
+                output_path=output_path,
+                robot_env=self.robot_env,
+                timeout=self.timeout_sec,
+            )
+
+        intermediate_path = owl_output_path
+        converted = convert_to(intermediate_path)
+        if not converted and is_serialization_failure(converted.error):
+            # The ontology loaded; RDF/XML just cannot write it back (#139).
+            # Nothing downstream requires this intermediate to be RDF/XML, so
+            # write the one serialization that can hold it.
+            logging.warning(
+                f"{ontology_name}: RDF/XML cannot express this ontology "
+                f"({converted.error}); retrying as {FALLBACK_SERIALIZATION}."
+            )
+            intermediate_path = os.path.join(
+                workdir, f"{ontology_name}{FALLBACK_SERIALIZATION}"
+            )
+            converted = convert_to(intermediate_path)
         if not converted:
             return TransformOutcome.failed("convert", converted.error)
 
         # ROBOT can write a character into its own output that no XML parser will
         # read back, so `relax` fails on a file `convert` exited 0 over (#141).
-        relax_input_path = strip_xml_illegal_chars(owl_output_path, ontology_name)
+        # Only XML has that problem, and only an XML file is worth rewriting for it.
+        intermediate_ext = os.path.splitext(intermediate_path)[1]
+        relax_input_path = intermediate_path
+        if intermediate_ext != FALLBACK_SERIALIZATION:
+            relax_input_path = strip_xml_illegal_chars(intermediate_path, ontology_name)
 
-        # Relax
-        relaxed_outpath = os.path.join(workdir, f"{ontology_name}_relaxed.owl")
-        relaxed = robot_relax(
-            robot_path=self.robot_path,
-            input_path=relax_input_path,
-            output_path=relaxed_outpath,
-            robot_env=self.robot_env,
-            timeout=self.timeout_sec,
+        # Relax. Its output is what KGX parses, so it keeps the serialization the
+        # ontology could actually be written in.
+        def relax_to(output_path):
+            return robot_relax(
+                robot_path=self.robot_path,
+                input_path=relax_input_path,
+                output_path=output_path,
+                robot_env=self.robot_env,
+                timeout=self.timeout_sec,
+            )
+
+        relaxed_outpath = os.path.join(
+            workdir, f"{ontology_name}_relaxed{intermediate_ext}"
         )
+        relaxed = relax_to(relaxed_outpath)
+        if (
+            not relaxed
+            and is_serialization_failure(relaxed.error)
+            and intermediate_ext != FALLBACK_SERIALIZATION
+        ):
+            # convert could write RDF/XML but relax cannot: same wall, one step
+            # later, and the same way through it.
+            logging.warning(
+                f"{ontology_name}: RDF/XML cannot express the relaxed ontology "
+                f"({relaxed.error}); retrying as {FALLBACK_SERIALIZATION}."
+            )
+            relaxed_outpath = os.path.join(
+                workdir, f"{ontology_name}_relaxed{FALLBACK_SERIALIZATION}"
+            )
+            relaxed = relax_to(relaxed_outpath)
         if not relaxed:
             return TransformOutcome.failed("relax", relaxed.error)
 
@@ -1135,7 +1199,7 @@ class Transformer:
             # Remove the owl files
             # They may not exist if the transform failed
             for path in (
-                owl_output_path,
+                intermediate_path,
                 relax_input_path,
                 relaxed_outpath,
                 stripped_path,
