@@ -44,8 +44,14 @@ ontologies:
   name: AGRonomy Ontology # human name from BioPortal
   version: '2023-08-14'   # BioPortal submission version string ('NA' if none)
   status: OK              # OK | Failed | Skipped
-  reason: ''              # why non-OK: transform_error | too_large | too_slow |
-                          #   skiplist | not_downloadable | no_submission
+  reason: ''              # why non-OK: transform_error_<stage> | too_large |
+                          #   too_slow | skiplist | not_downloadable | no_submission.
+                          #   <stage> is decompress | convert | relax | kgx — which
+                          #   step lost the ontology. Entries from runs before this
+                          #   was recorded carry a bare `transform_error`.
+  detail: ''              # non-OK entries only, and only when there is something to
+                          #   say: the message from the stage that failed, on one
+                          #   line, truncated to 500 characters
   nodecount: 5102         # 0 unless status OK
   edgecount: 8691
   submission_id: '6'      # BioPortal submission id

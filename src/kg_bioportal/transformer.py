@@ -11,7 +11,7 @@ import sys
 import tarfile
 import zipfile
 from contextlib import contextmanager
-from typing import List, Optional, Tuple
+from typing import List, NamedTuple, Optional, Tuple
 
 import yaml
 from kgx.transformer import Transformer as KGXTransformer
@@ -631,6 +631,56 @@ def pick_ontology_member(
     return sorted(ontology_files or candidates, key=rank)[0][0]
 
 
+# How much of a failure message to keep in the stats. Long enough for a ROBOT
+# exception with its cause chain, short enough that onto_stats.yaml stays
+# readable with a few hundred failures in it.
+MAX_DETAIL_CHARS = 500
+
+# Stages a transform can fail at, in the order it runs them. The reason written
+# to onto_stats is "transform_error_<stage>", so every transform failure still
+# greps as transform_error while saying which step lost the ontology (#134).
+TRANSFORM_STAGES = ("decompress", "convert", "relax", "kgx")
+
+
+def reason_for_stage(stage: str) -> str:
+    """The onto_stats ``reason`` for a transform that died at ``stage``."""
+    if stage in TRANSFORM_STAGES:
+        return f"transform_error_{stage}"
+    return "transform_error"  # a failure with no stage recorded; keep the old name
+
+
+class TransformOutcome(NamedTuple):
+    """What became of one ontology, and -- when it failed -- where and why.
+
+    Every failure used to arrive at the caller as a bare False, so the stats
+    could only record the constant "transform_error" for all of them. Auditing
+    66 failures then meant reconstructing the stage from half a million lines of
+    Actions logs, which expire (#134).
+    """
+
+    success: bool
+    nodecount: int = 0
+    edgecount: int = 0
+    stage: str = ""
+    detail: str = ""
+
+    @classmethod
+    def failed(cls, stage: str, detail: str = "") -> "TransformOutcome":
+        return cls(False, 0, 0, stage, summarize_detail(detail))
+
+
+def summarize_detail(text: str, limit: int = MAX_DETAIL_CHARS) -> str:
+    """Squash a failure message onto one line and cap its length.
+
+    These end up in a YAML field that people read; a multi-line exception or a
+    dumped stack trace makes onto_stats.yaml unusable as a summary.
+    """
+    collapsed = " ".join(str(text).split())
+    if len(collapsed) <= limit:
+        return collapsed
+    return collapsed[: limit - 3].rstrip() + "..."
+
+
 class TransformTimeout(Exception):
     """Raised when a single ontology transform exceeds its wall-clock budget."""
 
@@ -737,7 +787,8 @@ class Transformer:
         Yields two log files: total_stats.yaml and onto_stats.yaml.
         The first contains the total counts of Bioportal ontologies and transforms.
         The second contains the counts of nodes and edges for each ontology, plus
-        its status (OK / Failed / Skipped) and the reason for any skip.
+        its status (OK / Failed / Skipped), the reason for any skip or failure,
+        and -- for a failure -- a detail field carrying the message that caused it.
 
         Args:
             compress: If True, compresses the output nodes and edges to tar.gz.
@@ -794,21 +845,25 @@ class Transformer:
             ontology_name = (os.path.relpath(filepath, self.input_dir)).split(os.sep)[0]
             report_row = download_report.get(ontology_name, {})
             reason = ""
+            detail = ""
             try:
                 with deadline(self.timeout_sec):
-                    success, nodecount, edgecount = self.transform(filepath, compress)
+                    outcome = self.transform(filepath, compress)
             except TransformTimeout:
                 logging.error(
                     f"Transform of {ontology_name} exceeded {self.timeout_min} min; skipping."
                 )
-                success, nodecount, edgecount = False, 0, 0
+                outcome = TransformOutcome(False)
                 reason = "too_slow"
+                detail = f"exceeded the per-ontology limit of {self.timeout_min} min"
             except SourceTooLarge as e:
                 logging.warning(f"Skipping {ontology_name}: {e}.")
-                success, nodecount, edgecount = False, 0, 0
+                outcome = TransformOutcome(False)
                 reason = "too_large"
+                detail = summarize_detail(e)
 
-            if not success:
+            nodecount, edgecount = outcome.nodecount, outcome.edgecount
+            if not outcome.success:
                 strstatus = "Skipped" if reason in ("too_slow", "too_large") else "Failed"
                 # A deliberate skip is not an error; saying so in the log made
                 # the two indistinguishable when reading a run afterwards.
@@ -819,12 +874,15 @@ class Transformer:
                 nodecount = 0
                 edgecount = 0
                 if not reason:
-                    reason = "transform_error"
+                    # Name the stage that lost it, so the next audit is a grep of
+                    # onto_stats.yaml rather than an archaeology of expiring logs.
+                    reason = reason_for_stage(outcome.stage)
+                    detail = outcome.detail
             else:
                 logging.info(f"Transformed {filepath}.")
                 strstatus = "OK"
 
-            onto_log[ontology_name] = {
+            entry = {
                 "status": strstatus,
                 "reason": reason,
                 "name": report_row.get("name", ""),
@@ -834,6 +892,11 @@ class Transformer:
                 "submission_id": report_row.get("submission_id", "NA"),
                 "source_bytes": int(report_row.get("source_bytes") or 0),
             }
+            # Only failures have anything to explain; an empty field on every OK
+            # entry would be a thousand lines of noise in the index.
+            if detail:
+                entry["detail"] = detail
+            onto_log[ontology_name] = entry
 
         # Write total stats to a yaml
         logging.info("Writing total stats to total_stats.yaml.")
@@ -854,7 +917,7 @@ class Transformer:
 
         return None
 
-    def transform(self, ontology_path: str, compress: bool) -> Tuple[bool, int, int]:
+    def transform(self, ontology_path: str, compress: bool) -> TransformOutcome:
         """Transforms a single ontology to KGX nodes and edges.
 
         The compressed product is written flat as ``<output_dir>/<ACRONYM>.tar.gz``
@@ -865,12 +928,10 @@ class Transformer:
             compress: If True, compresses the output nodes and edges to tar.gz.
 
         Returns:
-            Tuple of:
-                True if transform was successful, otherwise False.
-                Number of nodes in the ontology.
-                Number of edges in the ontology.
+            A TransformOutcome: whether it succeeded, the node and edge counts,
+            and for a failure the stage it died at and the message that stage
+            gave, so the stats can say more than "transform_error".
         """
-        status = False
         nodecount = 0
         edgecount = 0
 
@@ -899,7 +960,10 @@ class Transformer:
                 ontology_path = new_path
             else:
                 logging.error(f"Failed to decompress {ontology_path}")
-                return False, nodecount, edgecount
+                return TransformOutcome.failed(
+                    "decompress",
+                    f"could not decompress {os.path.basename(ontology_path)}",
+                )
 
             # Re-apply the size gate now that we can see the real size. The
             # downloader weighed the compressed file, which understates a
@@ -918,25 +982,27 @@ class Transformer:
         ontology_path = strip_imports(ontology_path)
 
         # Convert
-        if not robot_convert(
+        converted = robot_convert(
             robot_path=self.robot_path,
             input_path=ontology_path,
             output_path=owl_output_path,
             robot_env=self.robot_env,
             timeout=self.timeout_sec,
-        ):
-            return False, nodecount, edgecount
+        )
+        if not converted:
+            return TransformOutcome.failed("convert", converted.error)
 
         # Relax
         relaxed_outpath = os.path.join(workdir, f"{ontology_name}_relaxed.owl")
-        if not robot_relax(
+        relaxed = robot_relax(
             robot_path=self.robot_path,
             input_path=owl_output_path,
             output_path=relaxed_outpath,
             robot_env=self.robot_env,
             timeout=self.timeout_sec,
-        ):
-            return False, nodecount, edgecount
+        )
+        if not relaxed:
+            return TransformOutcome.failed("relax", relaxed.error)
 
         # Strip imports again, this time from ROBOT's output. ROBOT keeps the
         # owl:imports triples in what it writes, and KGX's OwlSource dereferences
@@ -953,7 +1019,6 @@ class Transformer:
         kgx_input_path = strip_invalid_lang_tags(stripped_path, ontology_name)
 
         # Transform to KGX nodes + edges
-        txr = KGXTransformer(stream=True)
         outfilename = os.path.join(workdir, f"{ontology_name}")
         nodefilename = outfilename + "_nodes.tsv"
         edgefilename = outfilename + "_edges.tsv"
@@ -968,7 +1033,11 @@ class Transformer:
             "aggregator_knowledge_source": "infores:bioportal",
         }
         logging.info("Doing KGX transform.")
+        # Constructing the transformer is inside the try as well: it is part of
+        # the KGX stage, and an exception raised out here would take down the
+        # whole shard instead of costing one ontology.
         try:
+            txr = KGXTransformer(stream=True)
             txr.transform(
                 input_args=input_args,
                 output_args=output_args,
@@ -976,8 +1045,6 @@ class Transformer:
             logging.info(
                 f"Nodes and edges written to {nodefilename} and {edgefilename}."
             )
-            status = True
-
             # Get length of nodefile
             with open(nodefilename, "r") as f:
                 nodecount = len(f.readlines()) - 1
@@ -1015,9 +1082,11 @@ class Transformer:
             logging.error(
                 f"Error transforming {ontology_name} to KGX nodes and edges: {e}"
             )
-            return False, nodecount, edgecount
+            # The exception type carries as much as its message does when the
+            # message is empty, which some of KGX's are.
+            return TransformOutcome.failed("kgx", f"{type(e).__name__}: {e}")
 
-        return status, nodecount, edgecount
+        return TransformOutcome(True, nodecount, edgecount)
 
     def decompress(self, ontology_path: str, ontology_name: str) -> str:
         """Decompresses a downloaded ontology archive.
