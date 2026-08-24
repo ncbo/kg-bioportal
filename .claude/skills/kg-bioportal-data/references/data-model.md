@@ -57,6 +57,11 @@ ontologies:
   detail: ''              # non-OK entries only, and only when there is something to
                           #   say: the message from the stage that failed, on one
                           #   line, truncated to 500 characters
+  malformed_literals: 0   # present only when non-zero: literals whose lexical
+                          #   form does not match their declared datatype (e.g.
+                          #   xsd:dateTime '06/09/2012'). A fact about the source,
+                          #   not a transform problem -- the values are kept as
+                          #   written and the graph is unaffected.
   nodecount: 5102         # 0 unless status OK
   edgecount: 8691
   submission_id: '6'      # BioPortal submission id

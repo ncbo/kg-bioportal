@@ -842,12 +842,21 @@ class TransformOutcome(NamedTuple):
     # cannot load is not "the convert step went wrong", it is a file we were
     # never going to be able to transform (#142).
     reason: str = ""
+    # Literals whose lexical form does not match their declared datatype -- a
+    # data-quality fact about the source, counted rather than logged (#152).
+    malformed_literals: int = 0
 
     @classmethod
     def failed(
-        cls, stage: str, detail: str = "", reason: str = ""
+        cls,
+        stage: str,
+        detail: str = "",
+        reason: str = "",
+        malformed_literals: int = 0,
     ) -> "TransformOutcome":
-        return cls(False, 0, 0, stage, summarize_detail(detail), reason)
+        return cls(
+            False, 0, 0, stage, summarize_detail(detail), reason, malformed_literals
+        )
 
 
 def summarize_detail(text: str, limit: int = MAX_DETAIL_CHARS) -> str:
@@ -860,6 +869,109 @@ def summarize_detail(text: str, limit: int = MAX_DETAIL_CHARS) -> str:
     if len(collapsed) <= limit:
         return collapsed
     return collapsed[: limit - 3].rstrip() + "..."
+
+
+# rdflib logs one warning per literal whose lexical form does not match its
+# declared datatype, with exc_info, so each costs two formatted tracebacks. One
+# ontology (BDPM, which types DD/MM/YYYY dates as xsd:dateTime) produced 36,710
+# of them in a single run -- about 95% of that shard's half-million log lines,
+# burying everything else in it (#152).
+_LITERAL_WARNING = "Failed to convert Literal lexical form to value"
+
+# The datatype is in the message; the offending value is only in the exception.
+_WARNING_DATATYPE = re.compile(r"Datatype=(\S+?),")
+_QUOTED_VALUE = re.compile(r"'([^']*)'")
+
+# Namespaces worth abbreviating in the summary line. XSD is essentially all of
+# them in practice, since it owns the datatypes with lexical rules.
+_DATATYPE_PREFIXES = {
+    "http://www.w3.org/2001/XMLSchema#": "xsd:",
+    "http://www.w3.org/1999/02/22-rdf-syntax-ns#": "rdf:",
+}
+
+
+def abbreviate_datatype(iri: str) -> str:
+    """``...XMLSchema#dateTime`` -> ``xsd:dateTime``, for a readable summary."""
+    for namespace, prefix in _DATATYPE_PREFIXES.items():
+        if iri.startswith(namespace):
+            return prefix + iri[len(namespace):]
+    return iri
+
+
+class LiteralConversionTally(logging.Filter):
+    """Counts rdflib's per-literal warnings instead of letting them print.
+
+    "This ontology has 36,710 literals whose lexical form does not match their
+    declared datatype" is a real fact about the source. Emitted once with a
+    count it is information; emitted 36,710 times with tracebacks it is noise
+    that hides every other line in the run -- and costs real time to format.
+
+    Only that one message is intercepted. Anything else rdflib's term logger has
+    to say still comes through.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.count = 0
+        self.by_datatype: dict = {}
+        self.example = ""
+
+    def filter(self, record: "logging.LogRecord") -> bool:
+        if record.levelno < logging.WARNING:
+            return True
+        try:
+            message = record.getMessage()
+        except Exception:  # a record we cannot even format is not ours to judge
+            return True
+        if _LITERAL_WARNING not in message:
+            return True
+
+        self.count += 1
+        match = _WARNING_DATATYPE.search(message)
+        datatype = abbreviate_datatype(match.group(1)) if match else "(no datatype)"
+        self.by_datatype[datatype] = self.by_datatype.get(datatype, 0) + 1
+        if not self.example:
+            self.example = self._describe(datatype, record)
+        return False  # counted; do not emit
+
+    @staticmethod
+    def _describe(datatype: str, record: "logging.LogRecord") -> str:
+        """One example, for a summary that names the actual problem."""
+        exception = record.exc_info[1] if record.exc_info else None
+        while exception is not None:
+            quoted = _QUOTED_VALUE.search(str(exception))
+            if quoted:
+                return f"{datatype} {quoted.group(0)}"
+            exception = exception.__cause__ or exception.__context__
+        return datatype
+
+    def summary(self) -> str:
+        """One line describing everything this tally swallowed."""
+        if not self.count:
+            return ""
+        worst = sorted(self.by_datatype.items(), key=lambda kv: (-kv[1], kv[0]))
+        datatypes = ", ".join(f"{name} x{n}" for name, n in worst[:3])
+        if len(worst) > 3:
+            datatypes += f", and {len(worst) - 3} more"
+        example = f" (e.g. {self.example})" if self.example else ""
+        return (
+            f"{self.count} literal(s) whose lexical form does not match their "
+            f"datatype [{datatypes}]{example}; values kept as written."
+        )
+
+    @contextmanager
+    def installed(self):
+        """Intercept the warnings for the duration of the block.
+
+        A filter on the logger itself drops the record before any handler sees
+        it, so nothing formats the tracebacks that make these expensive.
+        """
+        logger = logging.getLogger("rdflib.term")
+        logger.addFilter(self)
+        try:
+            yield self
+        finally:
+            logger.removeFilter(self)
 
 
 class TransformTimeout(Exception):
@@ -1077,6 +1189,9 @@ class Transformer:
             # entry would be a thousand lines of noise in the index.
             if detail:
                 entry["detail"] = detail
+            # Same reasoning: recorded only for the ontologies that have any.
+            if outcome.malformed_literals:
+                entry["malformed_literals"] = outcome.malformed_literals
             onto_log[ontology_name] = entry
 
         # Write total stats to a yaml
@@ -1274,15 +1389,19 @@ class Transformer:
         # Constructing the transformer is inside the try as well: it is part of
         # the KGX stage, and an exception raised out here would take down the
         # whole shard instead of costing one ontology.
+        literals = LiteralConversionTally()
         try:
-            txr = KGXTransformer(stream=True)
-            txr.transform(
-                input_args=input_args,
-                output_args=output_args,
-            )
+            with literals.installed():
+                txr = KGXTransformer(stream=True)
+                txr.transform(
+                    input_args=input_args,
+                    output_args=output_args,
+                )
             logging.info(
                 f"Nodes and edges written to {nodefilename} and {edgefilename}."
             )
+            if literals.count:
+                logging.warning(f"{ontology_name}: {literals.summary()}")
             # Get length of nodefile
             with open(nodefilename, "r") as f:
                 nodecount = len(f.readlines()) - 1
@@ -1323,9 +1442,17 @@ class Transformer:
             )
             # The exception type carries as much as its message does when the
             # message is empty, which some of KGX's are.
-            return TransformOutcome.failed("kgx", f"{type(e).__name__}: {e}")
+            if literals.count:
+                logging.warning(f"{ontology_name}: {literals.summary()}")
+            return TransformOutcome.failed(
+                "kgx",
+                f"{type(e).__name__}: {e}",
+                malformed_literals=literals.count,
+            )
 
-        return TransformOutcome(True, nodecount, edgecount)
+        return TransformOutcome(
+            True, nodecount, edgecount, malformed_literals=literals.count
+        )
 
     def decompress(self, ontology_path: str, ontology_name: str) -> str:
         """Decompresses a downloaded ontology archive.
