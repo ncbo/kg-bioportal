@@ -66,8 +66,10 @@ jobs:
         run: kgbioportal get-ontology-list -o data/raw -k "$NCBO_API_KEY"
         env:
           NCBO_API_KEY: ${{ secrets.NCBO_API_KEY }}
-      - name: Fetch the current index (for version-skip on a full run)
-        if: ${{ github.event.inputs.ontologies == '' }}
+      - name: Fetch the current index (version-skip, and the sizes shards balance on)
+        # Not just for a full run: a targeted re-run needs the source sizes too,
+        # and it is the case where an unbalanced shard hurts most -- few
+        # ontologies, few shards, one heavyweight setting the wall-clock.
         run: gh release download -p onto_stats.yaml -D prev || echo "No index yet; will transform all."
         env:
           GH_TOKEN: ${{ github.token }}
@@ -76,9 +78,13 @@ jobs:
         # Explicit ontologies input: transform exactly those (no version-skip).
         # Full list: version-skip against the current index — only new/changed
         # BioPortal submissions are (re)transformed; unchanged graphs carry forward.
+        #
+        # Both pass --index: it carries the source sizes the shards are balanced
+        # by, and version-skip applies only to the full list, so an explicit list
+        # is still transformed exactly as given.
         run: |
           if [ -n "${{ github.event.inputs.ontologies }}" ]; then
-            SHARDS=$(kgbioportal shard-list -d "${{ github.event.inputs.ontologies }}" -n "$NUM_SHARDS")
+            SHARDS=$(kgbioportal shard-list -d "${{ github.event.inputs.ontologies }}" -n "$NUM_SHARDS" --index prev/onto_stats.yaml)
           else
             SHARDS=$(kgbioportal shard-list -f data/raw/ontologylist.tsv -n "$NUM_SHARDS" --index prev/onto_stats.yaml)
           fi

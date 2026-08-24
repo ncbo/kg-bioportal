@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import statistics
 
 import click
 
@@ -70,6 +71,80 @@ def _load_index_submissions(index_path: str) -> dict:
         if sub and sub != "NA":
             out[entry["id"]] = sub
     return out
+
+
+def load_index_sizes(index_path: str) -> dict:
+    """Read {acronym: source_bytes} from an onto_stats.yaml index.
+
+    The size of an ontology's source is the best predictor of transform cost we
+    already have: in the 2026-08-11 run BDPM was 88 MB and took 328s while
+    FOODON was 40 MB and took 126s. It is a proxy, not a measurement -- if the
+    stats ever carry per-ontology durations, schedule on those instead.
+    """
+    import yaml
+
+    if not index_path or not os.path.exists(index_path):
+        return {}
+    with open(index_path) as f:
+        data = yaml.safe_load(f) or {}
+    sizes = {}
+    for entry in data.get("ontologies", []):
+        try:
+            size = int(entry.get("source_bytes") or 0)
+        except (TypeError, ValueError):
+            continue
+        if size > 0:
+            sizes[entry["id"]] = size
+    return sizes
+
+
+def assign_shards(acronyms: list, num_shards: int, sizes: dict) -> list:
+    """Split acronyms into shards of roughly equal expected cost.
+
+    Round-robin only spreads the heavy ontologies out when size is uncorrelated
+    with position, and in an alphabetical list it is not: on 2026-08-11 the four
+    largest sources sat at indices 3, 9, 15 and 21, all of which are 3 mod 6, so
+    every one of them landed in the same shard. That shard took 13m57s while the
+    lightest took 2m22s, and the run was about 2.5x longer than the work in it
+    (#153).
+
+    Longest-processing-time-first instead: heaviest ontology first, each one
+    onto whichever shard is currently lightest. Ties break on name so the same
+    input always produces the same matrix.
+
+    Without sizes there is nothing to balance on, and this falls back to the
+    round-robin it replaces rather than inventing an order.
+
+    Args:
+        acronyms: The ontologies to shard, in input order.
+        num_shards: How many shards to fill.
+        sizes: {acronym: source_bytes}; entries may be missing.
+
+    Returns:
+        A list of shards, each a list of acronyms. Empty shards are dropped.
+    """
+    n = max(1, min(num_shards, len(acronyms)))
+    buckets = [[] for _ in range(n)]
+
+    known = [sizes[a] for a in acronyms if sizes.get(a)]
+    if not known:
+        for i, acr in enumerate(acronyms):
+            buckets[i % n].append(acr)
+        return [b for b in buckets if b]
+
+    # An ontology the index has never seen is a new submission; the median of
+    # the ones we do know is a better guess than nothing, and does not let a
+    # single unknown dominate the packing the way the maximum would.
+    default = statistics.median(known)
+    weights = {a: sizes.get(a) or default for a in acronyms}
+
+    loads = [0.0] * n
+    for acr in sorted(acronyms, key=lambda a: (-weights[a], a)):
+        lightest = min(range(n), key=lambda i: (loads[i], i))
+        buckets[lightest].append(acr)
+        loads[lightest] += weights[acr]
+
+    return [b for b in buckets if b]
 
 
 @click.group()
@@ -377,13 +452,23 @@ def shard_list(ontology_file, ontologies, num_shards, use_skiplist, index_path) 
     if use_skiplist:
         acronyms = [a for a in acronyms if not is_skiplisted(a)]
 
-    # Round-robin so heavy ontologies spread across shards rather than clumping.
-    n = max(1, min(num_shards, len(acronyms)))
-    buckets = [[] for _ in range(n)]
-    for i, acr in enumerate(acronyms):
-        buckets[i % n].append(acr)
+    # Balance the shards by expected cost, so no runner sits idle while another
+    # works through every heavyweight in the run.
+    sizes = load_index_sizes(index_path)
+    buckets = assign_shards(acronyms, num_shards, sizes)
 
-    shards = [" ".join(b) for b in buckets if b]
+    if buckets and sizes:
+        loads = [
+            sum(sizes.get(a, 0) for a in b) / 1024 / 1024 for b in buckets
+        ]
+        click.echo(
+            f"sharding: {len(buckets)} shards of {min(loads):.0f}-{max(loads):.0f} MB "
+            f"(by source size; {sum(1 for a in acronyms if a not in sizes)} "
+            "unknown weighted at the median).",
+            err=True,
+        )
+
+    shards = [" ".join(b) for b in buckets]
     click.echo(json.dumps(shards))
 
     return None
