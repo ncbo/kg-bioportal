@@ -878,9 +878,46 @@ def summarize_detail(text: str, limit: int = MAX_DETAIL_CHARS) -> str:
 # burying everything else in it (#152).
 _LITERAL_WARNING = "Failed to convert Literal lexical form to value"
 
-# The datatype is in the message; the offending value is only in the exception.
+# The datatype is in the message; the offending value is in neither the message
+# nor, reliably, the exception text -- see _offending_value.
 _WARNING_DATATYPE = re.compile(r"Datatype=(\S+?),")
 _QUOTED_VALUE = re.compile(r"'([^']*)'")
+
+
+def _offending_value(record: "logging.LogRecord") -> Optional[str]:
+    """The literal rdflib could not convert, from the frame that failed.
+
+    Read out of the traceback rather than out of the exception's prose, because
+    the prose depends on which converter is installed and does not reliably put
+    the value first. rdflib's own ``_castLexicalToPython(lexical, datatype)`` is
+    the frame the exception was raised in, so its ``lexical`` is exactly the
+    value, whatever converter raised:
+
+        isodate:        "ISO 8601 time designator 'T' missing. Unable to parse
+                         datetime string '06/09/2012'"     <- 'T' comes first
+        fromisoformat:  "Invalid isoformat string: '06/09/2012'"
+
+    Falls back to the longest quoted run in the exception chain, for a future
+    rdflib that names the variable something else -- longest rather than first
+    for the same reason: 'T' is quoted too.
+    """
+    if not record.exc_info:
+        return None
+    _, exception, traceback = record.exc_info
+
+    while traceback is not None:
+        lexical = traceback.tb_frame.f_locals.get("lexical")
+        if isinstance(lexical, str):
+            return lexical
+        traceback = traceback.tb_next
+
+    best = None
+    while exception is not None:
+        for quoted in _QUOTED_VALUE.findall(str(exception)):
+            if best is None or len(quoted) > len(best):
+                best = quoted
+        exception = exception.__cause__ or exception.__context__
+    return best
 
 # Namespaces worth abbreviating in the summary line. XSD is essentially all of
 # them in practice, since it owns the datatypes with lexical rules.
@@ -937,13 +974,8 @@ class LiteralConversionTally(logging.Filter):
     @staticmethod
     def _describe(datatype: str, record: "logging.LogRecord") -> str:
         """One example, for a summary that names the actual problem."""
-        exception = record.exc_info[1] if record.exc_info else None
-        while exception is not None:
-            quoted = _QUOTED_VALUE.search(str(exception))
-            if quoted:
-                return f"{datatype} {quoted.group(0)}"
-            exception = exception.__cause__ or exception.__context__
-        return datatype
+        value = _offending_value(record)
+        return f"{datatype} {value!r}" if value is not None else datatype
 
     def summary(self) -> str:
         """One line describing everything this tally swallowed."""

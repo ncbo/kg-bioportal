@@ -27,6 +27,7 @@ from kg_bioportal.robot_utils import RobotResult
 from kg_bioportal.transformer import (
     LiteralConversionTally,
     Transformer,
+    _offending_value,
     abbreviate_datatype,
 )
 
@@ -123,6 +124,75 @@ class TestNothingIsPrinted(TestCase):
         record = logging.LogRecord(
             "rdflib.term", logging.WARNING, __file__, 1, "%d", ("not an int",), None)
         self.assertTrue(tally.filter(record))
+
+
+class TestTheExampleIsTheValue(TestCase):
+    """Which quoted string is the offending literal depends on the environment.
+
+    rdflib picks its dateTime converter from what is installed, and the two
+    phrase the failure differently:
+
+        isodate:       "ISO 8601 time designator 'T' missing. Unable to parse
+                        datetime string '06/09/2012'"
+        fromisoformat: "Invalid isoformat string: '06/09/2012'"
+
+    Taking the first quoted run gives 'T' on the isodate stack -- which is the
+    one the pipeline actually runs on. So the value is read from the frame that
+    failed, and these pin both shapes regardless of which is installed here.
+    """
+
+    def record_for(self, exception, lexical=None):
+        """A warning record like rdflib's, optionally with a real frame."""
+        def cast(lexical):  # stands in for rdflib's _castLexicalToPython
+            raise exception
+
+        try:
+            if lexical is None:
+                raise exception
+            cast(lexical)
+        except Exception:
+            import sys
+
+            return logging.LogRecord(
+                "rdflib.term", logging.WARNING, __file__, 1,
+                "Failed to convert Literal lexical form to value. "
+                "Datatype=http://www.w3.org/2001/XMLSchema#dateTime, Converter=x",
+                (), sys.exc_info())
+
+    def test_the_isodate_phrasing_does_not_yield_the_designator(self):
+        record = self.record_for(
+            ValueError("ISO 8601 time designator 'T' missing. Unable to parse "
+                       "datetime string '06/09/2012'"),
+            lexical="06/09/2012")
+        self.assertEqual(_offending_value(record), "06/09/2012")
+
+    def test_the_fromisoformat_phrasing_works_too(self):
+        record = self.record_for(
+            ValueError("Invalid isoformat string: '06/09/2012'"),
+            lexical="06/09/2012")
+        self.assertEqual(_offending_value(record), "06/09/2012")
+
+    def test_without_a_frame_the_longest_quoted_run_wins(self):
+        # The fallback, for an rdflib that names the variable something else.
+        record = self.record_for(
+            ValueError("ISO 8601 time designator 'T' missing. Unable to parse "
+                       "datetime string '06/09/2012'"))
+        self.assertEqual(_offending_value(record), "06/09/2012")
+
+    def test_a_record_with_no_exception_has_no_value(self):
+        record = logging.LogRecord(
+            "rdflib.term", logging.WARNING, __file__, 1, "msg", (), None)
+        self.assertIsNone(_offending_value(record))
+
+    def test_the_summary_survives_a_value_it_cannot_find(self):
+        tally = LiteralConversionTally()
+        record = logging.LogRecord(
+            "rdflib.term", logging.WARNING, __file__, 1,
+            "Failed to convert Literal lexical form to value. "
+            "Datatype=http://www.w3.org/2001/XMLSchema#dateTime, Converter=x",
+            (), None)
+        self.assertFalse(tally.filter(record))
+        self.assertIn("xsd:dateTime", tally.summary())
 
 
 class TestSummary(TestCase):
