@@ -430,6 +430,69 @@ def strip_imports(path: str) -> str:
     return new_path
 
 
+# XML 1.0 forbids the C0 control characters outright -- only tab, newline and
+# carriage return are allowed -- and U+FFFE / U+FFFF are never legal either.
+# Nothing escapes them: not a character reference, not CDATA. A document holding
+# one cannot be parsed, whatever wrote it.
+_XML_ILLEGAL_CHARS = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]")
+
+# The two that are whitespace by origin. A vertical tab or form feed sits
+# between words -- they arrive in definitions pasted out of PDFs -- so a space
+# keeps the text as it read; dropping it would run the words together.
+_ILLEGAL_AS_SPACE = "\x0b\x0c"
+
+
+def strip_xml_illegal_chars(path: str, ontology_name: str = "") -> str:
+    """Remove characters XML cannot represent from an ontology file.
+
+    This is what makes ``robot relax`` fail to load the file ``robot convert``
+    just wrote (#141). A control character is perfectly legal in the source: in
+    Turtle it is written as an escape (``\\u0001``), and ROBOT parses it happily.
+    On the way out, though, ROBOT unescapes it and writes the raw character into
+    RDF/XML -- ``<rdfs:label>bad\x01char</rdfs:label>`` -- which no XML parser
+    will read back. ``convert`` exits 0, and ``relax`` takes the blame for an
+    unusable intermediate it did not produce.
+
+    So this runs over ROBOT's output rather than the source: by then whatever the
+    source encoded is raw text, and it is the only point where both spellings of
+    the problem look the same.
+
+    Args:
+        path: Path to the RDF/XML ROBOT wrote.
+        ontology_name: Acronym, used only to make the log line actionable.
+
+    Returns:
+        Path to use for the next step (cleaned copy, or the original).
+    """
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    except OSError as e:
+        logging.warning(f"Could not read {path} to check for illegal characters: {e}")
+        return path
+
+    found = _XML_ILLEGAL_CHARS.findall(text)
+    if not found:
+        return path
+
+    cleaned = _XML_ILLEGAL_CHARS.sub(
+        lambda m: " " if m.group() in _ILLEGAL_AS_SPACE else "", text
+    )
+
+    base, ext = os.path.splitext(path)
+    new_path = f"{base}_xmlsafe{ext or '.owl'}"
+    with open(new_path, "w", encoding="utf-8") as f:
+        f.write(cleaned)
+
+    label = ontology_name or os.path.basename(path)
+    seen = sorted({f"U+{ord(c):04X}" for c in found})
+    logging.warning(
+        f"{label}: removed {len(found)} character(s) XML cannot represent "
+        f"({', '.join(seen)}); they would have made ROBOT's own output unreadable."
+    )
+    return new_path
+
+
 # An xml:lang attribute in either XML serialization, single- or double-quoted.
 _XML_LANG_ATTR = re.compile(r"""\s+xml:lang\s*=\s*(["'])(.*?)\1""", re.S)
 
@@ -992,11 +1055,15 @@ class Transformer:
         if not converted:
             return TransformOutcome.failed("convert", converted.error)
 
+        # ROBOT can write a character into its own output that no XML parser will
+        # read back, so `relax` fails on a file `convert` exited 0 over (#141).
+        relax_input_path = strip_xml_illegal_chars(owl_output_path, ontology_name)
+
         # Relax
         relaxed_outpath = os.path.join(workdir, f"{ontology_name}_relaxed.owl")
         relaxed = robot_relax(
             robot_path=self.robot_path,
-            input_path=owl_output_path,
+            input_path=relax_input_path,
             output_path=relaxed_outpath,
             robot_env=self.robot_env,
             timeout=self.timeout_sec,
@@ -1069,6 +1136,7 @@ class Transformer:
             # They may not exist if the transform failed
             for path in (
                 owl_output_path,
+                relax_input_path,
                 relaxed_outpath,
                 stripped_path,
                 kgx_input_path,
