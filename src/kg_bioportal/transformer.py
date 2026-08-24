@@ -38,28 +38,364 @@ patch_mixed_type_sorting()
 # Files in the input dir that are not ontologies to transform.
 _NON_ONTOLOGY_FILES = {ONTOLOGY_LIST_NAME, DOWNLOAD_REPORT_NAME}
 
-# Patterns for ontology import declarations in the two XML serializations
-# BioPortal serves most often: RDF/XML (<owl:imports .../>) and OWL/XML (<Import>...</Import>).
-_IMPORT_PATTERNS = [
-    re.compile(r"[ \t]*<owl:imports\b[^>]*/>[ \t]*\n?"),
-    re.compile(r"[ \t]*<owl:imports\b[^>]*>.*?</owl:imports>[ \t]*\n?", re.S),
-    re.compile(r"[ \t]*<(?:owl:)?Import\b[^>]*>.*?</(?:owl:)?Import>[ \t]*\n?", re.S),
-]
+_OWL_NS = "http://www.w3.org/2002/07/owl#"
+
+# How much of a file we read to decide which serialization it is. The old
+# 400-character window fell inside the <!DOCTYPE rdf:RDF [ ... ]> entity block
+# some RDF/XML sources open with, so <rdf:RDF never came into view and the file
+# was written off as "not XML we handle" (#138).
+_SNIFF_CHARS = 65536
+
+# xmlns bindings of the OWL namespace, so an ontology that binds it to anything
+# other than the conventional "owl:" is still recognized.
+_XMLNS_OWL = re.compile(
+    r"""xmlns:([A-Za-z_][\w.\-]*)\s*=\s*(["'])%s\2""" % re.escape(_OWL_NS)
+)
+
+# @prefix / PREFIX bindings of the OWL namespace in Turtle and N3. The prefix
+# label is optional: ":imports" is legal when the default prefix is owl.
+_TTL_PREFIX_OWL = re.compile(
+    r"^[ \t]*@?prefix[ \t]+([A-Za-z_][\w.\-]*)?:[ \t]*<%s>" % re.escape(_OWL_NS),
+    re.I | re.M,
+)
+
+# Turtle/N3 terms an owl:imports object can be: an IRI or a prefixed name.
+_TTL_IRI = re.compile(r"""<[^<>"{}|^`\\\s]*>""")
+_TTL_PNAME = re.compile(r"(?:[A-Za-z_][\w.\-]*)?:[\w.\-%]*")
+_TTL_NAME_CHAR = re.compile(r"[\w:.\-%]")
+
+# OBO header line: "import: http://purl.obolibrary.org/obo/po.owl".
+_OBO_IMPORT_LINE = re.compile(r"^import:[ \t][^\n]*\n?", re.M)
+_OBO_STANZA = re.compile(r"^\[", re.M)
+
+# Extension for the cleaned copy when the source has none -- BioPortal serves
+# extensionless sources (HASCO), and ROBOT infers the format from the name.
+_EXT_FOR_KIND = {"xml": ".owl", "turtle": ".ttl", "obo": ".obo"}
+
+
+def _sniff_serialization(text: str) -> Optional[str]:
+    """Which serialization a source is written in, as far as imports go.
+
+    Extension is not consulted: BioPortal serves ``.owl`` files holding Turtle
+    and files with no extension at all. Returns "xml" (RDF/XML or OWL/XML),
+    "turtle" (Turtle or N3), "obo", or None when nothing is recognized.
+    """
+    head = text[:_SNIFF_CHARS].lstrip("\ufeff").lstrip()
+    lowered = head.lower()
+    if (
+        lowered.startswith(("<?xml", "<!doctype", "<!--"))
+        or "<rdf:rdf" in lowered
+        or "<owl:ontology" in lowered
+        or "<ontology" in lowered
+    ):
+        return "xml"
+    # The tags want their trailing space: "ontology:Thing" at the start of a
+    # Turtle line is a prefixed name, not an OBO header.
+    if re.search(r"^(?:format-version:[ \t]|ontology:[ \t]|\[term\]|\[typedef\])", lowered, re.M):
+        return "obo"
+    if re.search(r"^[ \t]*(?:@prefix\b|@base\b|prefix\b|base\b)", lowered, re.M) or re.search(
+        r"^[ \t]*<[^<>\s]*>[ \t]", head, re.M
+    ):
+        return "turtle"
+    return None
+
+
+def _xml_import_patterns(text: str) -> List["re.Pattern"]:
+    """Import declarations to remove from an XML serialization.
+
+    Covers RDF/XML (``<owl:imports .../>``, or with a nested resource) and
+    OWL/XML (``<Import>IRI</Import>``), under every prefix the file binds to the
+    OWL namespace.
+    """
+    prefixes = {m.group(1) for m in _XMLNS_OWL.finditer(text)}
+    prefixes.add("owl")
+    alt = "|".join(re.escape(p) for p in sorted(prefixes))
+    return [
+        re.compile(r"[ \t]*<(?:%s):imports\b[^>]*/>[ \t]*\n?" % alt),
+        re.compile(
+            r"[ \t]*<(?:%s):imports\b[^>]*>.*?</(?:%s):imports>[ \t]*\n?" % (alt, alt),
+            re.S,
+        ),
+        re.compile(
+            r"[ \t]*<(?:(?:%s):)?Import\b[^>]*>.*?</(?:(?:%s):)?Import>[ \t]*\n?"
+            % (alt, alt),
+            re.S,
+        ),
+        re.compile(r"[ \t]*<(?:(?:%s):)?Import\b[^>]*/>[ \t]*\n?" % alt),
+    ]
+
+
+def _strip_xml_imports(text: str) -> Tuple[str, int]:
+    """Remove import declarations from RDF/XML or OWL/XML."""
+    removed = 0
+    for pattern in _xml_import_patterns(text):
+        text, n = pattern.subn("", text)
+        removed += n
+    return text, removed
+
+
+def _line_start(text: str, i: int) -> int:
+    return text.rfind("\n", 0, i) + 1
+
+
+def _line_scan(text: str, start: int, end: int) -> Tuple[Optional[int], bool]:
+    """Walk a fragment of one line, tracking Turtle quoting.
+
+    Returns the index where a comment begins (a ``#`` that is not inside an IRI
+    or a literal), or None, and whether ``end`` lands inside an unclosed literal
+    or IRI. Literals that span lines are not tracked -- a triple-quoted string
+    containing something that reads like an imports statement would fool this,
+    which is why a caller that cannot tell leaves the file alone.
+    """
+    i, quote, in_iri = start, "", False
+    while i < end:
+        c = text[i]
+        if quote:
+            if c == "\\":
+                i += 2
+                continue
+            if text.startswith(quote, i):
+                i += len(quote)
+                quote = ""
+                continue
+        elif in_iri:
+            if c == ">":
+                in_iri = False
+        elif c == "<":
+            in_iri = True
+        elif c in "\"'":
+            quote = c * 3 if text.startswith(c * 3, i) else c
+            i += len(quote)
+            continue
+        elif c == "#":
+            return i, False
+        i += 1
+    return None, bool(quote) or in_iri
+
+
+def _skip_ws(text: str, i: int) -> int:
+    """Advance past whitespace and comments."""
+    n = len(text)
+    while i < n:
+        if text[i].isspace():
+            i += 1
+        elif text[i] == "#":
+            nl = text.find("\n", i)
+            i = n if nl == -1 else nl + 1
+        else:
+            break
+    return i
+
+
+def _prev_significant(text: str, i: int, hole: Tuple[int, int] = (0, 0)) -> int:
+    """Index of the last character before i that is not whitespace or comment.
+
+    ``hole`` is a span of text that has already been cut, and is stepped over as
+    if it were not there: what precedes an imports statement, once the one before
+    it has been removed, is whatever preceded them both.
+    """
+    while i > 0:
+        i -= 1
+        if hole[0] <= i < hole[1]:
+            i = hole[0]
+            continue
+        if text[i].isspace():
+            continue
+        comment_at, _ = _line_scan(text, _line_start(text, i), i + 1)
+        if comment_at is not None:
+            i = comment_at  # i sat inside a trailing comment; carry on before it
+            continue
+        return i
+    return -1
+
+
+def _term_end(text: str, i: int) -> Optional[int]:
+    """End of the Turtle term starting at i, or None if there isn't one."""
+    match = _TTL_IRI.match(text, i) or _TTL_PNAME.match(text, i)
+    if not match:
+        return None
+    end = match.end()
+    # A prefixed name cannot end in '.', so a trailing one is the statement's.
+    while end > i and text[end - 1] == ".":
+        end -= 1
+    return end if end > i else None
+
+
+def _object_list_end(text: str, i: int) -> Optional[Tuple[int, int]]:
+    """End of the (possibly comma-separated) object list, and of the whitespace after it."""
+    while True:
+        i = _skip_ws(text, i)
+        end = _term_end(text, i)
+        if end is None:
+            return None
+        after = _skip_ws(text, end)
+        if after < len(text) and text[after] == ",":
+            i = after + 1
+            continue
+        return end, after
+
+
+def _subject_start(text: str, end: int) -> Optional[int]:
+    """Start of the subject term whose last character is at index end."""
+    if text[end] == ">":
+        start = text.rfind("<", 0, end)
+        return start if start != -1 else None
+    if not _TTL_NAME_CHAR.match(text[end]):
+        return None  # e.g. ']' closing a blank node property list -- don't guess
+    start = end
+    while start > 0 and _TTL_NAME_CHAR.match(text[start - 1]):
+        start -= 1
+    return start
+
+
+def _turtle_import_span(
+    text: str, match: "re.Match", hole: Tuple[int, int] = (0, 0)
+) -> Optional[Tuple[int, int]]:
+    """The span to cut for one Turtle/N3 imports statement, or None if unclear.
+
+    Removing the predicate and its objects is not enough on its own: what has to
+    go with them depends on where the statement sits.
+
+    * ``owl:Ontology ; owl:imports <x> ; rdfs:label "y" .`` -- take the trailing
+      ``;`` with it, leaving the rest of the predicate list intact.
+    * ``owl:Ontology ; owl:imports <x> .`` -- there is no trailing ``;``, so take
+      the leading one instead.
+    * ``<onto> owl:imports <x> .`` -- imports is the whole statement; the subject
+      and the final ``.`` go too, since a subject with no predicate is a parse
+      error.
+
+    Anything that doesn't fit one of those shapes is left alone. A file that
+    still has an import in it fails the way it does today; a file mangled into
+    unparseable Turtle would fail in a new and worse way.
+
+    ``hole`` is the span the previous cut removed, which this one has to see
+    through: consecutive imports separated by ';' would otherwise each find a
+    separator that is already gone and leave the other one dangling.
+    """
+    line_start = _line_start(text, match.start())
+    comment_at, in_literal = _line_scan(text, line_start, match.start())
+    if comment_at is not None or in_literal:
+        return None  # this "owl:imports" is text in a comment or a literal
+
+    objects = _object_list_end(text, match.end())
+    if objects is None:
+        return None
+    obj_end, after = objects
+    terminator = text[after] if after < len(text) else ""
+    prev = _prev_significant(text, match.start(), hole)
+    prev_char = text[prev] if prev >= 0 else ""
+
+    if terminator == ";":
+        return match.start(), after + 1
+    if terminator not in (".", "]", "}", ""):
+        return None
+    if prev_char == ";":
+        return prev, obj_end
+    if prev_char in ("[", "{", ""):
+        return match.start(), obj_end
+    if terminator != ".":
+        return None
+    subject = _subject_start(text, prev)
+    if subject is None:
+        return None
+    return subject, after + 1
+
+
+def _tidy(text: str, start: int, end: int) -> Tuple[int, int]:
+    """Widen a cut to the whole line when nothing else is on it."""
+    line_start = _line_start(text, start)
+    newline = text.find("\n", end)
+    line_end = len(text) if newline == -1 else newline + 1
+    if not text[line_start:start].strip() and not text[end:line_end].strip():
+        return line_start, line_end
+    return start, end
+
+
+def _strip_turtle_imports(text: str) -> Tuple[str, int]:
+    """Remove owl:imports statements from Turtle or N3.
+
+    Text-level rather than a parse-and-reserialize: rdflib would have to hold the
+    whole graph in memory for a source of up to MAX_SOURCE_MB, and its output
+    would replace a file that is otherwise fine with a round-tripped one. Cutting
+    the statement leaves every other byte where it was.
+    """
+    prefixes = {m.group(1) or "" for m in _TTL_PREFIX_OWL.finditer(text)}
+    prefixes.add("owl")
+    alt = "|".join(re.escape(p) for p in sorted(prefixes, key=len, reverse=True))
+    predicate = re.compile(
+        r"<%s>|(?<![\w:.\-])(?:%s):imports(?![\w.\-])"
+        % (re.escape(_OWL_NS + "imports"), alt)
+    )
+
+    out: List[str] = []
+    pos = removed = declined = 0
+    chunk_start = 0  # source index the last chunk in `out` was copied from
+    cut_start = 0  # where the previous cut began
+    for match in predicate.finditer(text):
+        if match.start() < pos:
+            continue
+        span = _turtle_import_span(text, match, (cut_start, pos))
+        if span is None:
+            declined += 1
+            continue
+        start, end = _tidy(text, *span)
+        if end <= pos:
+            continue
+        if start >= pos:
+            chunk_start = pos
+            out.append(text[chunk_start:start])
+            cut_start = start
+        elif chunk_start <= start < cut_start:
+            # Consecutive imports share a separator, so this cut can reach back
+            # into text already copied out. Trim that copy back to it.
+            out[-1] = text[chunk_start:start]
+            cut_start = start
+        # Anything at or past cut_start went with the previous cut already.
+        pos = end
+        removed += 1
+    out.append(text[pos:])
+
+    if declined:
+        logging.warning(
+            f"Left {declined} owl:imports statement(s) in place: could not tell "
+            "what to cut without risking the file's syntax."
+        )
+    return "".join(out), removed
+
+
+def _strip_obo_imports(text: str) -> Tuple[str, int]:
+    """Remove ``import:`` lines from an OBO header.
+
+    Only the header carries them, and only there is ``import:`` a tag rather
+    than ordinary text, so the stanzas below are not touched.
+    """
+    stanza = _OBO_STANZA.search(text)
+    end = stanza.start() if stanza else len(text)
+    header, removed = _OBO_IMPORT_LINE.subn("", text[:end])
+    return header + text[end:], removed
+
+
+_STRIPPERS = {
+    "xml": _strip_xml_imports,
+    "turtle": _strip_turtle_imports,
+    "obo": _strip_obo_imports,
+}
 
 
 def strip_imports(path: str) -> str:
-    """Remove owl:imports / OWL-XML <Import> declarations from an ontology file.
+    """Remove ontology import declarations from an ontology file.
 
     ROBOT (via the OWL API) tries to resolve owl:imports over the network when it
     loads an ontology; when an import URL is dead, slow, or unreachable from the
     runner the whole convert/relax fails (UnloadableImportException). This is the
     dominant KG-Bioportal transform failure. Each ontology is transformed on its
-    own, so imports are not needed — references to imported terms just become
+    own, so imports are not needed -- references to imported terms just become
     dangling edges, resolved later at merge time.
 
-    Only XML serializations (RDF/XML, OWL/XML) are handled. Returns the path to a
-    cleaned sibling file, or the original path if nothing was removed / the file
-    isn't an XML serialization we recognize.
+    RDF/XML, OWL/XML, Turtle, N3 and OBO are handled; the serialization is
+    sniffed from the content, since BioPortal serves Turtle under a .owl name and
+    sources with no extension at all. Anything else is passed through untouched,
+    as is a file whose imports could not be removed without risking its syntax.
 
     Args:
         path: Path to the downloaded ontology file.
@@ -74,20 +410,20 @@ def strip_imports(path: str) -> str:
         logging.warning(f"Could not read {path} to strip imports: {e}")
         return path
 
-    head = text[:400].lstrip().lower()
-    if not (head.startswith("<?xml") or "<rdf:rdf" in head or "<ontology" in head):
-        return path  # not an XML serialization we handle (e.g. obo, ttl)
+    kind = _sniff_serialization(text)
+    if kind is None:
+        logging.info(
+            f"Not stripping imports from {os.path.basename(path)}: "
+            "unrecognized serialization."
+        )
+        return path
 
-    cleaned = text
-    removed = 0
-    for pattern in _IMPORT_PATTERNS:
-        cleaned, n = pattern.subn("", cleaned)
-        removed += n
+    cleaned, removed = _STRIPPERS[kind](text)
     if removed == 0:
         return path
 
     base, ext = os.path.splitext(path)
-    new_path = f"{base}_noimports{ext or '.owl'}"
+    new_path = f"{base}_noimports{ext or _EXT_FOR_KIND[kind]}"
     with open(new_path, "w", encoding="utf-8") as f:
         f.write(cleaned)
     logging.info(f"Stripped {removed} import declaration(s) from {os.path.basename(path)}.")
