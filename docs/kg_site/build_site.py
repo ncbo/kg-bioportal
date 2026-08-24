@@ -167,7 +167,8 @@ def onto_to_item(o, transform_date):
         "download_url": o.get("download_url") or "",
         "bioportal_url": f"{BP}/ontologies/{oid}",
         "submission_id": o.get("submission_id", "NA"),
-        "reason": o.get("reason", ""), "transform_date": transform_date or "",
+        "reason": o.get("reason", ""), "detail": o.get("detail", ""),
+        "transform_date": transform_date or "",
     }
 
 # Human-readable explanation for why a non-OK ontology has no KGX artifact.
@@ -178,6 +179,16 @@ REASON_MSG = {
     "skiplist": "This ontology is known to be too large or slow for the automated pipeline and is "
                 "skipped up front.",
     "transform_error": "The transform did not complete — ROBOT or the KGX conversion reported an error.",
+    # Stage-specific forms of the above, written since #134. The plain
+    # transform_error stays: index entries seeded from earlier releases have it.
+    "transform_error_decompress": "The downloaded source could not be unpacked, so the transform "
+                                  "never started.",
+    "transform_error_convert": "ROBOT could not load the source ontology (the `convert` step), so "
+                               "there was nothing to transform.",
+    "transform_error_relax": "ROBOT loaded the ontology but failed to normalise it (the `relax` "
+                             "step).",
+    "transform_error_kgx": "The ontology converted, but the KGX step failed to turn it into nodes "
+                           "and edges.",
     "not_downloadable": "No downloadable source is currently available from BioPortal.",
     "license_restricted": "This ontology is only available under a license we do not hold "
                           "(typically a UMLS licence), so BioPortal does not serve its source "
@@ -957,6 +968,10 @@ def render_ontology_resource(it):
     ]
     if not ok and reason:
         detail_rows.append(drow("Reason", f'<span class="mono">{esc(reason)}</span>'))
+    # The message from the stage that failed, when the index carries one. This
+    # is the difference between "it failed" and knowing what to fix.
+    if not ok and it.get("detail"):
+        detail_rows.append(drow("Detail", f'<span class="mono">{esc(it["detail"])}</span>'))
     detail_rows += [
         drow("Version", esc(ver or "—")),
         drow("Submission", f'<span class="mono">{esc(sub)}</span>'),

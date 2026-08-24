@@ -230,8 +230,7 @@ class TestKGXInputHasParseableLangTags(TransformImportsTestCase):
         self.assertIn("contact the author", content)
 
     def test_transform_still_succeeds(self):
-        success, _, _ = self.run_transform(self.RELAXED_WITH_BAD_TAG)
-        self.assertTrue(success)
+        self.assertTrue(self.run_transform(self.RELAXED_WITH_BAD_TAG).success)
 
     def test_a_clean_file_is_passed_through_untouched(self):
         # No bogus tags means no rewrite, so the ontologies that build today are

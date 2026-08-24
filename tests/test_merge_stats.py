@@ -226,6 +226,49 @@ class TestSeedAndOverlay(MergeStatsTestCase):
         self.assertEqual(list(index), sorted(index))
 
 
+class TestFailureDetail(MergeStatsTestCase):
+    """The stage and message a shard recorded have to survive the merge.
+
+    Shards write the per-ontology reason/detail (#134); if the merge dropped
+    them, the published index would be back to a bare "transform_error".
+    """
+
+    def test_stage_specific_reason_survives_the_merge(self):
+        self.write_fragment([entry(
+            "FYPO", status="Failed", reason="transform_error_kgx",
+            detail="TypeError: '<' not supported between instances of 'str' and 'int'")])
+        index, _ = self.run_merge()
+        self.assertEqual(index["FYPO"]["reason"], "transform_error_kgx")
+
+    def test_detail_survives_the_merge(self):
+        self.write_fragment([entry(
+            "FYPO", status="Failed", reason="transform_error_kgx",
+            detail="TypeError: '<' not supported")])
+        index, _ = self.run_merge()
+        self.assertIn("not supported", index["FYPO"]["detail"])
+
+    def test_a_fresh_failure_replaces_a_seeded_one(self):
+        # A re-run that fails differently has to say so, not keep the old cause.
+        base = self.write_base([entry(
+            "FYPO", status="Failed", reason="transform_error", detail="")])
+        self.write_fragment([entry(
+            "FYPO", status="Failed", reason="transform_error_convert",
+            detail="UnloadableImportException: Could not load imported ontology")])
+        index, _ = self.run_merge(base)
+        self.assertEqual(index["FYPO"]["reason"], "transform_error_convert")
+        self.assertIn("UnloadableImportException", index["FYPO"]["detail"])
+
+    def test_stage_specific_failures_are_still_counted_as_failures(self):
+        self.write_fragment([
+            entry("A", status="Failed", reason="transform_error_convert"),
+            entry("B", status="Failed", reason="transform_error_kgx"),
+            entry("C"),
+        ])
+        _, totals = self.run_merge()
+        self.assertEqual(totals["failedcount"], 2)
+        self.assertEqual(totals["totalcount"], 1)
+
+
 class TestTotals(MergeStatsTestCase):
     def setUp(self):
         super().setUp()

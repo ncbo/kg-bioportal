@@ -29,6 +29,8 @@ class TestReasonMessages(TestCase):
     # renders as a generic "has not been transformed", which tells nobody why.
     REASONS = [
         "too_large", "too_slow", "skiplist", "transform_error",
+        "transform_error_decompress", "transform_error_convert",
+        "transform_error_relax", "transform_error_kgx",
         "not_downloadable", "license_restricted", "no_download_file",
         "download_http_error", "no_submission", "metadata_http_error",
         "download_error",
@@ -63,6 +65,13 @@ class TestOntologyItems(TestCase):
         self.assertFalse(it["ok"])
         self.assertIn("transform_error", it["blurb"])
 
+    def test_stage_specific_messages_differ_from_each_other(self):
+        # Four stages that fail for four different reasons; one shared message
+        # would put us back where #134 started.
+        messages = {bs.reason_message(f"transform_error_{stage}")
+                    for stage in ("decompress", "convert", "relax", "kgx")}
+        self.assertEqual(len(messages), 4)
+
     def test_licensed_ontology_is_not_called_failed(self):
         it = item("NDDF", "Failed", "license_restricted")
         self.assertEqual(it["status_label"], "Licensed")
@@ -73,6 +82,37 @@ class TestOntologyItems(TestCase):
         self.assertIsNone(it["nodes"])
         self.assertIsNone(it["edges"])
         self.assertEqual(it["fmts"], [])
+
+
+class TestFailureDetail(TestCase):
+    """A failed ontology's page should say what actually went wrong."""
+
+    def test_detail_is_carried_onto_the_item(self):
+        it = item("FYPO", "Failed", "transform_error_kgx",
+                  detail="TypeError: '<' not supported")
+        self.assertIn("not supported", it["detail"])
+
+    def test_missing_detail_is_empty_not_absent(self):
+        # Entries seeded from an index written before #134 have no detail field.
+        self.assertEqual(item("FYPO", "Failed", "transform_error")["detail"], "")
+
+    def test_detail_is_rendered_on_the_resource_page(self):
+        html = bs.render_ontology_resource(item(
+            "FYPO", "Failed", "transform_error_kgx", detail="TypeError: bad sort"))
+        self.assertIn("Detail", html)
+        self.assertIn("TypeError: bad sort", html)
+
+    def test_detail_is_escaped_not_injected(self):
+        # ROBOT errors carry angle brackets and quotes straight from Java.
+        html = bs.render_ontology_resource(item(
+            "FYPO", "Failed", "transform_error_convert",
+            detail='could not load <http://x/y> "z"'))
+        self.assertNotIn("<http://x/y>", html)
+        self.assertIn("&lt;http://x/y&gt;", html)
+
+    def test_an_ok_ontology_shows_no_detail_row(self):
+        html = bs.render_ontology_resource(item("AGRO", "OK", nodecount=5, edgecount=6))
+        self.assertNotIn(">Detail<", html)
 
 
 class TestDownloadLinks(TestCase):

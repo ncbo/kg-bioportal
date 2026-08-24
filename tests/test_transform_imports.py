@@ -132,8 +132,7 @@ class TestKGXInputIsImportFree(TransformImportsTestCase):
         self.assertTrue(path.endswith("ONTO_relaxed.owl"), path)
 
     def test_transform_still_succeeds(self):
-        success, _, _ = self.run_transform(RELAXED_WITH_IMPORTS)
-        self.assertTrue(success)
+        self.assertTrue(self.run_transform(RELAXED_WITH_IMPORTS).success)
 
 
 class TestIntermediateCleanup(TransformImportsTestCase):
