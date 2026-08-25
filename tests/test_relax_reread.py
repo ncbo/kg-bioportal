@@ -340,3 +340,65 @@ class TestTheFallbackCannotCarryABadLanguageTag(RereadTestCase):
             f.write(RDFXML)
         self.run_transform(relax_rejects=())
         self.assertEqual(self.convert_inputs[0], self.source)
+
+
+# Verbatim from the 2026-08-25 run 11 logs. INFRARISK is the ontology the
+# Turtle fallback did not rescue, and the two lines are the two relax attempts.
+INFRARISK_XML_REASON = (
+    "org.xml.sax.SAXParseException; systemId: file:/data/INFRARISK.owl; "
+    "lineNumber: 712; columnNumber: 22; Element or attribute \"xmlns:5g_devices\" "
+    "do not match QName production: QName::=(NCName:)?NCName."
+)
+NOT_XML_AT_ALL = (
+    "org.xml.sax.SAXParseException; systemId: file:/data/INFRARISK.ttl; "
+    "lineNumber: 1; columnNumber: 1; Content is not allowed in prolog."
+)
+TURTLE_REASON = (
+    "org.semanticweb.owlapi.rdf.turtle.parser.ParseException: Encountered "
+    "\" <PNAME_NS> \"5g_devices: \"\" at line 412, column 9."
+)
+
+
+class TestTheRightParserIsQuoted(TestCase):
+    """The OWL API asks every parser it has, and most of them say "not mine".
+
+    The RDF/XML parser goes first and answers "Content is not allowed in prolog"
+    at line 1 for every Turtle file there has ever been. Quoting that as the
+    reason a Turtle file failed says nothing -- it was the recorded detail for
+    all four invalid_source entries and for INFRARISK in run 11, none of which
+    are XML. The parser that got somewhere into the file is the one that
+    recognized it.
+    """
+
+    def error(self, *lines):
+        return _error_text(FakeFailure("\n".join((BARE_LOAD_ERROR,) + lines)))
+
+    def test_a_line_one_not_my_format_reason_is_passed_over(self):
+        text = self.error(NOT_XML_AT_ALL, TURTLE_REASON)
+        self.assertIn("5g_devices", text)
+        self.assertNotIn("not allowed in prolog", text)
+
+    def test_the_parser_that_read_the_file_is_quoted(self):
+        self.assertIn("at line 412", self.error(NOT_XML_AT_ALL, TURTLE_REASON))
+
+    def test_order_does_not_matter(self):
+        # The RDF/XML parser happens to go first, but nothing guarantees it.
+        self.assertIn("at line 412", self.error(TURTLE_REASON, NOT_XML_AT_ALL))
+
+    def test_a_line_one_reason_is_still_better_than_nothing(self):
+        # When no parser got past line 1, say what little there is rather than
+        # dropping to the headline alone.
+        self.assertIn("not allowed in prolog", self.error(NOT_XML_AT_ALL))
+
+    def test_a_real_line_one_failure_still_reports(self):
+        self.assertIn(BARE_LOAD_ERROR, self.error(NOT_XML_AT_ALL))
+
+    def test_the_xml_reason_survives_when_the_file_is_xml(self):
+        # INFRARISK's first attempt: ROBOT wrote xmlns:5g_devices, which is not
+        # a legal XML name, so here the SAX parser is the one that read it.
+        text = self.error(INFRARISK_XML_REASON)
+        self.assertIn("xmlns:5g_devices", text)
+        self.assertIn("lineNumber: 712", text)
+
+    def test_the_iri_case_is_unaffected(self):
+        self.assertIn("Malformed escape pair", self.error(IRI_CAUSE))
