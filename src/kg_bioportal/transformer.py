@@ -1376,6 +1376,17 @@ class Transformer:
         # simply become dangling edges, resolved later at merge time.
         ontology_path = strip_imports(ontology_path)
 
+        # Drop invalid xml:lang here, on the way in, and not only from ROBOT's
+        # output further down. An XML attribute takes any string, but a Turtle
+        # language tag is part of the grammar, so when ROBOT writes one of these
+        # out as Turtle -- which it does on either fallback below -- it emits
+        # `"x"@editor@example.com`, which is not Turtle at all and takes the
+        # ontology out at the KGX step instead. Cleaning the source means no
+        # serialization ROBOT picks can carry the problem forward. XML-only, and
+        # a no-op for a file with no xml:lang in it, so a Turtle source (where
+        # such a tag could never have parsed) is untouched.
+        ontology_path = strip_invalid_lang_tags(ontology_path, ontology_name)
+
         # Convert
         def convert_to(output_path):
             return robot_convert(
@@ -1432,10 +1443,10 @@ class Transformer:
 
         # Relax. Its output is what KGX parses, so it keeps the serialization the
         # ontology could actually be written in.
-        def relax_to(output_path):
+        def relax_to(output_path, input_path):
             return robot_relax(
                 robot_path=self.robot_path,
-                input_path=relax_input_path,
+                input_path=input_path,
                 output_path=output_path,
                 robot_env=self.robot_env,
                 timeout=self.timeout_sec,
@@ -1444,7 +1455,7 @@ class Transformer:
         relaxed_outpath = os.path.join(
             workdir, f"{ontology_name}_relaxed{intermediate_ext}"
         )
-        relaxed = relax_to(relaxed_outpath)
+        relaxed = relax_to(relaxed_outpath, relax_input_path)
         if (
             not relaxed
             and is_serialization_failure(relaxed.error)
@@ -1459,7 +1470,37 @@ class Transformer:
             relaxed_outpath = os.path.join(
                 workdir, f"{ontology_name}_relaxed{FALLBACK_SERIALIZATION}"
             )
-            relaxed = relax_to(relaxed_outpath)
+            relaxed = relax_to(relaxed_outpath, relax_input_path)
+        elif (
+            not relaxed
+            and is_load_failure(relaxed.error)
+            and intermediate_ext != FALLBACK_SERIALIZATION
+        ):
+            # ROBOT will not read back the RDF/XML ROBOT just wrote. Its RDF/XML
+            # parser resolves every IRI against the base with java.net.URI and
+            # rejects what its Turtle parser accepted a step earlier, so an IRI
+            # holding a stray '%', a quote, a '<' or a second '#' loads from the
+            # source and then fails on the way in. Nothing is wrong with the
+            # ontology and nothing downstream needs this intermediate to be
+            # RDF/XML, so convert the source again to the serialization that can
+            # hold those IRIs, and relax that.
+            #
+            # It has to start from the source: ROBOT cannot read the RDF/XML it
+            # produced, so there is nothing to convert it *from*.
+            logging.warning(
+                f"{ontology_name}: ROBOT cannot read back its own RDF/XML "
+                f"({relaxed.error}); converting to {FALLBACK_SERIALIZATION} instead."
+            )
+            fallback_path = os.path.join(
+                workdir, f"{ontology_name}{FALLBACK_SERIALIZATION}"
+            )
+            reconverted = convert_to(fallback_path)
+            if reconverted:
+                intermediate_ext = FALLBACK_SERIALIZATION
+                relaxed_outpath = os.path.join(
+                    workdir, f"{ontology_name}_relaxed{FALLBACK_SERIALIZATION}"
+                )
+                relaxed = relax_to(relaxed_outpath, fallback_path)
         if not relaxed:
             return TransformOutcome.failed("relax", relaxed.error)
 
@@ -1472,9 +1513,11 @@ class Transformer:
         # ROBOT always writes RDF/XML for a .owl output, so the stripper applies.
         stripped_path = strip_imports(relaxed_outpath)
 
-        # Same pass, same reason: rdflib raises on an invalid xml:lang instead of
-        # warning, so one typo'd attribute in the source takes the whole ontology
-        # down at parse time. By here the file is always RDF/XML from ROBOT.
+        # Same pass, same reason: rdflib raises on an invalid xml:lang instead
+        # of warning, so one typo'd attribute takes the whole ontology down at
+        # parse time. The source was cleaned on the way in; this catches an
+        # RDF/XML output that reintroduces one, and no-ops on a Turtle output,
+        # where such a tag could not have been written in the first place.
         kgx_input_path = strip_invalid_lang_tags(stripped_path, ontology_name)
 
         # Transform to KGX nodes + edges

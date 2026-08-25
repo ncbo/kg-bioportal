@@ -53,6 +53,21 @@ _JVM_NOISE = (
 # or "java.io.IOException: errors#INVALID ONTOLOGY FILE ERROR ...".
 _THROWABLE = re.compile(r"\b[\w.$]*(?:Exception|Error|ERROR)\b")
 
+# A cause that points into the file: an OWL API parser position ("[line=26:
+# column=46]"), a SAX one ("lineNumber: 27"), or the "at line 4 of" a Turtle or
+# functional-syntax parser writes. A stack frame never carries one of these,
+# which is what makes it a usable filter for the reason among the noise.
+_POSITIONED_REASON = re.compile(
+    r"\[line=\d+|lineNumber:\s*\d+|\bat line \d+|\bat index \d+", re.I
+)
+
+# ROBOT's logging appends the first stack element to the message line itself,
+# after a run of spaces: "...Malformed escape pair at index 15        org.
+# semanticweb.owlapi.rdf.rdfxml.parser.RDFXMLParser.parse(RDFXMLParser.java:74)".
+# It identifies nothing about the ontology and it is the longest part of the
+# line, so it is cut before the 500-character budget is spent on it.
+_STACK_TAIL = re.compile(r"\s{2,}\S*\(\w+\.\w+:\d+\).*$")
+
 # Enough of stderr to find the error in; a stack trace that deep is not hiding
 # a better line further down.
 _MAX_ERROR_LINES = 200
@@ -77,32 +92,54 @@ def _output_written(output_path: str) -> str:
 
 
 def _error_text(e: Exception) -> str:
-    """The line of a ROBOT failure worth keeping.
+    """The part of a ROBOT failure worth keeping.
 
     ROBOT writes its verbose (-vvv) log to stdout and the failure to stderr,
-    where one line carries the exception and its whole cause chain --
+    where one line carries the exception and its cause chain --
     "java.lang.IllegalArgumentException: ...UnloadableImportException: Could not
     load imported ontology: <url>". Everything under it is a stack trace through
     OWL API internals, which identifies nothing about the ontology, and anything
     above it is the JVM clearing its throat.
 
-    So: skip the noise and the stack frames, prefer the first line that names a
-    throwable, and fall back to the first line left. Falls back to the exception
-    itself when there is no stderr to read at all.
+    That top line is enough when it names the cause, and useless when it does
+    not. A file ROBOT cannot read reports only "INVALID ONTOLOGY FILE ERROR
+    Could not load a valid ontology from file: X" -- true of every unreadable
+    file there has ever been. The reason is further down, because the OWL API
+    tries each parser in turn and collects their complaints under
+    UnparsableOntologyException:
+
+        [line=26:column=46] IRI 'http://ex.org/a%b' cannot be resolved against
+        current base IRI http://ex.org/o reason is: Malformed escape pair
+
+    That is the line that says which ontology, and where in it. So keep the top
+    line, and append the first line below it that points at a position in the
+    file -- the one thing a stack frame never does.
     """
     stderr = getattr(e, "stderr", b"") or b""
     if isinstance(stderr, (bytes, bytearray)):
         stderr = stderr.decode("utf-8", "replace")
 
+    head = ""
     fallback = ""
     for line in stderr.splitlines()[:_MAX_ERROR_LINES]:
         line = line.strip()
         if not line or line.startswith(("at ", "... ")) or line.startswith(_JVM_NOISE):
             continue
-        if _THROWABLE.search(line):
-            return line[:_MAX_ERROR_CHARS]
-        fallback = fallback or line
-    return (fallback or str(e).strip())[:_MAX_ERROR_CHARS]
+        line = _STACK_TAIL.sub("", line).strip()
+        if not line:
+            continue
+        if not head:
+            if _THROWABLE.search(line):
+                head = line
+                continue
+            fallback = fallback or line
+            continue
+        # Past the headline: the only thing left worth adding is a reason that
+        # names a place. Take the first, then stop -- the parsers after it are
+        # complaining about the same file in their own syntax.
+        if _POSITIONED_REASON.search(line) and line not in head:
+            return f"{head} | {line}"[:_MAX_ERROR_CHARS]
+    return (head or fallback or str(e).strip())[:_MAX_ERROR_CHARS]
 
 
 def initialize_robot(robot_path: str) -> list:
