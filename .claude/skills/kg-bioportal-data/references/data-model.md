@@ -59,7 +59,11 @@ ontologies:
                           #   was recorded carry a bare `transform_error`.
   detail: ''              # non-OK entries only, and only when there is something to
                           #   say: the message from the stage that failed, on one
-                          #   line, truncated to 500 characters
+                          #   line, truncated to 500 characters. When the message
+                          #   names no cause of its own -- "could not load a valid
+                          #   ontology from file: X" is true of every unreadable
+                          #   file -- the reason that points at a position in the
+                          #   file follows it after a ' | '.
   malformed_literals: 0   # present only when non-zero: literals whose lexical
                           #   form does not match their declared datatype (e.g.
                           #   xsd:dateTime '06/09/2012'). A fact about the source,
