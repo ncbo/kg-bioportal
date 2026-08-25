@@ -50,7 +50,10 @@ ontologies:
                           #   invalid_source: the file BioPortal serves cannot be read
                           #   as an ontology at all; `detail` says whether it is broken
                           #   RDF (with the parse error) or valid RDF that ROBOT will
-                          #   not load. Not fixable on this side.
+                          #   not load. Not fixable on this side — and the check is
+                          #   made against BioPortal's own file, so a source we
+                          #   ourselves corrupted while stripping imports is recorded
+                          #   as transform_error_convert instead, saying so.
                           #   <stage> is decompress | convert | relax | kgx — which
                           #   step lost the ontology. Entries from runs before this
                           #   was recorded carry a bare `transform_error`.

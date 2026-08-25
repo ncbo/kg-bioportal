@@ -749,8 +749,26 @@ def is_load_failure(error: str) -> bool:
     return any(marker in error for marker in _LOAD_FAILURE_MARKERS)
 
 
-def diagnose_source(path: str, max_mb: float = MAX_SYNTAX_CHECK_MB) -> str:
-    """Say why a source ROBOT refused is unusable, in terms someone can act on.
+class SourceDiagnosis(NamedTuple):
+    """What a syntax check could establish about a file ROBOT would not read."""
+
+    # True when the file parses as RDF, False when it does not, and None when
+    # nothing could be checked -- too large, not an RDF serialization, or
+    # unreadable. None is not "fine": it is "unknown", and callers must not
+    # read it as either answer.
+    parsed: Optional[bool]
+    # A phrase to append to the recorded detail, or "" when there is nothing
+    # to say at all.
+    detail: str
+
+
+UNCHECKED = SourceDiagnosis(None, "")
+
+
+def diagnose_source(
+    path: str, max_mb: float = MAX_SYNTAX_CHECK_MB, subject: str = "source"
+) -> SourceDiagnosis:
+    """Say why a file ROBOT refused is unusable, in terms someone can act on.
 
     ROBOT reports the same thing for a file that is not valid RDF and for one
     that is valid RDF it will not accept as an ontology, and #142 wants those
@@ -758,35 +776,39 @@ def diagnose_source(path: str, max_mb: float = MAX_SYNTAX_CHECK_MB) -> str:
     line number; the second is a file that might yet be readable another way.
     rdflib answers the question directly, and it is already a dependency.
 
-    Returns:
-        A phrase to append to the recorded detail, or "" when nothing can be
-        said (an unrecognized serialization, a file too large to check, or
-        rdflib itself failing for an unrelated reason).
+    Args:
+        path: The file to check.
+        max_mb: Ceiling above which the file is reported unchecked.
+        subject: What to call the file in the phrase, since this is also used
+            on our own intermediates, where calling them "source" would pin our
+            bug on the ontology's maintainers.
     """
     try:
         size_mb = os.path.getsize(path) / 1024 / 1024
     except OSError:
-        return ""
+        return UNCHECKED
     if max_mb and size_mb > max_mb:
-        return f"source not syntax-checked ({size_mb:.1f} MB)"
+        return SourceDiagnosis(None, f"{subject} not syntax-checked ({size_mb:.1f} MB)")
 
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
             text = f.read()
     except OSError:
-        return ""
+        return UNCHECKED
 
     if _HTML_DOCUMENT.match(text[:4096].lstrip("\ufeff")):
-        return "source is an HTML document, not an ontology"
+        return SourceDiagnosis(False, f"{subject} is an HTML document, not an ontology")
 
     rdflib_format = _RDFLIB_FORMATS.get(_sniff_serialization(text) or "")
     if not rdflib_format:
-        return "source is not an RDF serialization we can check"
+        return SourceDiagnosis(
+            None, f"{subject} is not an RDF serialization we can check"
+        )
 
     try:
         import rdflib
     except ImportError:  # pragma: no cover - rdflib ships with kgx
-        return ""
+        return UNCHECKED
 
     graph = rdflib.Graph()
     try:
@@ -794,11 +816,52 @@ def diagnose_source(path: str, max_mb: float = MAX_SYNTAX_CHECK_MB) -> str:
     except Exception as e:
         # The line and column live in the message; they are what an upstream
         # report needs, so keep the message rather than just the type.
-        return f"source is not valid {rdflib_format}: {type(e).__name__}: {e}"
-    return (
-        f"source is valid {rdflib_format} ({len(graph)} triples) that ROBOT "
-        "will not load as an ontology"
+        return SourceDiagnosis(
+            False, f"{subject} is not valid {rdflib_format}: {type(e).__name__}: {e}"
+        )
+    return SourceDiagnosis(
+        True,
+        f"{subject} is valid {rdflib_format} ({len(graph)} triples) that ROBOT "
+        "will not load as an ontology",
     )
+
+
+# What we call the file we hand ROBOT when it is not the file BioPortal served.
+STRIPPED_SUBJECT = "the import-stripped copy"
+
+
+def diagnose_load_failure(
+    source_path: str,
+    robot_input_path: str,
+    max_mb: float = MAX_SYNTAX_CHECK_MB,
+) -> Tuple[str, str]:
+    """Attribute a file ROBOT could not read to BioPortal or to ourselves.
+
+    strip_imports rewrites most sources before ROBOT sees them, so "ROBOT could
+    not load this file" is not on its own a statement about what BioPortal
+    served -- the file named in the error may be one we wrote. Recording that as
+    invalid_source blames the ontology's maintainers for our own bug, and hides
+    a stripper that corrupts files inside a bucket labelled "not our problem".
+
+    So check the source itself. If it does not parse, the source is the story.
+    If it parses and the copy we handed ROBOT does not, the corruption is ours
+    and belongs with the failures we can fix.
+
+    Returns:
+        (reason, detail): reason is INVALID_SOURCE_REASON when the source is
+        what is unusable, or "" -- meaning the transform's own stage reason --
+        when our preprocessing is what ROBOT choked on.
+    """
+    source = diagnose_source(source_path, max_mb=max_mb)
+    if robot_input_path == source_path or source.parsed is not True:
+        # Nothing of ours stands between BioPortal's file and ROBOT, or the
+        # source is itself unreadable (or unknowable). Either way, the source.
+        return INVALID_SOURCE_REASON, source.detail
+
+    ours = diagnose_source(robot_input_path, max_mb=max_mb, subject=STRIPPED_SUBJECT)
+    if ours.parsed is False:
+        return "", f"{ours.detail}, from a source that parses cleanly"
+    return INVALID_SOURCE_REASON, source.detail
 
 
 def is_serialization_failure(error: str) -> bool:
@@ -1303,6 +1366,10 @@ class Transformer:
                     f"(> {self.max_source_mb} MB limit)"
                 )
 
+        # Keep what BioPortal served. From here on ontology_path may be a file
+        # we wrote, and a failure over it is not upstream's to answer for.
+        source_path = ontology_path
+
         # Remove owl:imports so ROBOT doesn't try (and fail) to fetch external
         # ontologies over the network — the dominant cause of transform errors.
         # Each ontology is transformed standalone; references to imported terms
@@ -1335,16 +1402,23 @@ class Transformer:
             converted = convert_to(intermediate_path)
         if not converted:
             if is_load_failure(converted.error):
-                # convert's input is the source as BioPortal served it, so this
-                # is a file we were never going to transform. Say which kind of
-                # unusable it is, and record it apart from the failures that are
-                # ours to fix (#142).
-                diagnosis = diagnose_source(ontology_path)
-                logging.error(f"{ontology_name}: unusable source. {diagnosis}")
+                # ROBOT could not read the file at all. That is usually a source
+                # we were never going to transform, recorded apart from the
+                # failures that are ours to fix (#142) -- but convert's input is
+                # the stripped copy, not what BioPortal served, so which of the
+                # two is unusable has to be established rather than assumed.
+                reason, diagnosis = diagnose_load_failure(source_path, ontology_path)
+                if reason == INVALID_SOURCE_REASON:
+                    logging.error(f"{ontology_name}: unusable source. {diagnosis}")
+                else:
+                    logging.error(
+                        f"{ontology_name}: we broke this file, not BioPortal. "
+                        f"{diagnosis}"
+                    )
                 return TransformOutcome.failed(
                     "convert",
                     f"{converted.error} ({diagnosis})" if diagnosis else converted.error,
-                    reason=INVALID_SOURCE_REASON,
+                    reason=reason,
                 )
             return TransformOutcome.failed("convert", converted.error)
 
