@@ -24,7 +24,7 @@ on:
       max_source_mb:
         description: "Skip ontologies whose source exceeds this many MB"
         required: false
-        default: "100"
+        default: "250"
       timeout_min:
         description: "Per-ontology wall-clock cap (minutes)"
         required: false
@@ -44,7 +44,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  MAX_SOURCE_MB: ${{ github.event.inputs.max_source_mb || '100' }}
+  MAX_SOURCE_MB: ${{ github.event.inputs.max_source_mb || '250' }}
   TIMEOUT_MIN: ${{ github.event.inputs.timeout_min || '30' }}
   NUM_SHARDS: ${{ github.event.inputs.num_shards || '20' }}
 

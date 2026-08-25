@@ -3,6 +3,8 @@
 import os
 import logging
 import re
+from typing import Optional
+
 import requests
 import sh  # type: ignore
 from sh import chmod  # type: ignore
@@ -58,8 +60,16 @@ _THROWABLE = re.compile(r"\b[\w.$]*(?:Exception|Error|ERROR)\b")
 # functional-syntax parser writes. A stack frame never carries one of these,
 # which is what makes it a usable filter for the reason among the noise.
 _POSITIONED_REASON = re.compile(
-    r"\[line=\d+|lineNumber:\s*\d+|\bat line \d+|\bat index \d+", re.I
+    r"\[line=(\d+)|lineNumber:\s*(\d+)|\bat line (\d+)|\bat index (\d+)", re.I
 )
+
+
+def _reason_position(line: str) -> Optional[int]:
+    """Where in the file a cause line points, or None if it points nowhere."""
+    match = _POSITIONED_REASON.search(line)
+    if not match:
+        return None
+    return int(next(g for g in match.groups() if g is not None))
 
 # ROBOT's logging appends the first stack element to the message line itself,
 # after a run of spaces: "...Malformed escape pair at index 15        org.
@@ -121,6 +131,7 @@ def _error_text(e: Exception) -> str:
 
     head = ""
     fallback = ""
+    first_line_reason = ""
     for line in stderr.splitlines()[:_MAX_ERROR_LINES]:
         line = line.strip()
         if not line or line.startswith(("at ", "... ")) or line.startswith(_JVM_NOISE):
@@ -135,10 +146,21 @@ def _error_text(e: Exception) -> str:
             fallback = fallback or line
             continue
         # Past the headline: the only thing left worth adding is a reason that
-        # names a place. Take the first, then stop -- the parsers after it are
-        # complaining about the same file in their own syntax.
-        if _POSITIONED_REASON.search(line) and line not in head:
+        # names a place. The OWL API tries every parser it has and reports each
+        # one's complaint, so most of what follows is a parser saying the file
+        # is not in its format -- and the RDF/XML parser, which goes first, says
+        # so at line 1 ("Content is not allowed in prolog") for every Turtle
+        # file there has ever been. A parser that got somewhere into the file is
+        # the one that recognized it, so prefer a position past the first line,
+        # and settle for a line-1 reason only if nothing else is offered.
+        position = _reason_position(line)
+        if position is None or line in head:
+            continue
+        if position > 1:
             return f"{head} | {line}"[:_MAX_ERROR_CHARS]
+        first_line_reason = first_line_reason or line
+    if head and first_line_reason:
+        return f"{head} | {first_line_reason}"[:_MAX_ERROR_CHARS]
     return (head or fallback or str(e).strip())[:_MAX_ERROR_CHARS]
 
 

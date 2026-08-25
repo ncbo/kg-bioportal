@@ -53,9 +53,11 @@ the stats with a reason, rather than failing the build:
 
 - **`skiplist`** — a known giant, skipped up front with no download attempt
   (e.g. NCBITAXON, SNOMEDCT, RXNORM, GAZ, PR, NCIT, …). See `KNOWN_GIANTS` in
-  [`src/kg_bioportal/config.py`](src/kg_bioportal/config.py).
+  [`src/kg_bioportal/config.py`](src/kg_bioportal/config.py). Size is not the
+  only way to be a giant: CCO is 244 MB, inside the gate, but ships as OBO and
+  expands to 15.7M triples, which is what takes the runner down.
 - **`too_large`** — the source exceeded the size gate (`--max_source_mb`,
-  default 100 MB). Checked twice: on the file as downloaded, and again after
+  default 250 MB). Checked twice: on the file as downloaded, and again after
   decompression, since a gzipped source understates its real size by an order
   of magnitude (ROR is 14 MB gzipped and 135 MB unpacked).
 - **`too_slow`** — the transform exceeded the per-ontology wall-clock cap
@@ -63,6 +65,12 @@ the stats with a reason, rather than failing the build:
 
 These thresholds are tunable via config, CLI flags, or the environment
 (`KGBP_MAX_SOURCE_MB`, `KGBP_TIMEOUT_MIN`).
+
+The 250 MB gate is measured rather than assumed. Every ontology the index held
+between 100 and 250 MB was transformed on a standard runner on 2026-08-25 — 20
+of them, from HRA at 100 MB to GO-PLUS at 227 MB, each taking 2m32s to 7m49s —
+adding roughly 3.1M nodes and 6.6M edges. Raising it further has not been
+tested; the next band up starts at FMA (254 MB) and reaches BERO (878 MB).
 
 ## What BioPortal won't give us, and why
 
@@ -114,7 +122,7 @@ pip install .
 export NCBO_API_KEY=...   # from https://bioportal.bioontology.org/account
 
 # Download a few ontologies (honors the size gate + skiplist)
-kgbioportal download -d "AGRO SEPIO" -o data/raw -k "$NCBO_API_KEY" --max_source_mb 50
+kgbioportal download -d "AGRO SEPIO" -o data/raw -k "$NCBO_API_KEY" --max_source_mb 250
 
 # Transform them to KGX (honors the per-ontology time cap)
 kgbioportal transform -i data/raw -o data/transformed --timeout_min 30
