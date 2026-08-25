@@ -53,11 +53,17 @@ def _read_ontology_submissions(ontology_file: str) -> dict:
 
 
 def _load_index_submissions(index_path: str) -> dict:
-    """Read {acronym: submission_id} from an onto_stats.yaml index.
+    """Read {acronym: submission_id} for the entries worth carrying forward.
 
-    Only entries with a concrete submission_id are returned (skiplisted / no-
-    submission entries use 'NA' and are excluded), so a later run always treats
-    those as needing a transform.
+    Version-skip exists so a run only (re)transforms what changed. What it must
+    carry forward is a graph we *have*: an entry that failed has no artifact, so
+    skipping it keeps it missing until BioPortal happens to publish a new
+    submission -- which means a fix to this pipeline never reaches the
+    ontologies it fixes. So only OK entries are returned; anything else is
+    treated as needing a transform.
+
+    Entries with no concrete submission_id ('NA' -- skiplisted, or never
+    downloaded) are excluded too, as they always were.
     """
     import yaml
 
@@ -67,6 +73,8 @@ def _load_index_submissions(index_path: str) -> dict:
         data = yaml.safe_load(f) or {}
     out = {}
     for entry in data.get("ontologies", []):
+        if entry.get("status") != "OK":
+            continue  # no artifact to carry forward; try it again
         sub = str(entry.get("submission_id") or "").strip()
         if sub and sub != "NA":
             out[entry["id"]] = sub
@@ -413,9 +421,11 @@ def transform(input_dir, output_dir, compress, timeout_min, max_source_mb) -> No
     "index_path",
     required=False,
     type=click.Path(),
-    help="Path to the current onto_stats.yaml index. If given (with --ontology_file), "
-    "only ontologies whose BioPortal submission_id differs from the index are sharded "
-    "(version-skip); unchanged ones carry forward via the finalize seed.",
+    help="Path to the current onto_stats.yaml index. Supplies the source sizes the "
+    "shards are balanced by. With --ontology_file it also version-skips: an "
+    "ontology is sharded unless the index already holds a graph for it (status OK) "
+    "at the submission BioPortal is serving now. Those carry forward via the "
+    "finalize seed; everything else, including previous failures, is retried.",
 )
 def shard_list(ontology_file, ontologies, num_shards, use_skiplist, index_path) -> None:
     """Splits the ontology list into N shards and prints them as JSON.
@@ -433,8 +443,9 @@ def shard_list(ontology_file, ontologies, num_shards, use_skiplist, index_path) 
     else:
         raise click.UsageError("Provide --ontologies or --ontology_file.")
 
-    # Version-skip: only (re)transform ontologies that are new or whose BioPortal
-    # submission changed vs the current index. Applies only to the full list.
+    # Version-skip: only (re)transform ontologies that are new, whose BioPortal
+    # submission changed vs the current index, or that have no graph to carry
+    # forward. Applies only to the full list.
     if index_path and current_subs:
         index_subs = _load_index_submissions(index_path)
         if index_subs:
@@ -445,7 +456,8 @@ def shard_list(ontology_file, ontologies, num_shards, use_skiplist, index_path) 
             ]
             click.echo(
                 f"version-skip: {before - len(acronyms)} unchanged skipped, "
-                f"{len(acronyms)} to transform.",
+                f"{len(acronyms)} to transform (including anything that has no "
+                "graph in the index yet).",
                 err=True,
             )
 
