@@ -82,11 +82,16 @@ jobs:
         # Both pass --index: it carries the source sizes the shards are balanced
         # by, and version-skip applies only to the full list, so an explicit list
         # is still transformed exactly as given.
+        #
+        # --max_source_mb must match the one `transform` runs under: an ontology
+        # the index already shows above the gate is skipped at download, so it
+        # weighs nothing here. Without it the 2026-08-25 run gave four such
+        # giants a shard each and eight of twenty shards did no work at all.
         run: |
           if [ -n "${{ github.event.inputs.ontologies }}" ]; then
-            SHARDS=$(kgbioportal shard-list -d "${{ github.event.inputs.ontologies }}" -n "$NUM_SHARDS" --index prev/onto_stats.yaml)
+            SHARDS=$(kgbioportal shard-list -d "${{ github.event.inputs.ontologies }}" -n "$NUM_SHARDS" --index prev/onto_stats.yaml --max_source_mb "$MAX_SOURCE_MB")
           else
-            SHARDS=$(kgbioportal shard-list -f data/raw/ontologylist.tsv -n "$NUM_SHARDS" --index prev/onto_stats.yaml)
+            SHARDS=$(kgbioportal shard-list -f data/raw/ontologylist.tsv -n "$NUM_SHARDS" --index prev/onto_stats.yaml --max_source_mb "$MAX_SOURCE_MB")
           fi
           echo "shards=$SHARDS" >> "$GITHUB_OUTPUT"
       - name: Create release

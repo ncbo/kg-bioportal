@@ -21,6 +21,13 @@ __all__ = [
 ]
 
 
+# What one ontology costs before any of its content is read: a download, two
+# ROBOT JVM starts and a KGX pass. Measured at roughly two megabytes' worth of
+# transform time in the 2026-08-25 run (see transform_weights), and expressed in
+# bytes so it can be added to a source size and compared with one.
+PER_ONTOLOGY_BYTES: int = 2 * 1024 * 1024
+
+
 def _read_acronyms(ontology_file: str) -> list:
     """Read ontology acronyms (first column) from a TSV list, skipping the header."""
     acronyms = []
@@ -106,7 +113,57 @@ def load_index_sizes(index_path: str) -> dict:
     return sizes
 
 
-def assign_shards(acronyms: list, num_shards: int, sizes: dict) -> list:
+def transform_weights(acronyms: list, sizes: dict, gate_bytes: int = 0) -> dict:
+    """Expected transform cost per ontology, expressed in source bytes.
+
+    Source size alone was the model, and the 2026-08-25 run showed both of its
+    holes. Eight of that run's twenty shards -- 40% of the matrix -- did no
+    transform work at all, and the slowest shard took 12m03s against a 56s
+    fastest, a 12.9x spread, worse than the 10x that motivated balancing (#153).
+
+    Size is wrong for an ontology the run will not transform. One already known
+    to exceed this run's gate never reaches ROBOT: the downloader checks
+    Content-Length and skips without fetching, or streams with a hard abort at
+    the cap. Weighed at its size it buys a shard that does nothing, and that is
+    exactly what happened -- BERO (878 MB), UPHENO (397 MB), EFO (332 MB) and
+    PMAPP-PMO (290 MB) each got a shard to themselves and each finished in about
+    a minute. So an ontology over the gate contributes no size at all.
+
+    Size is also not the whole cost of one that is transformed. Every ontology
+    costs a download, two JVM starts and a KGX pass whatever its size: in that
+    run a shard of eight small ontologies spent ~31s on them and one of eleven
+    ~120s, against ~3.4 s/MB measured on the shard where MHCRO's 78.6 MB took
+    ~270s. That is a floor of roughly two megabytes' worth of time per ontology,
+    which is more than the 0.46 MB median source in the run -- so ignoring it
+    lets a shard of twenty "free" ontologies look empty. Every ontology carries
+    it, including the ones the gate rejects, which still cost a header check.
+
+    Both numbers are proxies fitted to one run, and they are only ever compared
+    against each other. If the stats ever carry per-ontology durations, schedule
+    on those and delete this.
+    """
+    transformable = [
+        sizes[a] for a in acronyms
+        if sizes.get(a) and not (gate_bytes and sizes[a] > gate_bytes)
+    ]
+    # An ontology the index has never seen is a new submission; the median of
+    # the ones we do know is a better guess than nothing, and does not let a
+    # single unknown dominate the packing the way the maximum would. Ontologies
+    # the gate will reject are left out of it -- they are not transform costs.
+    default = statistics.median(transformable) if transformable else 0
+    weights = {}
+    for a in acronyms:
+        size = sizes.get(a)
+        if size and gate_bytes and size > gate_bytes:
+            weights[a] = float(PER_ONTOLOGY_BYTES)  # skipped at download
+        else:
+            weights[a] = float(PER_ONTOLOGY_BYTES + (size or default))
+    return weights
+
+
+def assign_shards(
+    acronyms: list, num_shards: int, sizes: dict, gate_bytes: int = 0
+) -> list:
     """Split acronyms into shards of roughly equal expected cost.
 
     Round-robin only spreads the heavy ontologies out when size is uncorrelated
@@ -127,6 +184,9 @@ def assign_shards(acronyms: list, num_shards: int, sizes: dict) -> list:
         acronyms: The ontologies to shard, in input order.
         num_shards: How many shards to fill.
         sizes: {acronym: source_bytes}; entries may be missing.
+        gate_bytes: This run's source-size cap. An ontology already known to
+            exceed it is skipped at download, so it weighs nothing here; 0
+            means no cap is known and every size counts. See transform_weights.
 
     Returns:
         A list of shards, each a list of acronyms. Empty shards are dropped.
@@ -134,17 +194,12 @@ def assign_shards(acronyms: list, num_shards: int, sizes: dict) -> list:
     n = max(1, min(num_shards, len(acronyms)))
     buckets = [[] for _ in range(n)]
 
-    known = [sizes[a] for a in acronyms if sizes.get(a)]
-    if not known:
+    if not any(sizes.get(a) for a in acronyms):
         for i, acr in enumerate(acronyms):
             buckets[i % n].append(acr)
         return [b for b in buckets if b]
 
-    # An ontology the index has never seen is a new submission; the median of
-    # the ones we do know is a better guess than nothing, and does not let a
-    # single unknown dominate the packing the way the maximum would.
-    default = statistics.median(known)
-    weights = {a: sizes.get(a) or default for a in acronyms}
+    weights = transform_weights(acronyms, sizes, gate_bytes)
 
     loads = [0.0] * n
     for acr in sorted(acronyms, key=lambda a: (-weights[a], a)):
@@ -427,7 +482,18 @@ def transform(input_dir, output_dir, compress, timeout_min, max_source_mb) -> No
     "at the submission BioPortal is serving now. Those carry forward via the "
     "finalize seed; everything else, including previous failures, is retried.",
 )
-def shard_list(ontology_file, ontologies, num_shards, use_skiplist, index_path) -> None:
+@click.option(
+    "--max_source_mb",
+    default=MAX_SOURCE_MB,
+    show_default=True,
+    type=float,
+    help="The source-size cap this run will transform under. Ontologies the "
+    "index already shows above it are skipped at download, so they are weighed "
+    "at nothing when balancing the shards. Pass the same value as `transform`.",
+)
+def shard_list(
+    ontology_file, ontologies, num_shards, use_skiplist, index_path, max_source_mb
+) -> None:
     """Splits the ontology list into N shards and prints them as JSON.
 
     Emits a JSON array of strings, each a space-separated group of acronyms,
@@ -467,16 +533,22 @@ def shard_list(ontology_file, ontologies, num_shards, use_skiplist, index_path) 
     # Balance the shards by expected cost, so no runner sits idle while another
     # works through every heavyweight in the run.
     sizes = load_index_sizes(index_path)
-    buckets = assign_shards(acronyms, num_shards, sizes)
+    gate_bytes = int(max_source_mb * 1024 * 1024) if max_source_mb else 0
+    buckets = assign_shards(acronyms, num_shards, sizes, gate_bytes)
 
     if buckets and sizes:
-        loads = [
-            sum(sizes.get(a, 0) for a in b) / 1024 / 1024 for b in buckets
-        ]
+        # Report the weights actually used, not the raw sizes: a shard holding
+        # nothing but ontologies the gate will reject is not a 878 MB shard.
+        weights = transform_weights(acronyms, sizes, gate_bytes)
+        loads = [sum(weights.get(a, 0) for a in b) / 1024 / 1024 for b in buckets]
+        gated = sum(
+            1 for a in acronyms if gate_bytes and sizes.get(a, 0) > gate_bytes
+        )
         click.echo(
             f"sharding: {len(buckets)} shards of {min(loads):.0f}-{max(loads):.0f} MB "
             f"(by source size; {sum(1 for a in acronyms if a not in sizes)} "
-            "unknown weighted at the median).",
+            f"unknown weighted at the median, {gated} over the "
+            f"{max_source_mb:.0f} MB gate weighed at a skip).",
             err=True,
         )
 
