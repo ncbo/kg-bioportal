@@ -174,7 +174,7 @@ def onto_to_item(o, transform_date):
 
 # Human-readable explanation for why a non-OK ontology has no KGX artifact.
 REASON_MSG = {
-    "too_large": "The source ontology exceeds the transform size limit (100 MB), so it is not "
+    "too_large": "The source ontology exceeds the transform size limit (250 MB), so it is not "
                  "transformed on the automated (GitHub Actions) pipeline.",
     "too_slow": "The transform exceeded the per-ontology time limit and was stopped.",
     "skiplist": "This ontology is known to be too large or slow for the automated pipeline and is "

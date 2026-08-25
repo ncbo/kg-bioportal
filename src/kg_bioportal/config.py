@@ -11,7 +11,13 @@ import os
 
 # Skip an ontology whose downloaded source file exceeds this many megabytes.
 # Big source files mean big memory use in ROBOT and big output artifacts.
-MAX_SOURCE_MB: float = float(os.environ.get("KGBP_MAX_SOURCE_MB", 100))
+#
+# Measured, not guessed: on 2026-08-25 all 21 ontologies the index held between
+# 100 and 250 MB were transformed on a standard runner, from HRA at 100 MB to
+# GO-PLUS at 227 MB, in 2m32s to 7m49s each. The one that did not survive was
+# CCO at 244 MB, and it is on the skiplist below rather than being a reason to
+# hold the gate down -- see KNOWN_GIANTS for why size is not what stopped it.
+MAX_SOURCE_MB: float = float(os.environ.get("KGBP_MAX_SOURCE_MB", 250))
 
 # Hard wall-clock cap for transforming a single ontology, in minutes. If a
 # transform runs longer it is killed and recorded as skipped (too_slow), so one
@@ -54,6 +60,16 @@ KNOWN_GIANTS: frozenset = frozenset(
         "MESH",        # Medical Subject Headings
         "UMLS",        # UMLS-derived
         "RH-MESH",     # MeSH (Robert Hoehndorf variant)
+        # Not a giant by file size -- 244 MB, inside the gate -- but by what
+        # that file expands to. CCO ships as OBO, which is far denser per byte
+        # than the RDF/XML most sources use, and it parsed to 15,693,276
+        # triples: an order of magnitude more than anything else in its size
+        # band (GNO, 206 MB, is the next densest at ~2.2M nodes+edges). ROBOT
+        # convert and relax both finished; rdflib held the graph, went quiet
+        # for five minutes, and the runner was reclaimed under it, so the
+        # ontology was never recorded as anything and the whole run went red.
+        # Measured 2026-08-25 (run 12).
+        "CCO",         # Cell Cycle Ontology — 15.7M triples from 244 MB of OBO
     }
 )
 
