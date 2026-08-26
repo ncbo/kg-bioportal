@@ -99,8 +99,24 @@ SEEDS: Dict[str, str] = {
     "FOODON:00001002": "biolink:Food",               # food material
     # -- information, publications, samples
     "IAO:0000013": "biolink:Publication",            # journal article
+    "IAO:0000310": "biolink:Publication",            # document
     "OBI:0000011": "biolink:Procedure",              # planned process
     "OBI:0100051": "biolink:MaterialSample",         # specimen
+    "ECO:0000000": "biolink:EvidenceType",           # evidence
+    # -- roots that carry a large ontology on their own, found by looking at
+    #    where the uncategorized nodes actually were after the first pass. Each
+    #    reaches the number of nodes noted, measured on data-2026.08.26-16.
+    "GNO:00000001": "biolink:ChemicalEntity",        # glycan            191,529
+    "CAT:0000000": "biolink:ChemicalEntity",         # lipid classification 63,306
+    "SO:0000704": "biolink:Gene",                    # gene
+    "SO:0000340": "biolink:NucleicAcidEntity",       # chromosome
+    "PW:0000001": "biolink:Pathway",                 # pathway
+    "CLO:0000031": "biolink:CellLine",               # cell line
+    "CHEBI:23367": "biolink:MolecularEntity",        # molecular entity
+    "NCBITaxon:131567": "biolink:OrganismTaxon",     # cellular organisms
+    # OMIT's root carries no label of its own; its subclasses are gene symbols
+    # (A1BG, A2M, NAT1, NAT2 ...), which is what identifies it.
+    "NCRO:0000025": "biolink:Gene",                  #                    59,874
 }
 
 # Upper-ontology terms, kept apart because they are a *last resort*. Nearly
@@ -138,7 +154,76 @@ UPPER_SEEDS: Dict[str, str] = {
     "http://www.ifomis.org/bfo/1.1/span#Process": "biolink:Activity",
     "http://www.ifomis.org/bfo/1.1/span#ProcessAggregate": "biolink:Activity",
     "http://www.ifomis.org/bfo/1.1/span#FiatProcessPart": "biolink:Activity",
+    # BioTop, in the bioonto.de namespace BIOMODELS is built on. Same shape as
+    # the BFO seeds above -- an upper ontology whose top classes are the only
+    # thing a large ontology shares with anything else.
+    "http://bioonto.de/ro2.owl#Continuant": "biolink:PhysicalEntity",
+    "http://bioonto.de/ro2.owl#Process": "biolink:Activity",
+    "http://bioonto.de/ro2.owl#Function": "biolink:Attribute",
+    "http://bioonto.de/ro2.owl#Quality": "biolink:Attribute",
+    "http://purl.org/biotop/biotop.owl#Particular": "biolink:PhysicalEntity",
 }
+
+# A category for a whole ontology, used only where nothing else establishes one.
+#
+# Some ontologies are one kind of thing end to end, and say so nowhere a machine
+# can read: their hierarchy is rooted at owl:Thing or skos:Concept, which the
+# seeds above deliberately refuse. GNO is 580,716 glycan structures; LION is
+# lipid species; ROR is research organizations; FAST-TITLE is bibliographic
+# records for works. Naming those four is worth more than any amount of
+# traversal, because there is nothing in the file to traverse *to*.
+#
+# Every entry here is a judgement about an ontology rather than a fact read out
+# of it, so the bar is: the labels have to show it. Checked by sampling, which
+# is also why ICD10PCS and SNMI are absent despite being obvious candidates --
+# they have four labelled nodes between them (#173), so there is nothing to
+# check. NATPRO, HRA and RDL were considered and rejected: their labels show
+# mixed content (NATPRO's are DOID diseases, RDL's run from "IRON" to "PRESSED
+# GLASS LAMP").
+ONTOLOGY_DEFAULTS: Dict[str, str] = {
+    "GNO": "biolink:ChemicalEntity",
+    "LION": "biolink:ChemicalEntity",
+    "ROR": "biolink:Agent",
+    "FAST-TITLE": "biolink:InformationContentEntity",
+}
+
+# Prefixes that are never an ontology's own subject matter: the structural
+# vocabulary and upper-ontology terms that ride along inside any OWL file. A
+# whole-ontology default must not claim that skos:Concept is a glycan.
+#
+# RO and SIO are here for the same reason, having arrived by a different route:
+# KGX materialises the relations an ontology uses as nodes of their own, so
+# ROR's graph contains RO:0001025 "located in" alongside its 377,491
+# organizations. A relation is not an organization.
+#
+# Only consulted for ONTOLOGY_DEFAULTS. The seeds and the roll-up need no such
+# list, because they only ever assign what the hierarchy actually says.
+STRUCTURAL_PREFIXES = (
+    "owl:", "rdf:", "rdfs:", "xsd:", "skos:", "dc:", "dct:", "dcterms:",
+    "foaf:", "schema:", "prov:", "OIO:", "IAO:", "BFO:", "STY:", "RO:", "SIO:",
+    "http://www.w3.org/", "http://purl.org/dc/", "http://xmlns.com/foaf/",
+)
+
+
+def ontology_default(ontology_name: str, node_id: str) -> Optional[str]:
+    """The whole-ontology category for this node, if there is one.
+
+    Returns None for an ontology with no default, and for the structural terms
+    inside one that has -- see STRUCTURAL_PREFIXES.
+
+    It is a blunt instrument by design, and the residue is visible in the
+    published graphs: LION's 36 lipid *properties* ("average tail order
+    parameter") take ChemicalEntity along with its 63,546 lipids, and GNO's
+    graph carries three nodes for the ontology's own IRI. Both are the price of
+    a claim about a whole ontology, and both are small enough to be worth it --
+    but the report counts defaults apart from evidence-backed assignments
+    precisely so this can be watched rather than assumed.
+    """
+    category = ONTOLOGY_DEFAULTS.get(ontology_name.strip().upper())
+    if not category or node_id.startswith(STRUCTURAL_PREFIXES):
+        return None
+    return category
+
 
 SPECIFIC, GENERAL = 0, 1
 
@@ -153,11 +238,13 @@ SPECIFIC, GENERAL = 0, 1
 CATEGORY_ANCESTORS: Dict[str, Tuple[str, ...]] = {
     "biolink:Cell": ("biolink:AnatomicalEntity",),
     "biolink:CellularComponent": ("biolink:AnatomicalEntity",),
-    "biolink:Protein": ("biolink:Polypeptide",),
-    "biolink:NucleicAcidEntity": ("biolink:ChemicalEntity",),
     "biolink:Food": ("biolink:ChemicalEntity",),
-    "biolink:Publication": ("biolink:InformationContentEntity",),
     "biolink:MaterialSample": ("biolink:PhysicalEntity",),
+    "biolink:MolecularEntity": ("biolink:ChemicalEntity",),
+    "biolink:NucleicAcidEntity": ("biolink:ChemicalEntity", "biolink:MolecularEntity"),
+    "biolink:Pathway": ("biolink:BiologicalProcessOrActivity",),
+    "biolink:Protein": ("biolink:Polypeptide",),
+    "biolink:Publication": ("biolink:InformationContentEntity",),
 }
 
 
@@ -224,12 +311,13 @@ class CategoryReport(NamedTuple):
     seeded: int = 0         # nodes that are themselves a seed term
     inherited: int = 0      # nodes that got one from a subclass ancestor
     mapped: int = 0         # nodes that got one across a mapping edge
+    defaulted: int = 0      # nodes that fell back to what the ontology is
     ambiguous: int = 0      # nodes left holding more than one category
     uncategorized: int = 0  # nodes still NamedThing
 
     @property
     def assigned(self) -> int:
-        return self.seeded + self.inherited + self.mapped
+        return self.seeded + self.inherited + self.mapped + self.defaulted
 
     def summary(self) -> str:
         if not self.total:
@@ -241,6 +329,8 @@ class CategoryReport(NamedTuple):
             f"{self.inherited:,} by subclass",
             f"{self.mapped:,} by mapping",
         ]
+        if self.defaulted:
+            parts.append(f"{self.defaulted:,} by the ontology default")
         if self.ambiguous:
             parts.append(f"{self.ambiguous:,} ambiguous")
         return "; ".join(parts)
@@ -400,7 +490,7 @@ def assign(node_file: str, edge_file: str) -> Tuple[Dict[str, Set[str]], Set[str
     return categories, seeded, mapped
 
 
-def apply_to(node_file: str, edge_file: str) -> CategoryReport:
+def apply_to(node_file: str, edge_file: str, ontology_name: str = "") -> CategoryReport:
     """Rewrite ``node_file``'s category column in place, and report what changed.
 
     The assigned category *replaces* ``biolink:NamedThing`` rather than joining
@@ -408,12 +498,16 @@ def apply_to(node_file: str, edge_file: str) -> CategoryReport:
     leaves the ancestors implied, and nothing can be filtering usefully on
     NamedThing today given that every node in every published graph carries it.
 
-    A node the evidence says nothing about keeps whatever KGX wrote.
+    A node the evidence the ontology itself carries says nothing about falls back
+    to ONTOLOGY_DEFAULTS, if this ontology has one; failing that it keeps
+    whatever KGX wrote.
     """
     categories, seeded, mapped = assign(node_file, edge_file)
+    defaulted: Set[str] = set()
 
     temp_path = node_file + ".categorized"
-    counts = dict(total=0, seeded=0, inherited=0, mapped=0, ambiguous=0, uncategorized=0)
+    counts = dict(total=0, seeded=0, inherited=0, mapped=0, defaulted=0,
+                  ambiguous=0, uncategorized=0)
     with open(node_file, "r") as src, open(temp_path, "w") as dest:
         header = src.readline()
         dest.write(header)
@@ -439,6 +533,13 @@ def apply_to(node_file: str, edge_file: str) -> CategoryReport:
             if assigned is None and node_id in SEED_INDEX:
                 assigned = {SEED_INDEX[node_id][0]}
                 seeded.add(node_id)
+            # Last resort, and only for the few ontologies that have one: what
+            # this whole ontology is. Never overrules evidence from the file.
+            if not assigned:
+                fallback = ontology_default(ontology_name, node_id)
+                if fallback:
+                    assigned = {fallback}
+                    defaulted.add(node_id)
             if assigned:
                 if len(assigned) > 1:
                     counts["ambiguous"] += 1
@@ -446,6 +547,8 @@ def apply_to(node_file: str, edge_file: str) -> CategoryReport:
                     counts["seeded"] += 1
                 elif node_id in mapped:
                     counts["mapped"] += 1
+                elif node_id in defaulted:
+                    counts["defaulted"] += 1
                 else:
                     counts["inherited"] += 1
                 while len(cells) <= cat_at:
@@ -469,7 +572,7 @@ def categorize(node_file: str, edge_file: str, ontology_name: str = "") -> Optio
     """
     label = ontology_name or os.path.basename(node_file)
     try:
-        report = apply_to(node_file, edge_file)
+        report = apply_to(node_file, edge_file, ontology_name)
     except Exception as e:  # noqa: BLE001 -- see the docstring
         logging.warning(
             f"{label}: could not assign Biolink categories ({type(e).__name__}: {e}); "
