@@ -191,7 +191,11 @@ def canonical_forms(curie: str) -> Tuple[str, ...]:
     guessing which an ontology uses, recognise all three.
     """
     if "://" in curie:
-        return (curie,)  # already an IRI; there is no CURIE form to derive
+        # Already an IRI -- BFO 1.1's terms arrive as one. There is no CURIE
+        # form to derive, and deriving one anyway would put "OBO:http_//..."
+        # into the index: harmless, since nothing would ever match it, but the
+        # index is easier to trust when every key is a shape a node can have.
+        return (curie,)
     prefix, _, local = curie.partition(":")
     underscored = f"{prefix}_{local}"
     return (curie, f"OBO:{underscored}", f"{_OBO_IRI}{underscored}")
@@ -321,14 +325,15 @@ def _roll_up(
     reached: Dict[str, Tuple[int, Set[str]]] = {}
     seeded: Set[str] = set()
 
-    def seed(node: str) -> None:
+    # Every seed the ontology mentions starts at distance zero, so a seeded
+    # class is always already reached by the time the sweep arrives from above:
+    # its own category wins over an inherited one without needing a check for it
+    # further down.
+    frontier = sorted(present_seeds)
+    for node in frontier:
         category, tier = SEED_INDEX[node]
         reached[node] = (tier, {category})
         seeded.add(node)
-
-    frontier = sorted(present_seeds)
-    for node in frontier:
-        seed(node)
     while frontier:
         following: Dict[str, Tuple[int, Set[str]]] = {}
         for parent in frontier:
@@ -337,11 +342,6 @@ def _roll_up(
                 # Already reached in an earlier sweep: that seed is nearer, and
                 # nearness outranks everything.
                 if child in reached:
-                    continue
-                if child in SEED_INDEX:
-                    # A seed of its own beats anything inherited from above.
-                    seed(child)
-                    following[child] = reached[child]
                     continue
                 # Two seeds equally near: the more specific tier wins, and a
                 # level tier keeps both. Written as a comparison rather than as

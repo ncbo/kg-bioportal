@@ -20,6 +20,7 @@ on it from the same distance, so the tie-breaking has its own tests below.
 """
 
 import os
+import re
 import tempfile
 from unittest import TestCase, mock
 
@@ -126,6 +127,25 @@ class TestTheIdShapesASeedArrivesIn(TestCase):
     def test_all_three_mean_the_same_category(self):
         forms = canonical_forms("MONDO:0000001")
         self.assertEqual({SEED_INDEX[f][0] for f in forms}, {"biolink:Disease"})
+
+    def test_an_iri_seed_yields_only_itself(self):
+        # BFO 1.1's terms are IRIs. Deriving CURIE forms from one would produce
+        # "OBO:http_//www..." -- never matched by anything, but junk in an index
+        # that is otherwise a list of shapes a node id can actually take.
+        iri = "http://www.ifomis.org/bfo/1.1/snap#Quality"
+        self.assertEqual(canonical_forms(iri), (iri,))
+
+    OBO_LOCAL = re.compile(r"^[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9.]+$")
+
+    def test_no_seed_index_key_is_a_mangled_iri(self):
+        # An IRI put through the CURIE derivation comes out as
+        # "OBO:http_//www.ifomis.org/..." -- a key nothing can ever match. Every
+        # derived key should look like the OBO local name it claims to be.
+        for key in SEED_INDEX:
+            for prefix in ("OBO:", "http://purl.obolibrary.org/obo/"):
+                if key.startswith(prefix):
+                    local = key[len(prefix):]
+                    self.assertRegex(local, self.OBO_LOCAL, f"{key} is not an OBO id")
 
     def test_a_curie_without_a_prefix_does_not_crash(self):
         self.assertEqual(canonical_forms("plain")[0], "plain")
@@ -261,6 +281,15 @@ class TestBreakingATie(TestCase):
                   [sub("A:1", "MONDO:0000001"), sub("A:2", "A:1"),
                    sub("A:3", "A:2"), sub("A:3", "BFO:0000040")])
         self.assertEqual(g.categories()["A:3"], "biolink:PhysicalEntity")
+
+    def test_an_implied_ancestor_is_dropped_from_a_tie(self):
+        # Reached from cell and from anatomical entity at the same distance and
+        # the same tier. Every Cell is an AnatomicalEntity, so the pair says
+        # nothing the narrower one does not -- and this is the path that carries
+        # most_specific into the result, which testing the helper alone missed.
+        g = Graph(self, ["CL:0000000", "UBERON:0001062", "A:1"],
+                  [sub("A:1", "CL:0000000"), sub("A:1", "UBERON:0001062")])
+        self.assertEqual(g.categories()["A:1"], "biolink:Cell")
 
     def test_two_equally_specific_seeds_both_stand(self):
         # No basis to pick, and Biolink permits several. #98's tally counts a
