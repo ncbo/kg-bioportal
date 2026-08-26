@@ -17,6 +17,7 @@ _mixed_type_sorts = 0
 
 _patched = False
 _owl_format_patched = False
+_edge_id_patched = False
 
 
 def mixed_type_sort_count() -> int:
@@ -146,4 +147,79 @@ def patch_owl_source_format() -> bool:
     OwlSource.parse = parse
     _owl_format_patched = True
     logging.debug("Patched kgx.source.OwlSource.parse to honour the file's format.")
+    return True
+
+
+def edge_key(edge: dict) -> str:
+    """The id KGX itself would give this edge, from its subject/predicate/object.
+
+    Matches ``kgx.utils.kgx_utils.generate_edge_key``, which is what KGX uses
+    for the edges it does assign ids to, so a filled-in id is indistinguishable
+    from one KGX wrote -- rather than a second scheme sitting alongside the
+    first.
+    """
+    return "{}-{}-{}".format(
+        edge.get("subject", ""), edge.get("predicate", ""), edge.get("object", "")
+    )
+
+
+def patch_missing_edge_ids() -> bool:
+    """Give every edge an id, not just the ones a cache flush happened to catch.
+
+    KGX's RdfSource holds parsed edges in ``edge_cache`` and drains it in two
+    places. The mid-stream drain, which fires when the cache reaches
+    ``CACHE_SIZE`` (10,000), assigns an id to every edge that does not already
+    have one::
+
+        if "id" not in self.edge_cache[k] and "association_id" not in ...:
+            self.edge_cache[k]["id"] = generate_edge_key(subject, predicate, object)
+
+    The final drain at end-of-parse -- the one that yields everything left over
+    -- has no such block. So an ontology's edges get ids only in whole batches
+    of 10,000, and the remainder never do.
+
+    That is exactly what the published graphs show (#71). NANDO has 14,133
+    edges: the first 10,000 carry ids and the last 4,133 are blank, with the
+    same mix of predicates on both sides of the boundary. FAST-EVENT-SKOS is
+    60,000 of 62,123, MONDO 260,000 of 268,909. An ontology with fewer than
+    10,000 edges never flushes at all, so BFO's 115 edges are blank to the last
+    one -- which is the case the issue was filed about.
+
+    (A handful of edges carry an id regardless: those dereified from an
+    owl:Axiom bring their own, which is why HPIO has 3 ids among 244 edges.)
+
+    So: fill in the id on the way past, using KGX's own scheme. This is a fix to
+    a KGX bug applied from outside, like the two patches above; it stops
+    mattering if upstream drains the final batch the way it drains the others.
+
+    Returns:
+        True if the patch was applied, False if it was already in place.
+    """
+    global _edge_id_patched
+    if _edge_id_patched:
+        return False
+
+    try:
+        from kgx.source.owl_source import OwlSource
+    except ImportError as e:
+        logging.warning(f"Could not patch KGX's edge id assignment: {e}")
+        return False
+
+    original_parse = OwlSource.parse
+
+    def parse(self, *args: Any, **kwargs: Any):
+        for record in original_parse(self, *args, **kwargs):
+            # Node records are 2-tuples, edge records 4-tuples of
+            # (subject, object, key, data) -- see RdfSource's drains. The
+            # stream also carries a bare None after every triple that did not
+            # complete a record, so this cannot assume it has a tuple at all.
+            if isinstance(record, tuple) and len(record) == 4:
+                edge = record[3]
+                if isinstance(edge, dict) and not edge.get("id"):
+                    edge["id"] = edge_key(edge)
+            yield record
+
+    OwlSource.parse = parse
+    _edge_id_patched = True
+    logging.debug("Patched kgx.source.OwlSource.parse to give every edge an id.")
     return True
