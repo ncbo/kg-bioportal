@@ -77,6 +77,57 @@ class MergeStatsTestCase(TestCase):
         return dict(line.split("\t") for line in lines[1:])
 
 
+class TestCategoryTalliesSurviveTheMerge(MergeStatsTestCase):
+    """The per-ontology Biolink category counts (#98) are shard-local data.
+
+    Every shard writes its own onto_stats fragment and this script is the only
+    thing that joins them, so a tally that does not survive the merge never
+    reaches the site -- which is the half of the issue a reader actually sees.
+    """
+
+    NODE_CATS = {"biolink:NamedThing": 10}
+    EDGE_CATS = {"biolink:Association": 20}
+
+    def test_a_fresh_tally_reaches_the_merged_index(self):
+        self.write_fragment([entry("FRESH", node_categories=self.NODE_CATS,
+                                   edge_categories=self.EDGE_CATS)])
+        index, _ = self.run_merge()
+        self.assertEqual(index["FRESH"]["node_categories"], self.NODE_CATS)
+        self.assertEqual(index["FRESH"]["edge_categories"], self.EDGE_CATS)
+
+    def test_tallies_from_separate_shards_both_survive(self):
+        self.write_fragment([entry("A", node_categories={"biolink:Disease": 3})],
+                            shard="shard-1")
+        self.write_fragment([entry("B", node_categories={"biolink:NamedThing": 4})],
+                            shard="shard-2")
+        index, _ = self.run_merge()
+        self.assertEqual(index["A"]["node_categories"], {"biolink:Disease": 3})
+        self.assertEqual(index["B"]["node_categories"], {"biolink:NamedThing": 4})
+
+    def test_a_carried_forward_tally_is_kept(self):
+        # A run that does not rebuild an ontology must not strip what the run
+        # that did rebuild it recorded.
+        base = self.write_base([entry("OLD", download_url=asset(PREV_TAG, "OLD"),
+                                      node_categories=self.NODE_CATS)])
+        self.write_fragment([entry("FRESH")])
+        index, _ = self.run_merge(base)
+        self.assertEqual(index["OLD"]["node_categories"], self.NODE_CATS)
+
+    def test_a_rerun_that_fails_drops_the_stale_tally(self):
+        # The entry no longer describes any artifact; carrying its old
+        # composition forward would describe a graph that is not published.
+        base = self.write_base([entry("X", download_url=asset(PREV_TAG, "X"),
+                                      node_categories=self.NODE_CATS)])
+        self.write_fragment([entry("X", status="Failed", reason="transform_error_kgx")])
+        index, _ = self.run_merge(base)
+        self.assertNotIn("node_categories", index["X"])
+
+    def test_an_entry_without_a_tally_gains_no_empty_one(self):
+        self.write_fragment([entry("PLAIN")])
+        index, _ = self.run_merge()
+        self.assertNotIn("node_categories", index["PLAIN"])
+
+
 class TestDownloadUrlInvariants(MergeStatsTestCase):
     """Where each artifact lives must survive a run that didn't rebuild it.
 

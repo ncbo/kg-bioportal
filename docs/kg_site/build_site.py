@@ -169,6 +169,11 @@ def onto_to_item(o, transform_date):
         "submission_id": o.get("submission_id", "NA"),
         "reason": o.get("reason", ""), "detail": o.get("detail", ""),
         "malformed_literals": o.get("malformed_literals", 0),
+        # Biolink categories present on this ontology's nodes and edges (#98).
+        # Absent from entries seeded from a release built before the transform
+        # recorded them; the page then says so rather than showing an empty chart.
+        "node_categories": o.get("node_categories") or {},
+        "edge_categories": o.get("edge_categories") or {},
         "transform_date": transform_date or "",
     }
 
@@ -492,6 +497,44 @@ def bar_chart(rows, kind, unit):
         )
     return f'<div class="barchart">{"".join(bars)}</div>'
 
+def category_chart(counts, kind, unit):
+    """Ranked bars for a Biolink category tally: {category: count}.
+
+    Unlinked, unlike bar_chart -- a category is not a page on this site. The
+    label is the class name without its ``biolink:`` prefix, which is the same
+    for every row and so carries no information at this width; the full CURIE
+    is in the row's tooltip.
+    """
+    if not counts:
+        return ""
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    top = ranked[0][1] or 1
+    rows = []
+    for label, v in ranked:
+        pct = max(v / top * 100, 0.8)
+        rows.append(
+            f'<div class="bar-row wide" title="{esc(label)}: {commafy(v)} {unit}">'
+            f'<span class="bar-lab">{esc(short_cat(label))}</span>'
+            f'<span class="bar-track"><span class="bar-fill {kind}" style="width:{pct:.2f}%"></span></span>'
+            f'<span class="bar-val num">{commafy(v)}</span></div>'
+        )
+    return f'<div class="barchart">{"".join(rows)}</div>'
+
+# A tally counts a node once per category it carries, so it can exceed the node
+# count. Said once here rather than in every panel that shows one.
+MULTI_CAT_NOTE = ("An item carrying more than one category is counted under each, so these "
+                  "counts can add up to more than the total.")
+
+def category_panel(counts, total, kind, unit, absent_html):
+    """The Nodes/Edges tab body for one ontology: its category tally, or why there isn't one."""
+    if not counts:
+        return absent_html
+    n = len(counts)
+    head = (f'<p class="eyebrow">Biolink categories <span class="eb-count">'
+            f'{commafy(n)} {"category" if n == 1 else "categories"} across '
+            f'{commafy(total)} {unit}</span></p>')
+    return head + category_chart(counts, kind, unit) + f'<p class="muted mt">{MULTI_CAT_NOTE}</p>'
+
 def render_summary(totals, kg_count, onto_items):
     """Site-wide summary: headline counts, transform status, and top-10 charts."""
     ok_ontos = [it for it in onto_items if it.get("ok")]
@@ -545,6 +588,34 @@ def render_summary(totals, kg_count, onto_items):
                         key=lambda it: it[field], reverse=True)[:10]
         return [(it["acr"], it[field], f'../resource/{it["id"]}/') for it in ranked]
 
+    # Site-wide composition, summed over the ontologies whose index entries
+    # record a tally (#98). Entries seeded from a release built before the
+    # transform recorded them have none, so the header says how many ontologies
+    # are actually behind these numbers rather than implying it is all of them.
+    def sum_cats(field):
+        total, seen = {}, 0
+        for it in ok_ontos:
+            counts = it.get(field) or {}
+            if not counts:
+                continue
+            seen += 1
+            for name, v in counts.items():
+                total[name] = total.get(name, 0) + v
+        return total, seen
+
+    def cat_block(field, kind, unit, label):
+        counts, seen = sum_cats(field)
+        if not counts:
+            return ""
+        return f"""
+      <section class="block">
+        <p class="eyebrow">{label} <span class="eb-count">{commafy(seen)} of
+          {commafy(onto_ok)} ontologies</span></p>
+        {category_chart(counts, kind, unit)}
+        <p class="muted mt">{MULTI_CAT_NOTE} Ontologies last transformed before these counts
+          were recorded contribute nothing to them.</p>
+      </section>"""
+
     return head("Summary · KG-BioPortal") + nav("../", active="summary") + f"""
 <div class="wrap">
   <div class="crumbs"><a href="../index.html">Home</a><span>/</span>Summary</div>
@@ -576,6 +647,8 @@ def render_summary(totals, kg_count, onto_items):
         <p class="eyebrow">Largest ontologies by edge count</p>
         {bar_chart(top_rows('edges'), 'edge', 'edges')}
       </section>
+{cat_block('node_categories', 'node', 'nodes', 'Node categories across the collection')}
+{cat_block('edge_categories', 'edge', 'edges', 'Edge categories across the collection')}
     </main>
 
     <aside class="side">
@@ -992,21 +1065,25 @@ def render_ontology_resource(it):
     ]
     details = "".join(detail_rows)
 
-    # Transformed ontologies have only totals in the index — the per-node/edge
-    # types live in the KGX download, not here. Say so plainly.
-    ont_nodes_panel = (
-        "<p class=\"muted\">Per-node-type (Biolink category) lists aren't recorded in the index for "
-        "transformed ontologies"
+    # The Biolink category tally recorded at transform time (#98). Entries
+    # seeded from a release built before it was recorded have none, so each
+    # panel keeps the old "look in the download" text as its fallback.
+    ont_nodes_panel = category_panel(
+        it.get("node_categories"), nodes, "node", "nodes",
+        "<p class=\"muted\">Per-node-type (Biolink category) counts aren't recorded in the index for "
+        "this ontology"
         + (f' — each node carries a <span class="mono">category</span> column in the KGX download. '
            f'Total nodes: <span class="num">{commafy(nodes)}</span>.' if ok and nodes else ".")
-        + "</p>"
+        + "</p>",
     )
-    ont_edges_panel = (
-        "<p class=\"muted\">Per-edge-type (predicate) lists aren't recorded in the index for "
-        "transformed ontologies"
-        + (f' — each edge carries <span class="mono">predicate</span> and <span class="mono">relation</span> '
-           f'columns in the KGX download. Total edges: <span class="num">{commafy(edges)}</span>.' if ok and edges else ".")
-        + "</p>"
+    ont_edges_panel = category_panel(
+        it.get("edge_categories"), edges, "edge", "edges",
+        "<p class=\"muted\">Per-edge-type (Biolink category) counts aren't recorded in the index for "
+        "this ontology"
+        + (f' — each edge carries <span class="mono">category</span>, <span class="mono">predicate</span> '
+           f'and <span class="mono">relation</span> columns in the KGX download. '
+           f'Total edges: <span class="num">{commafy(edges)}</span>.' if ok and edges else ".")
+        + "</p>",
     )
 
     return head(f"{acr} · KG-BioPortal") + nav("../../") + f"""
@@ -1327,7 +1404,10 @@ padding:3px 5px;border-radius:7px;color:var(--ink)}
 .bar-fill{display:block;height:100%;border-radius:0 4px 4px 0;min-width:2px}
 .bar-fill.node{background:var(--node)}.bar-fill.edge{background:var(--edge)}
 .bar-val{font-size:12px;color:var(--ink-soft);text-align:right}
-@media(max-width:520px){.bar-row{grid-template-columns:88px minmax(0,1fr) 46px;gap:8px}}
+/* category tallies: longer labels, exact counts */
+.bar-row.wide{grid-template-columns:190px minmax(0,1fr) 76px}
+@media(max-width:520px){.bar-row{grid-template-columns:88px minmax(0,1fr) 46px;gap:8px}
+.bar-row.wide{grid-template-columns:120px minmax(0,1fr) 66px}}
 .stack{display:flex;gap:2px;height:16px;border-radius:4px;overflow:hidden;background:var(--panel-2)}
 .stack .seg{display:block;height:100%}
 .seg.ok{background:var(--prod)}.seg.fail{background:var(--warn)}.seg.skip{background:var(--ink-faint)}

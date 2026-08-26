@@ -11,7 +11,7 @@ import sys
 import tarfile
 import zipfile
 from contextlib import contextmanager
-from typing import List, NamedTuple, Optional, Tuple
+from typing import Dict, List, NamedTuple, Optional, Tuple
 
 import yaml
 from kgx.transformer import Transformer as KGXTransformer
@@ -23,6 +23,7 @@ from kg_bioportal.config import (
 )
 from kg_bioportal.downloader import DOWNLOAD_REPORT_NAME, ONTOLOGY_LIST_NAME
 from kg_bioportal.kgx_patches import (
+    patch_missing_edge_categories,
     patch_missing_edge_ids,
     patch_mixed_type_sorting,
     patch_owl_source_format,
@@ -34,6 +35,7 @@ from kg_bioportal.robot_utils import initialize_robot, robot_convert, robot_rela
 patch_mixed_type_sorting()
 patch_owl_source_format()
 patch_missing_edge_ids()
+patch_missing_edge_categories()
 
 # TODO: Don't repeat steps if the products already exist
 # TODO: Fix KGX hijacking logging
@@ -956,6 +958,15 @@ class TransformOutcome(NamedTuple):
     # Literals whose lexical form does not match their declared datatype -- a
     # data-quality fact about the source, counted rather than logged (#152).
     malformed_literals: int = 0
+    # Biolink categories present on this ontology's nodes and edges, and how
+    # many of each (#98). Empty for a failure, and for an ontology whose files
+    # carry no category column at all. Appended after malformed_literals so
+    # ``failed()``'s positional construction is unaffected.
+    #
+    # The two empty dicts are shared defaults, as any NamedTuple default is:
+    # nothing here mutates a tally after it is built.
+    node_categories: Dict[str, int] = {}
+    edge_categories: Dict[str, int] = {}
 
     @classmethod
     def failed(
@@ -968,6 +979,67 @@ class TransformOutcome(NamedTuple):
         return cls(
             False, 0, 0, stage, summarize_detail(detail), reason, malformed_literals
         )
+
+
+# Recorded in place of an empty category cell, so "how many of these carry no
+# category at all" is a number in the report rather than a blank key.
+UNCATEGORIZED = "(none)"
+
+
+def tally_column(path: str, column: str = "category") -> Tuple[int, Dict[str, int]]:
+    """Count a KGX TSV's rows and tally the values of one column.
+
+    Read line by line rather than in one go: a large ontology's node file runs
+    to hundreds of megabytes, and this replaces a ``readlines()`` that held all
+    of it at once purely to take its length.
+
+    KGX writes a multi-valued column pipe-delimited, and a node may legitimately
+    carry more than one category. Each value is counted once per row it appears
+    in, so a tally sums to at least the row count and can exceed it: it answers
+    "how many nodes are a Disease", not "how do the nodes partition".
+
+    Args:
+        path: The TSV to read. Its first line is the header.
+        column: Header name to tally. A file without that column is still
+            counted; its tally is empty.
+
+    Returns:
+        (rows excluding the header, {value: rows carrying that value}).
+    """
+    counts: Dict[str, int] = {}
+    rows = 0
+    with open(path, "r") as f:
+        header = f.readline()
+        if not header:
+            return 0, counts
+        fields = header.rstrip("\n").split("\t")
+        index = fields.index(column) if column in fields else None
+        for line in f:
+            rows += 1
+            if index is None:
+                continue
+            cells = line.rstrip("\n").split("\t")
+            cell = cells[index].strip() if index < len(cells) else ""
+            values = [v.strip() for v in cell.split("|") if v.strip()]
+            for value in values or [UNCATEGORIZED]:
+                counts[value] = counts.get(value, 0) + 1
+    return rows, counts
+
+
+def format_tally(counts: Dict[str, int], limit: int = 10) -> str:
+    """A tally as one log line, biggest first.
+
+    Truncated rather than unbounded: the full tally goes to onto_stats.yaml, and
+    an ontology with a long tail of categories should not push everything else
+    in the shard log out of view.
+    """
+    if not counts:
+        return "none"
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    shown = ", ".join(f"{name} {count:,}" for name, count in ranked[:limit])
+    if len(ranked) > limit:
+        shown += f", and {len(ranked) - limit} more"
+    return shown
 
 
 def summarize_detail(text: str, limit: int = MAX_DETAIL_CHARS) -> str:
@@ -1335,6 +1407,12 @@ class Transformer:
             # Same reasoning: recorded only for the ontologies that have any.
             if outcome.malformed_literals:
                 entry["malformed_literals"] = outcome.malformed_literals
+            # What kinds of node and edge this ontology actually produced (#98).
+            # Only OK entries have any; a failure has no files to tally.
+            if outcome.node_categories:
+                entry["node_categories"] = dict(outcome.node_categories)
+            if outcome.edge_categories:
+                entry["edge_categories"] = dict(outcome.edge_categories)
             onto_log[ontology_name] = entry
 
         # Write total stats to a yaml
@@ -1621,13 +1699,18 @@ class Transformer:
             )
             if literals.count:
                 logging.warning(f"{ontology_name}: {literals.summary()}")
-            # Get length of nodefile
-            with open(nodefilename, "r") as f:
-                nodecount = len(f.readlines()) - 1
-
-            # Get length of edgefile
-            with open(edgefilename, "r") as f:
-                edgecount = len(f.readlines()) - 1
+            # Size and composition of what we just wrote, in one pass over each
+            # file. The categories are logged here as well as recorded, so a
+            # shard log says what came out of an ontology and not just how much
+            # (#98).
+            nodecount, node_categories = tally_column(nodefilename)
+            edgecount, edge_categories = tally_column(edgefilename)
+            logging.info(
+                f"{ontology_name}: node categories: {format_tally(node_categories)}"
+            )
+            logging.info(
+                f"{ontology_name}: edge categories: {format_tally(edge_categories)}"
+            )
 
             # Compress if requested. Product is written flat at the top of the
             # output dir as <ACRONYM>.tar.gz for direct release upload.
@@ -1670,7 +1753,12 @@ class Transformer:
             )
 
         return TransformOutcome(
-            True, nodecount, edgecount, malformed_literals=literals.count
+            True,
+            nodecount,
+            edgecount,
+            malformed_literals=literals.count,
+            node_categories=node_categories,
+            edge_categories=edge_categories,
         )
 
     def decompress(self, ontology_path: str, ontology_name: str) -> str:

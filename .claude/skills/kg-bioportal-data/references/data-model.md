@@ -71,6 +71,16 @@ ontologies:
                           #   written and the graph is unaffected.
   nodecount: 5102         # 0 unless status OK
   edgecount: 8691
+  # node_categories / edge_categories: OK entries only, and only where the run
+  # that built the entry recorded a tally -- which Biolink categories are present
+  # and how many rows carry each. A row with more than one category is counted
+  # under each, so a tally can sum to more than nodecount/edgecount; `(none)` is
+  # the key for rows with no category at all. Entries carried forward from a
+  # release built before this was recorded have neither field.
+  node_categories:
+    biolink:NamedThing: 5102
+  edge_categories:
+    biolink:Association: 8691
   submission_id: '6'      # BioPortal submission id
   source_bytes: 7501012   # size of the source ontology file
   download_url: https://github.com/ncbo/kg-bioportal/releases/download/data-2026.08.01-42/AGRO.tar.gz
@@ -108,7 +118,7 @@ transform_date: 2026-07-31
 | `subject` | source node CURIE | `OBO:AGRO_00000002` |
 | `predicate` | Biolink predicate | `biolink:subclass_of` |
 | `object` | target node CURIE | `OBO:AGRO_00000108` |
-| `category` | Biolink edge category | *(often empty)* |
+| `category` | Biolink edge category | `biolink:Association` |
 | `relation` | original relation CURIE | `rdfs:subClassOf` |
 | `aggregator_knowledge_source` | where we got it | `infores:bioportal` |
 | `primary_knowledge_source` | source ontology, as an infores | `infores:bioportal.agro` |
@@ -123,6 +133,18 @@ per-ontology infores. The acronym is the part after `infores:bioportal.`, lowerc
 column on edges, and a `provided_by` on nodes, both holding the **relaxed OWL file name**
 (`<ID>_relaxed.owl`) — an artifact of the ROBOT→KGX step that exists only inside a runner's temp
 directory. If you are reading one of those releases, strip `_relaxed.owl` to recover the acronym.
+
+### Category note
+Every node carries `biolink:NamedThing` and every edge `biolink:Association`. These are the roots
+of the Biolink class hierarchies, and they are what KGX writes when nothing more specific has been
+established: a plain OWL ontology carries no Biolink typing, and this pipeline does not currently
+infer any. So the `category` columns say *that* a row is a node or an edge, not what kind — treat
+a category tally as a completeness check rather than as a description of the ontology's contents.
+
+**Releases up to and including `data-2026.08.25-12`** carry the same `biolink:NamedThing` on nodes
+but leave `category` **empty** on every edge except those dereified from an `owl:Axiom`, which
+carry `biolink:Association`. The proportion is an artifact of how the ontology was written, not a
+distinction worth reading.
 
 ### Other characteristics
 - Node ids are CURIEs; prefixes vary by ontology (`OBO:`, ontology-specific prefixes, etc.).
