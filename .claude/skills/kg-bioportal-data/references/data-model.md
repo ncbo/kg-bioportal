@@ -97,34 +97,42 @@ transform_date: 2026-07-31
 | `category` | Biolink category | `biolink:NamedThing` |
 | `name` | label | `tillage process` |
 | `description` | definition | `A planned process in which soil is …` |
-| `provided_by` | source (see note) | `AGRO_relaxed.owl` |
+| `provided_by` | source ontology, as an infores | `infores:bioportal.agro` |
 | `synonym`, `exact_synonym`, `broad_synonym`, `narrow_synonym`, `related_synonym` | synonyms | (often blank) |
 
 **Edges** — `<ID>_edges.tsv`:
 
 | column | meaning | example |
 |--------|---------|---------|
-| `id` | edge id | *(usually empty)* |
+| `id` | edge id, `subject-predicate-object` | `OBO:AGRO_00000002-biolink:subclass_of-OBO:AGRO_00000108` |
 | `subject` | source node CURIE | `OBO:AGRO_00000002` |
 | `predicate` | Biolink predicate | `biolink:subclass_of` |
 | `object` | target node CURIE | `OBO:AGRO_00000108` |
 | `category` | Biolink edge category | *(often empty)* |
 | `relation` | original relation CURIE | `rdfs:subClassOf` |
-| `knowledge_source` | source (see note) | `AGRO_relaxed.owl` |
+| `aggregator_knowledge_source` | where we got it | `infores:bioportal` |
+| `primary_knowledge_source` | source ontology, as an infores | `infores:bioportal.agro` |
 
-### Provenance note (important)
-Both `provided_by` (nodes) and `knowledge_source` (edges) currently contain the **relaxed OWL file
-name** (`<ID>_relaxed.owl`), an artifact of the ROBOT→KGX step, rather than the acronym or an
-`infores:` CURIE. It still uniquely identifies the source ontology (strip `_relaxed.owl`). If you
-need clean per-source provenance in a merged graph, rewrite this column to the acronym or
-`infores:bioportal` before/after merging.
+### Provenance note
+The ontology is the primary source of its own assertions and BioPortal is the aggregator we got
+them from, so edges carry both `primary_knowledge_source` (`infores:bioportal.<acronym>`) and
+`aggregator_knowledge_source` (`infores:bioportal`), and nodes carry `provided_by` with the same
+per-ontology infores. The acronym is the part after `infores:bioportal.`, lowercased.
+
+**Releases up to and including `data-2026.08.25-12`** instead carry a single `knowledge_source`
+column on edges, and a `provided_by` on nodes, both holding the **relaxed OWL file name**
+(`<ID>_relaxed.owl`) — an artifact of the ROBOT→KGX step that exists only inside a runner's temp
+directory. If you are reading one of those releases, strip `_relaxed.owl` to recover the acronym.
 
 ### Other characteristics
 - Node ids are CURIEs; prefixes vary by ontology (`OBO:`, ontology-specific prefixes, etc.).
 - `predicate` is Biolink-normalized (e.g. `biolink:subclass_of`); `relation` keeps the original
   (e.g. `rdfs:subClassOf`).
-- Edge `id` is frequently empty — cat-merge and KGX handle this, but if you need stable edge ids,
-  synthesize them (e.g. `subject|predicate|object`).
+- Edge `id` is `subject-predicate-object`, and is present on every edge. In releases up to
+  `data-2026.08.25-12` it was empty on most of them: KGX assigned ids only to whole batches of
+  10,000 edges and left the remainder blank, so an ontology with fewer than 10,000 edges had none
+  at all. The ids are derived, not opaque, so they are stable across runs but not unique across
+  ontologies until you namespace them.
 - These are single-ontology graphs; cross-ontology references appear as edges whose `object` (or
   `subject`) is a CURIE not present as a node in this graph — i.e. **dangling** until you merge in
   the referenced ontology. This is the main signal the merge QC report surfaces.

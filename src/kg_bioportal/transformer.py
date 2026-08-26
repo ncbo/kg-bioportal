@@ -22,13 +22,18 @@ from kg_bioportal.config import (
     PER_ONTOLOGY_TIMEOUT_MIN,
 )
 from kg_bioportal.downloader import DOWNLOAD_REPORT_NAME, ONTOLOGY_LIST_NAME
-from kg_bioportal.kgx_patches import patch_mixed_type_sorting, patch_owl_source_format
+from kg_bioportal.kgx_patches import (
+    patch_missing_edge_ids,
+    patch_mixed_type_sorting,
+    patch_owl_source_format,
+)
 from kg_bioportal.robot_utils import initialize_robot, robot_convert, robot_relax
 
 # Applied at import so it is in place for any use of the KGX transform, not just
 # the ones that go through Transformer. See kgx_patches for what and why.
 patch_mixed_type_sorting()
 patch_owl_source_format()
+patch_missing_edge_ids()
 
 # TODO: Don't repeat steps if the products already exist
 # TODO: Fix KGX hijacking logging
@@ -726,6 +731,49 @@ _LOAD_FAILURE_MARKERS = (
 # The onto_stats reason for those, so they stop sitting in the same bucket as
 # failures we can do something about.
 INVALID_SOURCE_REASON = "invalid_source"
+
+
+# Who we got the ontology from. BioPortal aggregates ontologies it does not
+# author, which is what an aggregator_knowledge_source is for; the ontology
+# itself is the primary source of its own assertions.
+AGGREGATOR_INFORES = "infores:bioportal"
+
+# The columns the TSVs carry. Streaming is the only way a 250 MB ontology fits
+# on a runner, and a streaming sink cannot discover its columns from records it
+# has already written past -- KGX says as much, and falls back to a fixed
+# DEFAULT_EDGE_COLUMNS that has "knowledge_source" in it and neither of the two
+# slots we actually populate. So the provenance would sit on every record and
+# reach no column. Declared here instead.
+#
+# These are KGX's own defaults with the edge provenance corrected: the generic
+# "knowledge_source" is dropped because nothing fills it once the specific slots
+# are set, and an always-empty column is worse than no column.
+NODE_COLUMNS = [
+    "id", "category", "name", "description", "provided_by",
+    "synonym", "exact_synonym", "broad_synonym", "narrow_synonym",
+    "related_synonym",
+]
+EDGE_COLUMNS = [
+    "id", "subject", "predicate", "object", "category", "relation",
+    "primary_knowledge_source", "aggregator_knowledge_source",
+]
+
+# An acronym is not an infores identifier, and inventing a registry entry for
+# 1190 ontologies is not this function's job -- but a bare "AGRO" in a
+# knowledge_source column is not one either. Namespacing it says plainly where
+# the value came from and keeps it distinguishable from a registered infores,
+# which is the honest state of things until BioPortal ontologies have real ones.
+INFORES_PREFIX = "infores:bioportal."
+
+
+def ontology_infores(acronym: str) -> str:
+    """The knowledge-source identifier for one BioPortal ontology.
+
+    Lowercased and namespaced under the aggregator: infores identifiers are
+    conventionally lowercase, and an acronym on its own would read as a claim to
+    a registered infores that does not exist.
+    """
+    return f"{INFORES_PREFIX}{acronym.strip().lower()}"
 
 # Ceiling on the syntax check below. It runs only for an ontology that has
 # already failed, but rdflib holds the whole graph in memory and the per-
@@ -1524,15 +1572,37 @@ class Transformer:
         outfilename = os.path.join(workdir, f"{ontology_name}")
         nodefilename = outfilename + "_nodes.tsv"
         edgefilename = outfilename + "_edges.tsv"
+        # Provenance goes in input_args, not output_args. KGX reads it in
+        # Transformer.transform as `source.parse(f, default_provenance=..., 
+        # **input_args)`, and the sink never looks at it -- so the same keys set
+        # on output_args, as they were, are silently dropped (#72). What KGX
+        # falls back to when nothing is set is
+        #
+        #     default_provenance = os.path.basename(f)
+        #
+        # which is our own intermediate: every node and edge of all 1190
+        # published graphs says it was provided by "<ACRONYM>_relaxed.owl", a
+        # build artifact that does not exist anywhere outside a runner's temp
+        # directory and identifies nothing about where the knowledge came from.
+        #
+        # So say it properly. The ontology is the primary source of its own
+        # assertions; BioPortal is the aggregator we got them from. Both slots
+        # take the same infores rather than the bare acronym on one and a
+        # namespaced id on the other: these are knowledge-source slots in
+        # Biolink, and the acronym is still recoverable from the value, from the
+        # file name, and from the index.
         input_args = {
             "format": "owl",
             "filename": [kgx_input_path],
+            "provided_by": ontology_infores(ontology_name),
+            "primary_knowledge_source": ontology_infores(ontology_name),
+            "aggregator_knowledge_source": AGGREGATOR_INFORES,
         }
         output_args = {
             "format": "tsv",
             "filename": outfilename,
-            "provided_by": ontology_name,
-            "aggregator_knowledge_source": "infores:bioportal",
+            "node_properties": NODE_COLUMNS,
+            "edge_properties": EDGE_COLUMNS,
         }
         logging.info("Doing KGX transform.")
         # Constructing the transformer is inside the try as well: it is part of
