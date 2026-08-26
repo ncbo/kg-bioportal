@@ -21,6 +21,7 @@ from kg_bioportal.config import (
     MAX_SOURCE_MB,
     PER_ONTOLOGY_TIMEOUT_MIN,
 )
+from kg_bioportal.categories import categorize
 from kg_bioportal.downloader import DOWNLOAD_REPORT_NAME, ONTOLOGY_LIST_NAME
 from kg_bioportal.kgx_patches import (
     patch_missing_edge_categories,
@@ -1699,6 +1700,11 @@ class Transformer:
             )
             if literals.count:
                 logging.warning(f"{ontology_name}: {literals.summary()}")
+            # Put real Biolink categories on the nodes before anything counts
+            # them (#169). This runs on the finished files rather than inside
+            # the KGX stream because it needs the whole subclass hierarchy at
+            # once, which a streaming source cannot offer.
+            categorize(nodefilename, edgefilename, ontology_name)
             # Size and composition of what we just wrote, in one pass over each
             # file. The categories are logged here as well as recorded, so a
             # shard log says what came out of an ontology and not just how much
