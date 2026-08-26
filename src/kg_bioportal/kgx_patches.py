@@ -18,6 +18,7 @@ _mixed_type_sorts = 0
 _patched = False
 _owl_format_patched = False
 _edge_id_patched = False
+_edge_category_patched = False
 
 
 def mixed_type_sort_count() -> int:
@@ -222,4 +223,62 @@ def patch_missing_edge_ids() -> bool:
     OwlSource.parse = parse
     _edge_id_patched = True
     logging.debug("Patched kgx.source.OwlSource.parse to give every edge an id.")
+    return True
+
+
+# The root of Biolink's association hierarchy. Every edge is an association of
+# some kind, so this is the one category that is true of all of them.
+ROOT_ASSOCIATION = "biolink:Association"
+
+
+def patch_missing_edge_categories() -> bool:
+    """Give every edge the root association category, not just the reified ones.
+
+    KGX sets a category on an edge in exactly one place: ``OwlSource`` reifies
+    the edges that carry a logical interpretation and stamps
+    ``biolink:Association`` on those. Every other edge -- which is almost all of
+    them -- reaches the TSV with an empty ``category`` column. In the
+    ``data-2026.08.25-12`` release MONDO's and VTO's edges are blank to the last
+    one, while MCBCC, whose axioms are reified, is mostly ``biolink:Association``.
+
+    That is the same inconsistency as the missing edge ids (#71): the value KGX
+    would have written is not in doubt, it just does not write it on the path
+    most edges take. Filling it in makes the category counts this pipeline now
+    reports (#98) say something about every edge rather than about the handful
+    that happened to be reified.
+
+    ``biolink:Association`` is the root of the association hierarchy, so it is
+    correct-but-general for any edge: a more specific category would need
+    per-predicate evidence we do not have here. An edge that already carries a
+    category -- the reified ones, or anything a future KGX assigns -- is left
+    exactly as it is.
+
+    Returns:
+        True if the patch was applied, False if it was already in place.
+    """
+    global _edge_category_patched
+    if _edge_category_patched:
+        return False
+
+    try:
+        from kgx.source.owl_source import OwlSource
+    except ImportError as e:
+        logging.warning(f"Could not patch KGX's edge category assignment: {e}")
+        return False
+
+    original_parse = OwlSource.parse
+
+    def parse(self, *args: Any, **kwargs: Any):
+        for record in original_parse(self, *args, **kwargs):
+            # See patch_missing_edge_ids for the record shapes; the stream
+            # carries bare None values as well as tuples.
+            if isinstance(record, tuple) and len(record) == 4:
+                edge = record[3]
+                if isinstance(edge, dict) and not edge.get("category"):
+                    edge["category"] = [ROOT_ASSOCIATION]
+            yield record
+
+    OwlSource.parse = parse
+    _edge_category_patched = True
+    logging.debug("Patched kgx.source.OwlSource.parse to give every edge a category.")
     return True

@@ -173,6 +173,120 @@ class TestDownloadLinks(TestCase):
         self.assertNotIn("Artifact location not recorded", page)
 
 
+class TestCategoryCounts(TestCase):
+    """The dashboard half of #98: what kinds of node and edge an ontology has.
+
+    Before this, both tabs said the same thing for every ontology -- "look in
+    the download". The counts are now in the index, so they can be read here.
+    """
+
+    NODE_CATS = {"biolink:NamedThing": 300000, "biolink:Disease": 22000}
+    EDGE_CATS = {"biolink:Association": 268909}
+
+    def mondo(self, **kw):
+        return item("MONDO", "OK", nodecount=300000, edgecount=268909,
+                    node_categories=self.NODE_CATS,
+                    edge_categories=self.EDGE_CATS, **kw)
+
+    def panel(self, html, which):
+        """The Nodes or Edges tab body.
+
+        Sliced between the panel markers rather than matched to a closing tag:
+        the panels nest divs, so a non-greedy match stops inside the chart.
+        """
+        start = html.index(f'data-panel="{which}"')
+        rest = html.index('data-panel="edges"', start + 1) if which == "nodes" else len(html)
+        return html[start:rest]
+
+    def test_the_tallies_are_carried_onto_the_item(self):
+        it = self.mondo()
+        self.assertEqual(it["node_categories"], self.NODE_CATS)
+        self.assertEqual(it["edge_categories"], self.EDGE_CATS)
+
+    def test_an_entry_without_them_gets_empty_dicts_not_none(self):
+        # Entries seeded from a release built before the counts existed.
+        it = item("BFO", "OK", nodecount=36, edgecount=115)
+        self.assertEqual(it["node_categories"], {})
+        self.assertEqual(it["edge_categories"], {})
+
+    def test_node_categories_are_named_on_the_page(self):
+        html = bs.render_ontology_resource(self.mondo())
+        self.assertIn("Disease", self.panel(html, "nodes"))
+
+    def test_node_category_counts_are_shown(self):
+        html = bs.render_ontology_resource(self.mondo())
+        self.assertIn("22,000", self.panel(html, "nodes"))
+
+    def test_edge_categories_are_named_on_the_page(self):
+        html = bs.render_ontology_resource(self.mondo())
+        edges = self.panel(html, "edges")
+        self.assertIn("Association", edges)
+        self.assertIn("268,909", edges)
+
+    def test_the_biggest_category_leads(self):
+        html = self.panel(bs.render_ontology_resource(self.mondo()), "nodes")
+        self.assertLess(html.index("NamedThing"), html.index("Disease"))
+
+    def test_bar_widths_are_relative_to_the_biggest(self):
+        html = bs.render_ontology_resource(self.mondo())
+        widths = [float(w) for w in
+                  re.findall(r'bar-fill node" style="width:([\d.]+)%', html)]
+        self.assertEqual(widths[0], 100.0)
+        self.assertTrue(all(w <= 100.0 for w in widths))
+
+    def test_the_multi_category_caveat_is_stated(self):
+        # A node counted under two categories makes the tally exceed the node
+        # count; a reader who does not know that reads it as an error.
+        html = bs.render_ontology_resource(self.mondo())
+        self.assertIn("counted under each", self.panel(html, "nodes"))
+
+    def test_an_ontology_without_a_tally_keeps_the_old_explanation(self):
+        html = bs.render_ontology_resource(item("BFO", "OK", nodecount=36, edgecount=115))
+        self.assertIn("aren't recorded in the index", self.panel(html, "nodes"))
+
+    def test_a_failed_ontology_renders_without_one(self):
+        html = bs.render_ontology_resource(item("FYPO", "Failed", "transform_error_kgx"))
+        self.assertIn("aren't recorded in the index", self.panel(html, "edges"))
+
+    def test_category_names_are_escaped(self):
+        # The tally's keys come from the transform, not from a fixed list.
+        # Checked on the panel, not the page: the page carries its own <script>.
+        panel = self.panel(bs.render_ontology_resource(item(
+            "X", "OK", nodecount=1, edgecount=1,
+            node_categories={"<script>alert(1)</script>": 1})), "nodes")
+        self.assertNotIn("<script>", panel)
+        self.assertIn("&lt;script&gt;", panel)
+
+    def test_the_collection_wide_tally_is_summed_over_ontologies(self):
+        html = bs.render_summary(
+            {"totalcount": 2, "transform_date": DATE},
+            0,
+            [self.mondo(), item("DOID", "OK", nodecount=10, edgecount=10,
+                                node_categories={"biolink:Disease": 8000})],
+        )
+        self.assertIn("Node categories across the collection", html)
+        self.assertIn("30,000", html)  # 22,000 + 8,000
+
+    def test_the_collection_wide_tally_says_how_many_ontologies_it_covers(self):
+        # Not every entry has one, so "2 of 3" is the difference between a
+        # partial picture and a wrong one.
+        html = bs.render_summary(
+            {"totalcount": 3, "transform_date": DATE},
+            0,
+            [self.mondo(), item("DOID", "OK", nodecount=10, edgecount=10,
+                                node_categories={"biolink:Disease": 8000}),
+             item("BFO", "OK", nodecount=36, edgecount=115)],
+        )
+        head = re.search(r"Node categories across the collection.*?</p>", html, re.S).group(0)
+        self.assertIn("2 of", head)
+        self.assertIn("3 ontologies", head)
+
+    def test_the_collection_wide_tally_is_omitted_when_nothing_records_one(self):
+        html = bs.render_summary({"totalcount": 1}, 0,
+                                 [item("BFO", "OK", nodecount=36, edgecount=115)])
+        self.assertNotIn("Node categories across the collection", html)
+
+
 class TestSummaryCounts(TestCase):
     TOTALS = {
         "totalcount": 1108, "skippedcount": 43, "failedcount": 133,
