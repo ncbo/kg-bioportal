@@ -135,16 +135,27 @@ column on edges, and a `provided_by` on nodes, both holding the **relaxed OWL fi
 directory. If you are reading one of those releases, strip `_relaxed.owl` to recover the acronym.
 
 ### Category note
-Every node carries `biolink:NamedThing` and every edge `biolink:Association`. These are the roots
-of the Biolink class hierarchies, and they are what KGX writes when nothing more specific has been
-established: a plain OWL ontology carries no Biolink typing, and this pipeline does not currently
-infer any. So the `category` columns say *that* a row is a node or an edge, not what kind — treat
-a category tally as a completeness check rather than as a description of the ontology's contents.
+**Nodes.** KG-Bioportal assigns a real Biolink category where the ontology gives it grounds to.
+Terms whose meaning is not in doubt (`MONDO:0000001` disease, `GO:0008150` biological_process,
+`CL:0000000` cell, BFO's upper-level classes …) are seeded, the category rolls down
+`biolink:subclass_of` to every class beneath — nearest seed wins — and it then carries across
+`biolink:exact_match` edges to mapping targets, which is how a `UMLS:`/ICD/SNOMED node reached
+from a MONDO class gets one. A node with no such evidence keeps `biolink:NamedThing`, so that
+value means "we could not establish anything more specific", not "this is typed as the root".
 
-**Releases up to and including `data-2026.08.25-12`** carry the same `biolink:NamedThing` on nodes
-but leave `category` **empty** on every edge except those dereified from an `owl:Axiom`, which
-carry `biolink:Association`. The proportion is an artifact of how the ontology was written, not a
-distinction worth reading.
+How much of an ontology this reaches depends entirely on whether it is built on shared vocabulary.
+On a uniform random sample of 90 ontologies it is **16.9%** of nodes, with 71 of the 90 getting
+nothing — most of the collection is bespoke, rooted in one-off project IRIs. On the large OBO
+ontologies it is most of the graph: VTO 96.8%, MONDO 93.6%, ERO 89.8%, GO-PLUS and OBA ~80%.
+A node may carry more than one category, pipe-delimited, where two equally specific seeds apply.
+
+**Edges** all carry `biolink:Association`, the root of the association hierarchy. Biolink keys its
+association classes on the subject/object category pair, and those cannot be resolved from a pair
+alone (`organism taxon` → `organism taxon` alone admits four), so nothing more specific is claimed.
+
+**Releases up to and including `data-2026.08.25-12`** carry `biolink:NamedThing` on *every* node
+and leave `category` **empty** on every edge except those dereified from an `owl:Axiom`. In those
+releases the category columns say nothing about the contents at all.
 
 ### Other characteristics
 - Node ids are CURIEs; prefixes vary by ontology (`OBO:`, ontology-specific prefixes, etc.).
