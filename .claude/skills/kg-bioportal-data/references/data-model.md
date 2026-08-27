@@ -159,7 +159,7 @@ are exempt. A default is a claim about an ontology rather than a fact read out o
 weaker signal than the rest — treat those four accordingly.
 
 How much of an ontology this reaches depends on whether it is built on shared vocabulary.
-Collection-wide it is **37.3%** of 8.27M nodes. On the large OBO ontologies it is most of the
+Collection-wide it is **41.1%** of 8.27M nodes. On the large OBO ontologies it is most of the
 graph — VTO 96.8%, MONDO 93.6%, ERO 89.8%, GO-PLUS and OBA ~80% — while much of the rest of the
 collection is bespoke, rooted in one-off project IRIs that no seed table reaches.
 A node may carry more than one category, pipe-delimited, where two equally specific seeds apply.
