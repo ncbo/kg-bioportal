@@ -170,7 +170,43 @@ class TestTheSeedsMatchIdsThatOccur(TestCase):
         ("NCRO:0000025", "OBO:NCRO_0000025", 59874),
         ("MONDO:0000001", "MONDO:0000001", 31550),
         ("VTO:0000001", "OBO:VTO_0000001", 106998),
+        # SIO's real top level. Its own root, SIO:000000 "entity", is useless as
+        # a seed, but these three sit directly under it and carry most of the
+        # SIO-built ontologies between them.
+        ("SIO:000776", "SIO:000776", 0),
+        ("SIO:000614", "SIO:000614", 0),
+        ("SIO:000006", "SIO:000006", 0),
     ]
+
+    # Roots that arrive only as a full IRI, so no CURIE form is derived.
+    IRI_SEEDS = [
+        "http://purl.org/obo/owlapi/fma#FMA_62955",
+        "http://purl.org/ccf/AnatomicalStructure",
+        "http://purl.org/ccf/CellType",
+        "https://identifiers.org/ito:Process",
+        "http://www.semanticweb.org/ontology/HOOM#HPO_id",
+        "http://www.semanticweb.org/ontology/HOOM#OrphaCode",
+        "http://purl.bioontology.org/ontology/RCTV2/7....00",
+    ]
+
+    def test_the_iri_roots_are_seeded_verbatim(self):
+        # These carry no label in the graph that uses them; each was identified
+        # from another published graph or from its own subclasses, so the exact
+        # string is the whole of what makes them work.
+        for iri in self.IRI_SEEDS:
+            with self.subTest(iri=iri):
+                self.assertIn(iri, SEED_INDEX)
+                self.assertEqual(canonical_forms(iri), (iri,))
+
+    def test_the_ambiguous_roots_stayed_out(self):
+        # Rejected on evidence, and each would have been wrong:
+        #   ccf/Biomarker      subclasses mix gene symbols with peptides
+        #   RCTV2 chapter T    subclasses are accidents, not diseases
+        #   SIO:000000         "entity" -- seeding the top re-derives NamedThing
+        for rejected in ("http://purl.org/ccf/Biomarker",
+                         "http://purl.bioontology.org/ontology/RCTV2/T....00",
+                         "SIO:000000"):
+            self.assertNotIn(rejected, SEED_INDEX, rejected)
 
     def test_each_measured_root_is_recognised_as_written(self):
         for curie, as_published, _ in self.MEASURED:

@@ -117,6 +117,39 @@ SEEDS: Dict[str, str] = {
     # OMIT's root carries no label of its own; its subclasses are gene symbols
     # (A1BG, A2M, NAT1, NAT2 ...), which is what identifies it.
     "NCRO:0000025": "biolink:Gene",                  #                    59,874
+    # SIO's real top level, read from the published SIO graph. (SIO:000000
+    # "entity" is deliberately absent: it is the top, and seeding the top only
+    # re-derives NamedThing.)
+    "SIO:000776": "biolink:PhysicalEntity",          # object
+    "SIO:000614": "biolink:Attribute",               # attribute
+    "SIO:000006": "biolink:Activity",                # process
+    # Roots identified from another published graph rather than from a label of
+    # their own, then confirmed against their subclasses. The reach noted is
+    # measured on data-2026.08.26-16.
+    #
+    # FMA's anatomical entity, under the IRI the OWL API rewrote it to. Its two
+    # subclasses are "Physical anatomical entity" and "Non-physical anatomical
+    # entity", which is what identifies it.
+    "http://purl.org/obo/owlapi/fma#FMA_62955": "biolink:AnatomicalEntity",  # 78,558
+    # CCF, whose classes carry no label inside HRA but do inside CCF itself.
+    "http://purl.org/ccf/AnatomicalStructure": "biolink:AnatomicalEntity",   #  7,838
+    "http://purl.org/ccf/CellType": "biolink:Cell",                          #  1,831
+    # (ccf/Biomarker is deliberately absent: its subclasses mix gene symbols
+    # with peptides, so no one category is true of them.)
+    "https://identifiers.org/ito:Process": "biolink:Activity",               # 14,351
+    # HOOM keeps its HPO and Orphanet identifiers under classes of their own.
+    "http://www.semanticweb.org/ontology/HOOM#HPO_id": "biolink:PhenotypicFeature",  # 8,763
+    "http://www.semanticweb.org/ontology/HOOM#OrphaCode": "biolink:Disease",         # 4,362
+    # Read Codes are chaptered, and each chapter is coherent even though the
+    # ontology as a whole is not. Checked by reading each chapter's subclasses:
+    # "Artery and vein operations" under 7, "Fracture of skull" under S.
+    # Chapter T, "Causes of injury and poisoning", is absent on purpose -- its
+    # subclasses are accidents ("Railway accidents"), which is not a disease and
+    # not clearly anything else in Biolink either.
+    "http://purl.bioontology.org/ontology/RCTV2/7....00": "biolink:Procedure",  # 14,984
+    "http://purl.bioontology.org/ontology/RCTV2/4....00": "biolink:Procedure",  #  5,992
+    "http://purl.bioontology.org/ontology/RCTV2/3....00": "biolink:Procedure",
+    "http://purl.bioontology.org/ontology/RCTV2/S....00": "biolink:Disease",    #  7,013
 }
 
 # Upper-ontology terms, kept apart because they are a *last resort*. Nearly
