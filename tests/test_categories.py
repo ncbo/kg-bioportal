@@ -27,6 +27,8 @@ from unittest import TestCase, mock
 from kg_bioportal import categories
 from kg_bioportal.categories import (
     CATEGORY_ANCESTORS,
+    ONTOLOGY_DEFAULTS,
+    STRUCTURAL_PREFIXES,
     GENERAL,
     NAMED_THING,
     SEED_INDEX,
@@ -38,6 +40,7 @@ from kg_bioportal.categories import (
     canonical_forms,
     categorize,
     most_specific,
+    ontology_default,
 )
 
 NODE_HEADER = ["id", "category", "name"]
@@ -149,6 +152,42 @@ class TestTheIdShapesASeedArrivesIn(TestCase):
 
     def test_a_curie_without_a_prefix_does_not_crash(self):
         self.assertEqual(canonical_forms("plain")[0], "plain")
+
+
+class TestTheSeedsMatchIdsThatOccur(TestCase):
+    """A seed whose id shape never appears in a graph reaches nothing.
+
+    Each of these was measured against a published artifact, so the CURIE in
+    SEEDS has to derive the form the artifact actually uses. LION's root is
+    written OBO:CAT_0000000, not OBO:LION_..., which is the kind of thing that
+    is only caught by looking.
+    """
+
+    # (seed CURIE, the id the published graph uses, nodes it reached)
+    MEASURED = [
+        ("GNO:00000001", "OBO:GNO_00000001", 191529),
+        ("CAT:0000000", "OBO:CAT_0000000", 63306),
+        ("NCRO:0000025", "OBO:NCRO_0000025", 59874),
+        ("MONDO:0000001", "MONDO:0000001", 31550),
+        ("VTO:0000001", "OBO:VTO_0000001", 106998),
+    ]
+
+    def test_each_measured_root_is_recognised_as_written(self):
+        for curie, as_published, _ in self.MEASURED:
+            with self.subTest(curie=curie):
+                self.assertIn(curie, SEED_INDEX, f"{curie} is not seeded")
+                self.assertIn(as_published, SEED_INDEX,
+                              f"{curie} does not derive {as_published}")
+
+    def test_the_two_forms_agree_on_the_category(self):
+        for curie, as_published, _ in self.MEASURED:
+            self.assertEqual(SEED_INDEX[curie][0], SEED_INDEX[as_published][0], curie)
+
+    def test_a_measured_root_categorizes_its_subtree(self):
+        # The end of the chain: seeded id -> published id -> the graph.
+        g = Graph(self, ["OBO:GNO_00000001", "OBO:GNO_G1"],
+                  [sub("OBO:GNO_G1", "OBO:GNO_00000001")])
+        self.assertEqual(g.categories()["OBO:GNO_G1"], "biolink:ChemicalEntity")
 
 
 class TestNarrowingAnOverlappingPair(TestCase):
@@ -337,6 +376,119 @@ class TestCarryingACategoryAcrossAMapping(TestCase):
     def test_mappings_between_two_unknown_nodes_assign_nothing(self):
         g = Graph(self, ["A:1", "B:1"], [same("A:1", "B:1")])
         self.assertEqual(g.categories()["A:1"], NAMED_THING)
+
+
+class TestTheWholeOntologyFallback(TestCase):
+    """Some ontologies are one thing end to end and say so nowhere machine-readable.
+
+    GNO is 580,716 glycan structures rooted under terms the seeds refuse to
+    touch; ROR is 377,491 research organizations with 7 subclass edges in the
+    whole file. No amount of traversal reaches those, because there is nothing
+    in the file to traverse. Naming the ontology is the only thing that does.
+
+    It is the last resort on purpose: an assertion about an ontology rather than
+    a fact read out of it, so anything the file actually says outranks it.
+    """
+
+    def graph(self, acr, nodes, edges=()):
+        g = Graph(self, nodes, list(edges))
+        apply_to(g.nodes, g.edges, acr)
+        out = {}
+        with open(g.nodes) as f:
+            f.readline()
+            for line in f:
+                cells = line.rstrip("\n").split("\t")
+                out[cells[0]] = cells[1]
+        return out
+
+    def test_an_ontology_with_a_default_uses_it(self):
+        cats = self.graph("GNO", ["OBO:GNO_G21587JI", "OBO:GNO_G50730KL"])
+        self.assertEqual(cats["OBO:GNO_G21587JI"], "biolink:ChemicalEntity")
+
+    def test_the_acronym_match_is_case_insensitive(self):
+        # onto_stats and the input list do not always agree on case.
+        self.assertEqual(ontology_default("gno", "OBO:GNO_1"), "biolink:ChemicalEntity")
+
+    def test_an_ontology_without_a_default_gets_nothing(self):
+        cats = self.graph("SOMETHINGELSE", ["X:1"])
+        self.assertEqual(cats["X:1"], NAMED_THING)
+
+    def test_the_hierarchy_still_wins(self):
+        # The default must never overrule what the ontology itself says. A
+        # disease inside GNO is a disease, whatever GNO mostly contains.
+        cats = self.graph("GNO", ["MONDO:0000001", "A:1", "OBO:GNO_G1"],
+                          [sub("A:1", "MONDO:0000001")])
+        self.assertEqual(cats["A:1"], "biolink:Disease")
+        self.assertEqual(cats["MONDO:0000001"], "biolink:Disease")
+        self.assertEqual(cats["OBO:GNO_G1"], "biolink:ChemicalEntity")
+
+    def test_a_mapping_still_wins(self):
+        cats = self.graph("GNO", ["MONDO:0000001", "UMLS:C1", "OBO:GNO_G1"],
+                          [same("UMLS:C1", "MONDO:0000001")])
+        self.assertEqual(cats["UMLS:C1"], "biolink:Disease")
+
+    def test_structural_terms_are_left_alone(self):
+        # Every OWL file carries these. Calling skos:Concept a glycan would be
+        # the most visible possible way to get this wrong.
+        cats = self.graph("GNO", ["owl:Thing", "skos:Concept", "rdfs:label",
+                                  "BFO:0000001", "IAO:0000030", "OBO:GNO_G1"])
+        for structural in ("owl:Thing", "skos:Concept", "rdfs:label", "BFO:0000001"):
+            self.assertEqual(cats[structural], NAMED_THING, structural)
+        self.assertEqual(cats["OBO:GNO_G1"], "biolink:ChemicalEntity")
+
+    def test_a_w3_iri_is_structural_too(self):
+        self.assertIsNone(ontology_default("GNO", "http://www.w3.org/2002/07/owl#Thing"))
+
+    def test_xref_targets_in_the_same_ontology_are_covered(self):
+        # ROR's ids are mostly GRID/ISNI/Wikidata identifiers for the same
+        # organizations, not ror.org URLs. A prefix allow-list keyed on the
+        # ontology's "own" namespace would have missed 239,710 of its 377,491
+        # nodes; the deny-list of structural terms is what makes that work.
+        cats = self.graph("ROR", ["https://ror.org/00tk6s776",
+                                  "https://www.grid.ac/institutes/grid.1",
+                                  "http://www.wikidata.org/entity/Q1"])
+        for node in cats:
+            self.assertEqual(cats[node], "biolink:Agent", node)
+
+    def test_the_report_counts_defaults_apart(self):
+        # They are a weaker claim than the rest, so the log has to distinguish
+        # them -- this is the number to look at when one turns out to be wrong.
+        g = Graph(self, ["MONDO:0000001", "A:1", "OBO:GNO_G1"],
+                  [sub("A:1", "MONDO:0000001")])
+        report = apply_to(g.nodes, g.edges, "GNO")
+        self.assertEqual(report.defaulted, 1)
+        self.assertEqual(report.seeded, 1)
+        self.assertEqual(report.inherited, 1)
+        self.assertEqual(report.uncategorized, 0)
+        # ...but they are still assigned. Counting them apart must not mean
+        # leaving them out of the total the summary reports.
+        self.assertEqual(report.assigned, 3)
+        self.assertIn("3/3 nodes categorized (100.0%)", report.summary())
+        self.assertIn("1 by the ontology default", report.summary())
+
+    def test_categorize_passes_the_ontology_name_through(self):
+        # apply_to takes the acronym, categorize is what supplies it. Every
+        # other test here calls apply_to directly, so they all pass on a build
+        # where categorize forgets to hand it over.
+        g = Graph(self, ["OBO:GNO_G1"], [])
+        report = categorize(g.nodes, g.edges, "GNO")
+        self.assertIsNotNone(report)
+        self.assertEqual(report.defaulted, 1)
+
+    def test_every_default_names_a_biolink_class(self):
+        for acr, category in ONTOLOGY_DEFAULTS.items():
+            self.assertTrue(category.startswith("biolink:"), acr)
+            self.assertNotEqual(category, NAMED_THING, acr)
+
+    def test_every_default_key_is_upper_case(self):
+        # ontology_default() upper-cases what it is given, so a lower-case key
+        # here would simply never match.
+        for acr in ONTOLOGY_DEFAULTS:
+            self.assertEqual(acr, acr.upper())
+
+    def test_the_deny_list_covers_the_common_structural_prefixes(self):
+        for prefix in ("owl:", "rdfs:", "skos:", "BFO:", "IAO:"):
+            self.assertIn(prefix, STRUCTURAL_PREFIXES)
 
 
 class TestRewritingTheNodeFile(TestCase):

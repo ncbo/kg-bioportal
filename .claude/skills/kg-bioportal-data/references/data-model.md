@@ -143,10 +143,18 @@ Terms whose meaning is not in doubt (`MONDO:0000001` disease, `GO:0008150` biolo
 from a MONDO class gets one. A node with no such evidence keeps `biolink:NamedThing`, so that
 value means "we could not establish anything more specific", not "this is typed as the root".
 
-How much of an ontology this reaches depends entirely on whether it is built on shared vocabulary.
-On a uniform random sample of 90 ontologies it is **16.9%** of nodes, with 71 of the 90 getting
-nothing — most of the collection is bespoke, rooted in one-off project IRIs. On the large OBO
-ontologies it is most of the graph: VTO 96.8%, MONDO 93.6%, ERO 89.8%, GO-PLUS and OBA ~80%.
+A handful of ontologies are one kind of thing end to end and say so nowhere a machine can read —
+their hierarchy is rooted at `owl:Thing` or `skos:Concept`, which the seeding deliberately refuses.
+Those carry a **whole-ontology default**, applied only where nothing in the file establishes
+anything: GNO and LION → `biolink:ChemicalEntity`, ROR → `biolink:Agent`, FAST-TITLE →
+`biolink:InformationContentEntity`. Structural terms inside them (`owl:`, `skos:`, `BFO:`, `RO:` …)
+are exempt. A default is a claim about an ontology rather than a fact read out of it, so it is a
+weaker signal than the rest — treat those four accordingly.
+
+How much of an ontology this reaches depends on whether it is built on shared vocabulary.
+Collection-wide it is **37.3%** of 8.27M nodes. On the large OBO ontologies it is most of the
+graph — VTO 96.8%, MONDO 93.6%, ERO 89.8%, GO-PLUS and OBA ~80% — while much of the rest of the
+collection is bespoke, rooted in one-off project IRIs that no seed table reaches.
 A node may carry more than one category, pipe-delimited, where two equally specific seeds apply.
 
 **Edges** all carry `biolink:Association`, the root of the association hierarchy. Biolink keys its
