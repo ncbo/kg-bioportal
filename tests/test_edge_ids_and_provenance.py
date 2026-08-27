@@ -42,6 +42,7 @@ from kg_bioportal import kgx_patches
 from kg_bioportal.transformer import (
     AGGREGATOR_INFORES,
     EDGE_COLUMNS,
+    KGX_NODE_COLUMNS,
     NODE_COLUMNS,
     ontology_infores,
 )
@@ -296,8 +297,15 @@ class TestTheProvenanceIsWiredWhereKgxReadsIt(TestCase):
     def test_the_columns_are_declared_on_output_args(self):
         # Streaming sinks fix their columns before the first record, so without
         # this the provenance is on every record and in no file.
+        #
+        # KGX is asked for one column more than we publish: the scratch column
+        # skos:prefLabel is read into, which adopt_pref_labels folds into `name`
+        # and removes afterwards (#173). Every published column still has to be
+        # declared here, and in the same order.
         self.assertEqual(self.captured["output"]["edge_properties"], EDGE_COLUMNS)
-        self.assertEqual(self.captured["output"]["node_properties"], NODE_COLUMNS)
+        self.assertEqual(self.captured["output"]["node_properties"], KGX_NODE_COLUMNS)
+        declared = self.captured["output"]["node_properties"]
+        self.assertEqual(declared[: len(NODE_COLUMNS)], NODE_COLUMNS)
 
 
 class TestTheColumnsExistToWriteItInto(TestCase):

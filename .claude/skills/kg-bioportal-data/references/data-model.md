@@ -105,10 +105,17 @@ transform_date: 2026-07-31
 |--------|---------|---------|
 | `id` | node CURIE | `OBO:AGRO_00000002` |
 | `category` | Biolink category | `biolink:NamedThing` |
-| `name` | label | `tillage process` |
+| `name` | label — `rdfs:label`, or `skos:prefLabel` where there is no `rdfs:label` | `tillage process` |
 | `description` | definition | `A planned process in which soil is …` |
 | `provided_by` | source ontology, as an infores | `infores:bioportal.agro` |
-| `synonym`, `exact_synonym`, `broad_synonym`, `narrow_synonym`, `related_synonym` | synonyms | (often blank) |
+| `synonym`, `exact_synonym`, `broad_synonym`, `narrow_synonym`, `related_synonym` | synonyms; `synonym` also carries `skos:altLabel` | (often blank) |
+
+**Releases up to and including `data-2026.08.26-16`** read labels from `rdfs:label` alone, so the
+SKOS-style and UMLS-derived vocabularies are published with no `name` at all — ICD10PCS has four
+named nodes out of 192,698, and DDSS, GEXO, NLMVS, OCHV, SNMI and XREF-FUNDER-REG are in the same
+state. From the next release those take their name from `skos:prefLabel`, their description from
+`skos:definition`, and their synonyms from `skos:altLabel`. Where a term has both an `rdfs:label`
+and a `skos:prefLabel`, the `rdfs:label` wins, so no existing name changes.
 
 **Edges** — `<ID>_edges.tsv`:
 
