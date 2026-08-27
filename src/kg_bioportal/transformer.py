@@ -982,6 +982,79 @@ class TransformOutcome(NamedTuple):
         )
 
 
+# SKOS vocabularies label with skos:prefLabel, and KGX reads only the properties
+# the Biolink model names -- where `name` is rdfs:label and nothing else. So an
+# ontology that labels the SKOS way loses every label silently: ICD10PCS ships
+# 192,698 procedure codes and four names, and six other ontologies in the twenty
+# holding the most uncategorized nodes are in the same state, 1,009,910 nodes
+# between them (#173).
+#
+# KGX can be told about the extra predicates -- Transformer.transform forwards
+# both keys to RdfSource -- but prefLabel must NOT be mapped straight to `name`.
+# `name` is single-valued, so where a term carries rdfs:label *and* a differing
+# prefLabel the winner is whichever the parser reaches last, and that order comes
+# out of a set: measured across PYTHONHASHSEED 0-7, the same file produced the
+# rdfs:label three times and the prefLabel five. A published name that flips
+# between releases with no change to the source is worse than a missing one.
+#
+# So prefLabel is given a column to itself, where it can race nothing, and
+# adopt_pref_labels folds it into `name` afterwards -- only where rdfs:label left
+# `name` empty. Deterministic, and rdfs:label always wins.
+SKOS = "http://www.w3.org/2004/02/skos/core#"
+PREF_LABEL_COLUMN = "pref_label"
+SKOS_PROPERTY_MAP = {
+    SKOS + "prefLabel": PREF_LABEL_COLUMN,
+    SKOS + "altLabel": "synonym",
+    SKOS + "definition": "description",
+}
+
+# What we ask KGX to write: the published columns plus the scratch one that
+# adopt_pref_labels consumes and removes. dcterms:title needs no entry -- Biolink
+# already maps it to `name`.
+KGX_NODE_COLUMNS = NODE_COLUMNS + [PREF_LABEL_COLUMN]
+
+
+def adopt_pref_labels(node_file: str) -> int:
+    """Fill an empty ``name`` from ``skos:prefLabel``, and drop the scratch column.
+
+    Runs over the finished node file, so the choice is made per node against
+    what was actually written rather than against whatever order a parser
+    happened to visit two triples in.
+
+    A file without the scratch column -- one written before this existed, or by
+    a test -- is left exactly as it is.
+
+    Returns:
+        How many nodes took their name from a prefLabel.
+    """
+    with open(node_file, "r") as f:
+        header = f.readline()
+    if not header:
+        return 0
+    fields = header.rstrip("\n").split("\t")
+    if PREF_LABEL_COLUMN not in fields:
+        return 0
+    pref_at = fields.index(PREF_LABEL_COLUMN)
+    name_at = fields.index("name") if "name" in fields else None
+    keep = [i for i in range(len(fields)) if i != pref_at]
+
+    adopted = 0
+    temp_path = node_file + ".labelled"
+    with open(node_file, "r") as src, open(temp_path, "w") as dest:
+        src.readline()
+        dest.write("\t".join(fields[i] for i in keep) + "\n")
+        for line in src:
+            cells = line.rstrip("\n").split("\t")
+            while len(cells) < len(fields):
+                cells.append("")
+            if name_at is not None and not cells[name_at].strip() and cells[pref_at].strip():
+                cells[name_at] = cells[pref_at]
+                adopted += 1
+            dest.write("\t".join(cells[i] for i in keep) + "\n")
+    os.replace(temp_path, node_file)
+    return adopted
+
+
 # Recorded in place of an empty category cell, so "how many of these carry no
 # category at all" is a number in the report rather than a blank key.
 UNCATEGORIZED = "(none)"
@@ -1676,11 +1749,16 @@ class Transformer:
             "provided_by": ontology_infores(ontology_name),
             "primary_knowledge_source": ontology_infores(ontology_name),
             "aggregator_knowledge_source": AGGREGATOR_INFORES,
+            # Teach KGX the SKOS properties the Biolink model does not name, so
+            # a vocabulary that labels the SKOS way is not published nameless
+            # (#173). See SKOS_PROPERTY_MAP for why prefLabel is kept apart.
+            "predicate_mappings": dict(SKOS_PROPERTY_MAP),
+            "node_property_predicates": list(SKOS_PROPERTY_MAP),
         }
         output_args = {
             "format": "tsv",
             "filename": outfilename,
-            "node_properties": NODE_COLUMNS,
+            "node_properties": KGX_NODE_COLUMNS,
             "edge_properties": EDGE_COLUMNS,
         }
         logging.info("Doing KGX transform.")
@@ -1700,6 +1778,14 @@ class Transformer:
             )
             if literals.count:
                 logging.warning(f"{ontology_name}: {literals.summary()}")
+            # Take names from skos:prefLabel where rdfs:label left none, and
+            # drop the scratch column, before anything else reads this file.
+            adopted = adopt_pref_labels(nodefilename)
+            if adopted:
+                logging.info(
+                    f"{ontology_name}: {adopted:,} nodes took their name from "
+                    "skos:prefLabel"
+                )
             # Put real Biolink categories on the nodes before anything counts
             # them (#169). This runs on the finished files rather than inside
             # the KGX stream because it needs the whole subclass hierarchy at
