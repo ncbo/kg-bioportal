@@ -88,3 +88,7 @@ See `references/cat-merge-vs-kgx.md` for a ready-to-edit template.
 - The dormant `merge` / `catmerge` commands in `src/kg_bioportal/cli.py` are the CLI equivalents of
   this workflow; this skill calls the tools directly rather than depending on that (unrevived) code.
 - Merging the full corpus is heavy; prefer a purposeful subset unless you truly need everything.
+- Merge **base** graphs (`<ID>.tar.gz`), not full graphs (`<ID>_full.tar.gz`): a full graph repeats
+  everything it imports, so two full graphs that share an import duplicate it. Dangling edges in a
+  base-graph merge are the imports you have not pulled in yet; fetch those ontologies' base graphs.
+  The one exception is an `import_only` ontology (SWEET, OBOE), whose base graph is empty.

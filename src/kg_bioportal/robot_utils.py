@@ -11,7 +11,7 @@ from sh import chmod  # type: ignore
 
 from typing import NamedTuple
 
-from kg_bioportal.config import ROBOT_JAVA_ARGS
+from kg_bioportal.config import ROBOT_JAVA_ARGS, UNRESOLVABLE_IMPORTS_REASON
 
 # Note that sh module can take environment variables, see
 # https://amoffat.github.io/sh/sections/special_arguments.html#env
@@ -32,6 +32,10 @@ class RobotResult(NamedTuple):
 
     ok: bool
     error: str = ""
+    # Set by robot_merge when the error has a name of its own in the index:
+    # an import that could not be fetched, or a timeout. Empty otherwise, and
+    # the caller falls back to naming the stage that failed.
+    reason: str = ""
 
     def __bool__(self) -> bool:
         return self.ok
@@ -319,47 +323,83 @@ def robot_convert(
     return RobotResult(False, error)
 
 
-def merge_and_convert_ontology(
-    robot_path: str, input_path: str, output_path: str, robot_env: dict
-) -> bool:
-    """
-    Run a merge and convert ROBOT command on a single ontology.
+# What ROBOT (through the OWL API) says when an owl:imports target cannot be
+# fetched: "java.lang.IllegalArgumentException: org.semanticweb.owlapi.model.
+# UnloadableImportException: Could not load imported ontology: <iri> Cause: ...".
+# _error_text keeps that line, so the reason is read off it.
+_UNLOADABLE_IMPORT_MARKERS = ("UnloadableImportException", "Could not load imported ontology")
 
-    Has a three-hour timeout limit - process is killed if it takes this long.
+
+def mentions_unloadable_import(error: str) -> bool:
+    """True if a ROBOT error text says an import could not be fetched."""
+    return any(marker in error for marker in _UNLOADABLE_IMPORT_MARKERS)
+
+
+def robot_merge(
+    robot_path: str,
+    input_path: str,
+    output_path: str,
+    robot_env: dict,
+    timeout: int = 10800,
+) -> RobotResult:
+    """Run ROBOT merge on a single ontology, folding its import closure into it.
+
+    This is how the full graph is made. ROBOT fetches every owl:imports target
+    over the network, and their imports in turn, and writes one ontology holding
+    all of it. Any import it cannot fetch fails the whole merge, which is the
+    failure #121 stripped imports to avoid for the base graph; here it is the
+    expected way a full graph goes missing, so it is told apart from the rest
+    and the offending import is logged by name (#177).
+
     :param robot_path: Path to ROBOT files
-    :param input_path: Ontology file to be relaxed
+    :param input_path: Ontology file to merge, imports intact
     :param output_path: Ontology file to be created (needs valid ROBOT suffix)
     :param robot_env: dict of environment variables, including ROBOT_JAVA_ARGS
-    :return: True if completed without errors, False if errors
+    :param timeout: Wall-clock limit in seconds; the process is killed if exceeded.
+    :return: RobotResult -- truthy if completed without errors, carrying the
+        error text if not, and a reason (unresolvable_imports, too_slow) where
+        the failure has a name of its own.
     """
-    success = False
-
-    logging.info(f"Merging and converting {input_path} to {output_path}...")
+    logging.info(f"Merging {input_path} and its imports to {output_path}...")
 
     robot_command = sh.Command(robot_path)
 
+    reason = ""
     try:
         robot_command(
             "merge",
             "--input",
             input_path,
-            "convert",
             "--output",
             output_path,
             "-vvv",
             _env=robot_env,
-            _timeout=10800,
+            _timeout=timeout,
         )
         logging.info("Complete.")
-        success = True
-    except sh.ErrorReturnCode_1 as e:  # If ROBOT runs but returns an error
-        logging.error(f"ROBOT encountered an error: {e}")
-        success = False
-    except sh.SignalException_SIGKILL as e:  # If ROBOT encounters severe error
-        logging.error(f"ROBOT crashed! {e}")
-        success = False
+        unusable = _output_written(output_path)
+        if unusable:
+            logging.error(unusable)
+            return RobotResult(False, unusable)
+        return RobotResult(True)
+    except sh.SignalException_SIGKILL:  # If ROBOT encounters severe error
+        error = "ROBOT was killed (SIGKILL); the runner most likely ran out of memory"
+        logging.error(error)
+    except sh.ErrorReturnCode as e:  # If ROBOT runs but returns an error
+        error = _error_text(e)
+        if mentions_unloadable_import(error):
+            # Name the import: it is what a maintainer would need to fix, and
+            # what tells a flaky server apart from a dead one across runs.
+            reason = UNRESOLVABLE_IMPORTS_REASON
+            logging.warning(f"ROBOT could not fetch an import of {input_path}: {error}")
+        else:
+            logging.error(f"ROBOT encountered an error: {error}")
+    except sh.TimeoutException:  # If ROBOT exceeded the wall-clock limit
+        error = f"ROBOT merge timed out after {timeout}s"
+        reason = "too_slow"
+        logging.error(error)
 
-    return success
+    return RobotResult(False, error, reason)
 
 
 def measure_ontology(

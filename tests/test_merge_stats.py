@@ -69,12 +69,17 @@ class MergeStatsTestCase(TestCase):
             totals = yaml.safe_load(f)
         return index, totals
 
-    def read_manifest(self):
-        """graph_urls.tsv as {id: url}, asserting the header is intact."""
+    def read_manifest(self, column=1):
+        """graph_urls.tsv as {id: url}, asserting the header is intact.
+
+        Column 1 is the base graph, column 2 the full graph (blank if none).
+        """
         with open(os.path.join(self.out, "graph_urls.tsv")) as f:
             lines = f.read().splitlines()
-        self.assertEqual(lines[0], "id\tdownload_url")
-        return dict(line.split("\t") for line in lines[1:])
+        self.assertEqual(lines[0], "id\tdownload_url\tfull_download_url")
+        rows = [line.split("\t") for line in lines[1:]]
+        self.assertTrue(all(len(r) == 3 for r in rows), "every row has three columns")
+        return {r[0]: r[column] for r in rows}
 
 
 class TestCategoryTalliesSurviveTheMerge(MergeStatsTestCase):
@@ -349,3 +354,120 @@ class TestTotals(MergeStatsTestCase):
     def test_transform_date_is_recorded(self):
         _, totals = self.run_merge(date="2026-08-10")
         self.assertEqual(str(totals["transform_date"]), "2026-08-10")
+
+
+def full_asset(tag, oid):
+    return f"https://github.com/ncbo/kg-bioportal/releases/download/{tag}/{oid}_full.tar.gz"
+
+
+class TestFullGraphUrls(MergeStatsTestCase):
+    """The full graph is a second asset, resolved on its own (#177).
+
+    A full graph can fail while the base graph beside it is fine, so the two
+    URLs are set and cleared independently, and the manifest carries both.
+    """
+
+    def test_ok_full_graph_points_at_this_release(self):
+        self.write_fragment([entry("A", full_status="OK", full_nodecount=50, full_edgecount=60)])
+        index, _ = self.run_merge()
+        self.assertEqual(index["A"]["full_download_url"], full_asset(THIS_TAG, "A"))
+
+    def test_failed_full_graph_carries_no_url(self):
+        self.write_fragment([entry("A", full_status="Failed", full_reason="unresolvable_imports")])
+        index, _ = self.run_merge()
+        self.assertNotIn("full_download_url", index["A"])
+        self.assertEqual(index["A"]["download_url"], asset(THIS_TAG, "A"))
+
+    def test_skipped_full_graph_carries_no_url(self):
+        self.write_fragment([entry("A", full_status="Skipped", full_reason="no_imports")])
+        index, _ = self.run_merge()
+        self.assertNotIn("full_download_url", index["A"])
+
+    def test_entry_without_full_fields_gets_no_full_url(self):
+        # A fragment from a base-only run (--no_full) says nothing about full graphs.
+        self.write_fragment([entry("A")])
+        index, _ = self.run_merge()
+        self.assertNotIn("full_download_url", index["A"])
+        self.assertNotIn("full_status", index["A"])
+
+    def test_carried_forward_full_url_keeps_its_release(self):
+        base = self.write_base([entry(
+            "OLD", download_url=asset(PREV_TAG, "OLD"),
+            full_status="OK", full_download_url=full_asset(PREV_TAG, "OLD"),
+        )])
+        self.write_fragment([entry("FRESH")])
+        index, _ = self.run_merge(base)
+        self.assertEqual(index["OLD"]["full_download_url"], full_asset(PREV_TAG, "OLD"))
+
+    def test_a_full_graph_that_stops_building_loses_its_stale_url(self):
+        base = self.write_base([entry(
+            "X", download_url=asset(PREV_TAG, "X"),
+            full_status="OK", full_download_url=full_asset(PREV_TAG, "X"),
+        )])
+        self.write_fragment([entry("X", full_status="Failed", full_reason="unresolvable_imports")])
+        index, _ = self.run_merge(base)
+        self.assertNotIn("full_download_url", index["X"])
+
+    def test_manifest_third_column_is_the_full_url(self):
+        self.write_fragment([
+            entry("WITH", full_status="OK"),
+            entry("WITHOUT", full_status="Skipped", full_reason="no_imports"),
+        ])
+        self.run_merge()
+        full = self.read_manifest(column=2)
+        self.assertEqual(full["WITH"], full_asset(THIS_TAG, "WITH"))
+        self.assertEqual(full["WITHOUT"], "")
+
+    def test_manifest_second_column_is_still_the_base_url(self):
+        # Readers written for the two-column file take column two; it must
+        # keep meaning what it meant.
+        self.write_fragment([entry("A", full_status="OK")])
+        self.run_merge()
+        self.assertEqual(self.read_manifest()["A"], asset(THIS_TAG, "A"))
+
+    def test_import_only_entry_stays_resolvable(self):
+        # The base artifact exists and is honest, so it keeps its URL; the
+        # reason is what tells a reader to take the full graph instead.
+        self.write_fragment([entry("SWEET", reason="import_only", nodecount=2, edgecount=0,
+                                   full_status="OK")])
+        index, _ = self.run_merge()
+        self.assertEqual(index["SWEET"]["download_url"], asset(THIS_TAG, "SWEET"))
+        self.assertEqual(index["SWEET"]["full_download_url"], full_asset(THIS_TAG, "SWEET"))
+        self.assertIn("SWEET", self.read_manifest())
+
+
+class TestFullGraphTotals(MergeStatsTestCase):
+    def setUp(self):
+        super().setUp()
+        self.write_fragment([
+            entry("A", full_status="OK"),
+            entry("B", full_status="OK"),
+            entry("C", full_status="Failed", full_reason="unresolvable_imports"),
+            entry("D", full_status="Skipped", full_reason="no_imports"),
+            entry("SWEET", reason="import_only", nodecount=2, edgecount=0, full_status="OK"),
+            entry("E"),  # base-only run: no full fields at all
+            entry("FAIL", status="Failed", reason="transform_error"),
+        ])
+
+    def test_full_graph_counts(self):
+        _, totals = self.run_merge()
+        self.assertEqual(totals["fullcount"], 3)
+        self.assertEqual(totals["fullfailedcount"], 1)
+        self.assertEqual(totals["fullskippedcount"], 1)
+
+    def test_import_only_is_counted_and_still_ok(self):
+        _, totals = self.run_merge()
+        self.assertEqual(totals["importonlycount"], 1)
+        # SWEET's base artifact exists; it stays inside totalcount.
+        self.assertEqual(totals["totalcount"], 6)
+
+    def test_totals_match_the_transformer_definition(self):
+        # merge_stats and the transformer share stats.summarize; the release
+        # totals must equal what the package computes over the same entries.
+        index, totals = self.run_merge()
+        import sys as _sys
+        _sys.path.insert(0, os.path.join(os.path.dirname(MERGE_STATS), "..", "..", "src"))
+        from kg_bioportal.stats import summarize
+        expected = summarize(index.values())
+        for key, value in expected.items():
+            self.assertEqual(totals[key], value, key)

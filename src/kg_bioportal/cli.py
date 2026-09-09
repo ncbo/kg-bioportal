@@ -414,8 +414,19 @@ def download(
     help="Skip an ontology whose decompressed source exceeds this many MB. "
     "The download-time gate can only weigh the compressed file.",
 )
-def transform(input_dir, output_dir, compress, timeout_min, max_source_mb) -> None:
+@click.option(
+    "--full/--no_full",
+    "full_graphs",
+    default=True,
+    show_default=True,
+    help="Also build each ontology's full graph (imports merged in by ROBOT) as "
+    "<ACRONYM>_full.tar.gz beside its base graph. Needs the network.",
+)
+def transform(input_dir, output_dir, compress, timeout_min, max_source_mb, full_graphs) -> None:
     """Transforms all ontologies in the input directory to KGX nodes and edges.
+
+    Each ontology yields a base graph (imports stripped) and, unless --no_full,
+    a full graph (imports merged in).
 
     Yields two log files: total_stats.yaml and onto_stats.yaml.
     The first contains the total counts of Bioportal ontologies and transforms.
@@ -435,6 +446,7 @@ def transform(input_dir, output_dir, compress, timeout_min, max_source_mb) -> No
         output_dir=output_dir,
         timeout_min=timeout_min,
         max_source_mb=max_source_mb,
+        full_graphs=full_graphs,
     )
 
     tx.transform_all(compress=compress)

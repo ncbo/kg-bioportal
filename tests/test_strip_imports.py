@@ -384,3 +384,49 @@ class TestStripImportsDeclined(StripImportsTestCase):
 # was: owl:imports <http://example.org/dead> .
 """)
         self._assert_untouched(path)
+
+
+class TestCountImports(StripImportsTestCase):
+    """count_imports feeds the full-graph decision and the import-only flag (#177).
+
+    For the serializations the strippers know it is the number they would cut;
+    for the rest it is a pattern count.
+    """
+
+    def count(self, name, text):
+        from kg_bioportal.transformer import count_imports
+        return count_imports(self.write(name, text))
+
+    def test_rdfxml(self):
+        self.assertEqual(self.count("o.owl", RDFXML), 1)
+
+    def test_owlxml(self):
+        self.assertEqual(self.count("o.owx", OWLXML), 1)
+
+    def test_turtle_counts_objects_not_predicates(self):
+        # SWEET: one owl:imports predicate, hundreds of imports behind it.
+        many = TURTLE.replace(
+            "owl:imports <http://example.org/dead> ;",
+            "owl:imports <http://example.org/dead> ,\n        <http://example.org/deader> ;",
+        )
+        self.assertEqual(self.count("o.ttl", many), 2)
+
+    def test_obo(self):
+        self.assertEqual(self.count("o.obo", OBO.replace("import: http://example.org/dead\n",
+                                                          "import: http://a\nimport: http://b\n")), 2)
+
+    def test_functional_syntax(self):
+        self.assertEqual(self.count(
+            "o.ofn", "Prefix(:=<http://e/>)\nOntology(<http://e/o>\nImport(<http://a>)\nImport(<http://b>)\n)\n"), 2)
+
+    def test_manchester_syntax(self):
+        self.assertEqual(self.count(
+            "o.omn", "Prefix: : <http://e/>\nOntology: <http://e/o>\nImport: <http://a>\nClass: A\n"), 1)
+
+    def test_no_imports_is_zero(self):
+        self.assertEqual(self.count(
+            "o.owl", RDFXML.replace('    <owl:imports rdf:resource="http://example.org/dead"/>\n', "")), 0)
+
+    def test_unreadable_path_is_zero(self):
+        from kg_bioportal.transformer import count_imports
+        self.assertEqual(count_imports(os.path.join(self._tmp.name, "missing.owl")), 0)

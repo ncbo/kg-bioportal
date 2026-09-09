@@ -19,14 +19,29 @@ index, look up its `download_url`, download that. `<ID>` is the BioPortal acrony
 each tarball contains `<ID>_nodes.tsv` and `<ID>_edges.tsv`.
 
 The latest release also carries **`graph_urls.tsv`** — the same `<ID>` → artifact-URL mapping as a
-two-column TSV with one header line. Prefer it when you don't need the rest of the index or don't
+three-column TSV with one header line: `id`, `download_url` (base graph), `full_download_url` (full
+graph, blank where none was built). Prefer it when you don't need the rest of the index or don't
 want a YAML parser:
 
 ```bash
 BASE=https://github.com/ncbo/kg-bioportal/releases/latest/download
-URL=$(curl -sL "$BASE/graph_urls.tsv" | awk -F'\t' '$1=="AGRO"{print $2}')
+URL=$(curl -sL "$BASE/graph_urls.tsv" | awk -F'\t' '$1=="AGRO"{print $2}')   # base graph
+URL=$(curl -sL "$BASE/graph_urls.tsv" | awk -F'\t' '$1=="AGRO"{print $3}')   # full graph, if any
 curl -LO "$URL"
 ```
+
+## Base and full graphs
+
+Every ontology is transformed twice, after the OBO Foundry's base/full distinction:
+
+| Graph | Asset | Members | What it is |
+|-------|-------|---------|------------|
+| **base** | `<ID>.tar.gz` | `<ID>_nodes.tsv`, `<ID>_edges.tsv` | The ontology alone: `owl:imports` stripped before ROBOT. References to imported terms are dangling edges. Merges cleanly with other base graphs. |
+| **full** | `<ID>_full.tar.gz` | `<ID>_full_nodes.tsv`, `<ID>_full_edges.tsv` | The ontology with its import closure merged in by `robot merge`. Self-contained; repeats whatever it imports. Only where the ontology declares imports ROBOT could fetch. |
+
+An **import-only** ontology (`reason: import_only` on an OK entry) has no classes of its own; its
+base graph is just the header (no edges, a node or two). SWEET is the type case: one header, 224
+component files behind `owl:imports`. Use its full graph.
 
 Release tags are unique per run (`data-YYYY.MM.DD-<run>`). Only `status: OK` ontologies have an
 artifact.
@@ -43,7 +58,7 @@ ontologies:
 - id: AGRO                # BioPortal acronym (also the asset name <ID>.tar.gz)
   name: AGRonomy Ontology # human name from BioPortal
   version: '2023-08-14'   # BioPortal submission version string ('NA' if none)
-  status: OK              # OK | Failed | Skipped
+  status: OK              # base graph: OK | Failed | Skipped
   reason: ''              # why non-OK: transform_error_<stage> | invalid_source |
                           #   too_large | too_slow | skiplist | not_downloadable |
                           #   no_submission.
@@ -57,6 +72,8 @@ ontologies:
                           #   <stage> is decompress | convert | relax | kgx — which
                           #   step lost the ontology. Entries from runs before this
                           #   was recorded carry a bare `transform_error`.
+                          #   On an OK entry: import_only, meaning the base graph is
+                          #   only the ontology header (see Base and full graphs).
   detail: ''              # non-OK entries only, and only when there is something to
                           #   say: the message from the stage that failed, on one
                           #   line, truncated to 500 characters. When the message
@@ -69,7 +86,7 @@ ontologies:
                           #   xsd:dateTime '06/09/2012'). A fact about the source,
                           #   not a transform problem -- the values are kept as
                           #   written and the graph is unaffected.
-  nodecount: 5102         # 0 unless status OK
+  nodecount: 5102         # base graph; 0 unless status OK
   edgecount: 8691
   # node_categories / edge_categories: OK entries only, and only where the run
   # that built the entry recorded a tally -- which Biolink categories are present
@@ -83,16 +100,34 @@ ontologies:
     biolink:Association: 8691
   submission_id: '6'      # BioPortal submission id
   source_bytes: 7501012   # size of the source ontology file
+  imports: 2              # owl:imports declarations in the source
+  full_status: OK         # full graph: OK | Failed | Skipped; absent = not attempted
+  full_reason: ''         # no_imports (Skipped: base is the full graph) |
+                          #   unresolvable_imports (Failed: an import could not be
+                          #   fetched; full_detail names it) | transform_error_<stage>
+                          #   with <stage> merge | relax | kgx | too_slow | too_large
+  full_detail: ''         # as `detail`, for the full graph; only when there is one
+  full_nodecount: 91234   # full graph; 0 unless full_status OK
+  full_edgecount: 160021
+  full_node_categories: {} # as node_categories / edge_categories, for the full graph
+  full_edge_categories: {}
   download_url: https://github.com/ncbo/kg-bioportal/releases/download/data-2026.08.01-42/AGRO.tar.gz
                           # OK entries only; the release+asset holding this graph's newest artifact
+  full_download_url: https://github.com/ncbo/kg-bioportal/releases/download/data-2026.08.01-42/AGRO_full.tar.gz
+                          # full_status OK only
 ```
 
 `total_stats.yaml`:
 ```yaml
-totalcount: 987       # OK
+totalcount: 987       # OK base graphs (import-only ones included)
 skippedcount: 43
-failedcount: 262
-totalnodecount: 3988318
+failedcount: 262      # excludes license-restricted
+licensedcount: 8
+importonlycount: 3    # OK base graphs that are only a header
+fullcount: 410        # full graphs built
+fullskippedcount: 560 # mostly no_imports: the base graph is the full graph
+fullfailedcount: 17   # mostly unresolvable_imports
+totalnodecount: 3988318   # base graphs only; full graphs repeat their imports
 totaledgecount: 7354869
 transform_date: 2026-07-31
 ```
@@ -181,9 +216,10 @@ releases the category columns say nothing about the contents at all.
   10,000 edges and left the remainder blank, so an ontology with fewer than 10,000 edges had none
   at all. The ids are derived, not opaque, so they are stable across runs but not unique across
   ontologies until you namespace them.
-- These are single-ontology graphs; cross-ontology references appear as edges whose `object` (or
-  `subject`) is a CURIE not present as a node in this graph — i.e. **dangling** until you merge in
-  the referenced ontology. This is the main signal the merge QC report surfaces.
+- Base graphs are single-ontology graphs; cross-ontology references appear as edges whose `object`
+  (or `subject`) is a CURIE not present as a node in this graph — i.e. **dangling** until you merge
+  in the referenced ontology. This is the main signal the merge QC report surfaces. A full graph
+  has those imported terms as nodes of its own.
 
 ## Loading recipes
 

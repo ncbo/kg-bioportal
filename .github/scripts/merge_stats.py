@@ -6,39 +6,43 @@ Usage: merge_stats.py <fragments_dir> <output_dir> [transform_date] [base_onto_s
 Reads every onto_stats.yaml under <fragments_dir> (one per transform shard),
 optionally seeds from an existing index (<base_onto_stats>, the previous latest
 release's onto_stats — carries every ontology's download_url), overlays this
-run's results, sets each of this run's OK entries' download_url to <release_tag>,
-adds the statically skiplisted giants as Skipped/skiplist rows, and writes the
-merged onto_stats.yaml + total_stats.yaml + graph_urls.tsv into <output_dir>.
+run's results, sets each of this run's OK entries' download_url (and each OK
+full graph's full_download_url) to <release_tag>, adds the statically
+skiplisted giants as Skipped/skiplist rows, and writes the merged
+onto_stats.yaml + total_stats.yaml + graph_urls.tsv into <output_dir>.
 
 The merged index is authoritative across releases: each OK entry's download_url
 points at whichever release holds that ontology's most recent artifact. There is
 no release that holds them all — GitHub caps a release at 1000 assets and there
 are more transformed ontologies than that — so resolving through the index is
 the only way to find an artifact. graph_urls.tsv is that same mapping in a form
-a shell can read without a YAML parser.
+a shell can read without a YAML parser: one row per OK ontology, its base
+graph's URL in the second column and its full graph's (if one was built) in the
+third.
 
-Depends only on PyYAML. The skiplist is loaded directly from the package's
-config.py by path, so this script needs no heavy dependencies installed.
+Depends only on PyYAML. The skiplist, the reason vocabulary and the totals
+are loaded from the package source tree by path (config.py and stats.py import
+nothing heavy), so this script needs no other dependencies installed.
 """
 import glob
-import importlib.util
 import os
 import sys
 
 import yaml
 
 
-def load_config(repo_root):
-    """Import src/kg_bioportal/config.py without installing the package.
+def load_package(repo_root):
+    """Import the package's light modules without installing it.
 
-    Keeps the skiplist and the license-restricted reason string in one place
-    rather than duplicating them here.
+    Keeps the skiplist, the reason strings and the totals in one place rather
+    than duplicating them here. ``kg_bioportal.config`` and ``kg_bioportal.stats``
+    import nothing beyond the standard library; the heavy modules are never
+    touched.
     """
-    config_path = os.path.join(repo_root, "src", "kg_bioportal", "config.py")
-    spec = importlib.util.spec_from_file_location("kgbp_config", config_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    sys.path.insert(0, os.path.join(repo_root, "src"))
+    from kg_bioportal import config, stats  # noqa: E402
+
+    return config, stats
 
 
 def main():
@@ -55,10 +59,10 @@ def main():
     # download_url they already have (which release they actually live in).
     release_tag = sys.argv[5] if len(sys.argv) > 5 else ""
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    config = load_config(repo_root)
+    config, stats = load_package(repo_root)
 
-    def asset_url(tag, onto_id):
-        return f"https://github.com/ncbo/kg-bioportal/releases/download/{tag}/{onto_id}.tar.gz"
+    def asset_url(tag, onto_id, suffix=""):
+        return f"https://github.com/ncbo/kg-bioportal/releases/download/{tag}/{onto_id}{suffix}.tar.gz"
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -80,10 +84,18 @@ def main():
             data = yaml.safe_load(f) or {}
         for entry in data.get("ontologies", []):
             # This run's OK graphs live in this run's release; record where.
+            # The base and full graphs are separate assets, resolved separately:
+            # a full graph can fail while the base graph beside it is fine.
             if entry.get("status") == "OK" and release_tag:
                 entry["download_url"] = asset_url(release_tag, entry["id"])
             else:
                 entry.pop("download_url", None)  # no artifact for non-OK
+            if entry.get("full_status") == "OK" and release_tag:
+                entry["full_download_url"] = asset_url(
+                    release_tag, entry["id"], config.FULL_SUFFIX
+                )
+            else:
+                entry.pop("full_download_url", None)
             by_id[entry["id"]] = entry
             fresh += 1
     print(f"Merged {len(fragment_files)} fragments ({fresh} entries) -> {len(by_id)} ontologies total.")
@@ -114,39 +126,40 @@ def main():
     # Shell-readable resolver: acronym -> the release that actually holds its
     # artifact. Published on every release so `latest/download/graph_urls.tsv`
     # is a stable entry point even though `latest/download/<ACRONYM>.tar.gz`
-    # cannot be (no single release can hold every artifact).
+    # cannot be (no single release can hold every artifact). The third column
+    # is the full graph's URL, empty where none was built; readers that only
+    # ever took the second column still get the base graph.
     resolvable = [o for o in ontologies if o.get("status") == "OK" and o.get("download_url")]
     with open(os.path.join(output_dir, "graph_urls.tsv"), "w") as f:
-        f.write("id\tdownload_url\n")
+        f.write("id\tdownload_url\tfull_download_url\n")
         for o in resolvable:
-            f.write(f"{o['id']}\t{o['download_url']}\n")
+            f.write(f"{o['id']}\t{o['download_url']}\t{o.get('full_download_url', '')}\n")
     missing = [
         o["id"] for o in ontologies
         if o.get("status") == "OK" and not o.get("download_url")
     ]
     if missing:
         print(f"WARNING: {len(missing)} OK ontologies have no download_url: {missing[:10]}")
+    missing_full = [
+        o["id"] for o in ontologies
+        if o.get("full_status") == "OK" and not o.get("full_download_url")
+    ]
+    if missing_full:
+        print(f"WARNING: {len(missing_full)} OK full graphs have no full_download_url: {missing_full[:10]}")
 
-    ok = sum(1 for o in ontologies if o.get("status") == "OK")
-    skipped = sum(1 for o in ontologies if o.get("status") == "Skipped")
-    # License-restricted entries stay status Failed (no artifact exists) but are
-    # counted separately and excluded from failedcount — see transformer.py.
-    licensed = sum(
-        1 for o in ontologies if o.get("reason") == config.LICENSE_RESTRICTED_REASON
-    )
-    failed = sum(1 for o in ontologies if o.get("status") == "Failed") - licensed
+    # One definition of the totals, shared with the per-shard stats the
+    # transformer writes — see kg_bioportal/stats.py.
+    totals = stats.summarize(ontologies)
     with open(os.path.join(output_dir, "total_stats.yaml"), "w") as f:
-        f.write(f"totalcount: {ok}\n")
-        f.write(f"skippedcount: {skipped}\n")
-        f.write(f"failedcount: {failed}\n")
-        f.write(f"licensedcount: {licensed}\n")
-        f.write(f"totalnodecount: {sum(o.get('nodecount', 0) for o in ontologies)}\n")
-        f.write(f"totaledgecount: {sum(o.get('edgecount', 0) for o in ontologies)}\n")
+        for key, value in totals.items():
+            f.write(f"{key}: {value}\n")
         if transform_date:
             f.write(f"transform_date: {transform_date}\n")
 
     print(
-        f"OK={ok} Skipped={skipped} Failed={failed} Licensed={licensed} "
+        f"OK={totals['totalcount']} Skipped={totals['skippedcount']} "
+        f"Failed={totals['failedcount']} Licensed={totals['licensedcount']} "
+        f"ImportOnly={totals['importonlycount']} Full={totals['fullcount']} "
         f"resolvable={len(resolvable)} -> {output_dir}/"
     )
 

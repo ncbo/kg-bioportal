@@ -9,8 +9,19 @@ assets on this repository's [Releases](../../releases).
 
 ## Getting the graphs
 
-Each transformed ontology is a `<ACRONYM>.tar.gz` release asset containing
-`<ACRONYM>_nodes.tsv` and `<ACRONYM>_edges.tsv`.
+Each transformed ontology is published as up to two release assets, after the
+OBO Foundry's distinction between an ontology's *base* and *full* releases:
+
+| Asset | What it is | Contains |
+|---|---|---|
+| `<ACRONYM>.tar.gz` | **Base graph**: the ontology alone, its `owl:imports` stripped before ROBOT sees it. Always built. | `<ACRONYM>_nodes.tsv`, `<ACRONYM>_edges.tsv` |
+| `<ACRONYM>_full.tar.gz` | **Full graph**: the ontology with its import closure merged in by `robot merge`. Built when the ontology declares imports and ROBOT can fetch them all. | `<ACRONYM>_full_nodes.tsv`, `<ACRONYM>_full_edges.tsv` |
+
+Base graphs merge cleanly with each other (nothing is counted twice; references
+to imported terms are dangling edges until the imported ontology is merged in).
+Full graphs stand alone, at the cost of repeating whatever they import. See
+[Base and full graphs](#base-and-full-graphs) for what the index says about
+each and how a full graph can go missing.
 
 Releases are **incremental**: a run publishes only the ontologies it transformed,
 so an artifact lives in whichever release most recently rebuilt it, and there is
@@ -21,8 +32,8 @@ makes `releases/latest/download/<that file>` a stable entry point:
 
 | File | What it is |
 |---|---|
-| `graph_urls.tsv` | `<ACRONYM>` → artifact URL. Two columns, one header line. |
-| `onto_stats.yaml` | Full per-ontology index: status, reason, node/edge counts, `download_url`. |
+| `graph_urls.tsv` | `<ACRONYM>` → base graph URL → full graph URL (blank where none). Three columns, one header line. |
+| `onto_stats.yaml` | Full per-ontology index: status, reason, node/edge counts, `download_url`, and the same again as `full_*` for the full graph. |
 | `total_stats.yaml` | Site-wide totals. |
 
 To fetch one ontology:
@@ -33,17 +44,86 @@ URL=$(curl -sL "$BASE/graph_urls.tsv" | awk -F'\t' '$1=="AGRO"{print $2}')
 curl -LO "$URL"
 ```
 
-To fetch all of them:
+To fetch its full graph instead (the third column; empty if none was built):
+
+```bash
+URL=$(curl -sL "$BASE/graph_urls.tsv" | awk -F'\t' '$1=="AGRO"{print $3}')
+```
+
+To fetch all base graphs:
 
 ```bash
 curl -sL "$BASE/graph_urls.tsv" | tail -n +2 | cut -f2 | xargs -n1 -P4 curl -sLO
 ```
 
-From Python, read `download_url` off the entry you want in `onto_stats.yaml`.
+From Python, read `download_url` (base) or `full_download_url` (full) off the
+entry you want in `onto_stats.yaml`.
 
 > **Note:** `releases/latest/download/<ACRONYM>.tar.gz` does *not* work, despite
 > looking like it should. `latest` is just the most recent run's release, which
 > holds only that run's handful of artifacts.
+
+## Base and full graphs
+
+The index describes the two graphs separately. `status`, `reason`, `detail`,
+`nodecount`, `edgecount`, the category tallies and `download_url` are the base
+graph, as they always were; the full graph gets the same fields under a
+`full_` prefix (`full_status`, `full_reason`, `full_detail`, `full_nodecount`,
+`full_edgecount`, `full_node_categories`, `full_edge_categories`,
+`full_download_url`), plus `imports`, the number of import declarations in the
+source:
+
+```yaml
+- id: OBOE
+  status: OK
+  reason: import_only        # the base graph is only the ontology header
+  nodecount: 1
+  edgecount: 0
+  imports: 3
+  full_status: OK
+  full_reason: ''
+  full_nodecount: 509
+  full_edgecount: 764
+  download_url: https://github.com/ncbo/kg-bioportal/releases/download/<tag>/OBOE.tar.gz
+  full_download_url: https://github.com/ncbo/kg-bioportal/releases/download/<tag>/OBOE_full.tar.gz
+```
+
+Two things the base graph alone could not tell you, and which the site's
+Summary page and each ontology's page now spell out:
+
+- **`reason: import_only`** on an OK base graph. The ontology has no classes of
+  its own; everything it describes is pulled in through `owl:imports` (SWEET
+  is 224 component files behind one header). Its base graph holds only the
+  header: no edges and a handful of nodes (the ontology IRI, a license). The
+  artifact is published because it is a faithful base graph, and it is flagged
+  because it is useless on its own. The full graph is the one to use. These
+  are counted on their own `importonlycount` line in `total_stats.yaml` and
+  stay inside `totalcount`, since the artifact exists.
+- **A missing full graph**, by `full_reason`:
+  - **`no_imports`** (`full_status: Skipped`): the ontology declares no
+    imports, so its base graph already is its full graph. Nothing separate is
+    built. This is the common case.
+  - **`unresolvable_imports`** (`Failed`): an import (or an import's import)
+    could not be fetched; the transform log names it. `robot merge` needs the
+    whole closure, so one dead URL loses the full graph. The base graph is
+    unaffected. This is the failure #121 stripped imports to avoid, moved to
+    where it belongs.
+  - **`transform_error_<stage>`** (`Failed`): the merged ontology failed at
+    `merge` (ROBOT, for a reason other than an import), `relax` or `kgx`;
+    `full_detail` carries the message, as `detail` does for the base graph.
+  - **`too_slow`** / **`too_large`** (`Skipped`): the merged ontology tripped
+    the same gates as below. Each graph gets its own `--timeout_min`, and the
+    size gate is applied again to what `robot merge` wrote, since the closure
+    can be far larger than what BioPortal served.
+  - **No `full_*` fields at all**: no full graph was attempted. Either the
+    base graph is not OK (a full graph is only tried on top of a working base),
+    or the entry was carried forward from a run before full graphs existed and
+    will get one when its BioPortal submission next changes.
+
+`total_stats.yaml` carries `fullcount`, `fullskippedcount` and
+`fullfailedcount`. Node and edge totals sum base graphs only; full graphs
+repeat whatever they import. `kgbioportal transform --no_full` builds base
+graphs only.
 
 ## What gets skipped, and why
 
@@ -60,8 +140,9 @@ the stats with a reason, rather than failing the build:
   default 250 MB). Checked twice: on the file as downloaded, and again after
   decompression, since a gzipped source understates its real size by an order
   of magnitude (ROR is 14 MB gzipped and 135 MB unpacked).
-- **`too_slow`** — the transform exceeded the per-ontology wall-clock cap
-  (`--timeout_min`, default 30 min).
+- **`too_slow`** — the transform exceeded the per-graph wall-clock cap
+  (`--timeout_min`, default 30 min). The base and full graph of one ontology
+  each get the full cap.
 
 These thresholds are tunable via config, CLI flags, or the environment
 (`KGBP_MAX_SOURCE_MB`, `KGBP_TIMEOUT_MIN`).
@@ -107,13 +188,15 @@ since no KGX artifact exists for them either way.
 1. **prepare** — fetches the ontology list, drops the skiplist, splits the rest
    into shards, and creates the release.
 2. **transform** — a parallel matrix (one job per shard) downloads and transforms
-   its ontologies and uploads the `<ACRONYM>.tar.gz` assets to the release.
+   its ontologies and uploads the `<ACRONYM>.tar.gz` and `<ACRONYM>_full.tar.gz`
+   assets to the release.
 3. **finalize** — merges the per-shard stats and attaches/commits
    `onto_stats.yaml` + `total_stats.yaml`.
 
 The workflow needs a repository secret **`NCBO_API_KEY`** (a BioPortal / NCBO
 API key). Use the **ontologies** input (e.g. `AGRO SEPIO PO`) to test a handful
-without running the full set.
+without running the full set, and **full_graphs** to switch full graphs off for
+a run.
 
 ## Running locally
 
@@ -124,7 +207,7 @@ export NCBO_API_KEY=...   # from https://bioportal.bioontology.org/account
 # Download a few ontologies (honors the size gate + skiplist)
 kgbioportal download -d "AGRO SEPIO" -o data/raw -k "$NCBO_API_KEY" --max_source_mb 250
 
-# Transform them to KGX (honors the per-ontology time cap)
+# Transform them to KGX (honors the per-graph time cap); --no_full for base graphs only
 kgbioportal transform -i data/raw -o data/transformed --timeout_min 30
 ```
 

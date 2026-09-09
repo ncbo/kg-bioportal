@@ -65,10 +65,22 @@ def main():
         print(json.dumps(onts, indent=2))
         return
 
-    print(f"{'ID':24} {'STATUS':8} {'NODES':>11} {'EDGES':>11}  NAME")
+    # STATUS/NODES/EDGES describe the base graph (imports stripped). FULL is the
+    # full graph (imports merged in): its node/edge counts, "=base" when the
+    # ontology has no imports, "-" when none was built or attempted, and an
+    # import-only base graph is flagged, since it holds only the header.
+    def full(o):
+        if o.get("full_status") == "OK":
+            return f"{fmt(o.get('full_nodecount'))}/{fmt(o.get('full_edgecount'))}"
+        if o.get("full_reason") == "no_imports":
+            return "=base"
+        return o.get("full_reason") or "-"
+
+    print(f"{'ID':24} {'STATUS':8} {'NODES':>11} {'EDGES':>11}  {'FULL (nodes/edges)':22}  NAME")
     for o in onts:
-        print(f"{o['id']:24} {o.get('status', ''):8} "
-              f"{fmt(o.get('nodecount')):>11} {fmt(o.get('edgecount')):>11}  {o.get('name') or ''}")
+        status = "IMPORT-ONLY" if o.get("reason") == "import_only" else o.get("status", "")
+        print(f"{o['id']:24} {status:8} "
+              f"{fmt(o.get('nodecount')):>11} {fmt(o.get('edgecount')):>11}  {full(o):22}  {o.get('name') or ''}")
     unresolved = sum(1 for o in onts
                      if o.get("status") == "OK" and not o.get("download_url"))
     print(f"\n{len(onts)} graphs. Each OK entry's download_url (in onto_stats / --json) points at "
