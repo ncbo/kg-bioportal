@@ -452,6 +452,25 @@ class TestFullGraphPages(TestCase):
         self.assertIn("Base graph is the full graph", page)
         self.assertNotIn("not built", page)
 
+    def test_an_ontology_without_imports_speaks_of_one_graph(self):
+        # The base/full distinction answers a question this ontology never
+        # raises; the page keeps the one notice and otherwise says "graph".
+        page = self.page(full_status="Skipped", full_reason="no_imports")
+        self.assertIn("Download graph", page)
+        self.assertNotIn("Download base graph", page)
+        self.assertNotIn("imports stripped", page)
+        self.assertNotIn("where built", page)
+        self.assertIn("Graph at a glance", page)
+        self.assertIn("The graph contains", page)
+        self.assertIn("Same as the base graph (no imports)", page)
+        self.assertIn("Base graph is the full graph", page)
+
+    def test_an_ontology_with_imports_keeps_the_base_wording(self):
+        page = self.page(full_status="Failed", full_reason="unresolvable_imports")
+        self.assertIn("Download base graph", page)
+        self.assertIn("Base graph at a glance", page)
+        self.assertIn("imports stripped", page)
+
     def test_too_slow_full_graph_is_explained(self):
         page = self.page(full_status="Skipped", full_reason="too_slow")
         self.assertIn("time limit", page)
