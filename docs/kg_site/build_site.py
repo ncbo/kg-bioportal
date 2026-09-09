@@ -92,7 +92,7 @@ def kg_formats(r):
     return seen
 
 FMT_CLASS = {  # map a format string to a chip color class
-    "kgx": "kgx", "kgx-jsonl": "jsonl", "json": "jsonl", "jsonld": "jsonl",
+    "kgx": "kgx", "full": "full", "kgx-jsonl": "jsonl", "json": "jsonl", "jsonld": "jsonl",
     "rdfxml": "rdf", "ttl": "rdf", "ntriples": "rdf", "nquads": "rdf",
     "neo4j": "neo4j", "duckdb": "duckdb", "sqlite": "duckdb", "mixed": "duckdb",
 }
@@ -130,7 +130,13 @@ def kg_to_item(r):
     }
 
 def onto_to_item(o, transform_date):
-    """Normalize a transformed BioPortal ontology (onto_stats entry) into a browse item."""
+    """Normalize a transformed BioPortal ontology (onto_stats entry) into a browse item.
+
+    ``status``/counts/``download_url`` describe the base graph (imports stripped),
+    as they always have. The ``full_*`` fields describe the full graph (imports
+    merged in) and are absent from entries transformed before full graphs
+    existed, which the page reports as "not yet attempted".
+    """
     oid = o["id"]
     status = o.get("status", "")
     ok = status == "OK"
@@ -142,21 +148,46 @@ def onto_to_item(o, transform_date):
     # License-restricted entries are stored as Failed (there is no artifact) but
     # nothing about them is broken, so don't call them failed to a reader.
     licensed = o.get("reason") == "license_restricted"
-    if ok:
-        blurb = "BioPortal ontology transformed to KGX"
+    # An OK base graph that is only the ontology's header: every class lives
+    # behind its imports (#177). The artifact is real, and the full graph is
+    # the one anybody wants.
+    import_only = ok and o.get("reason") == "import_only"
+    full_status = o.get("full_status") or ""
+    full_ok = full_status == "OK"
+    full_nodes = o.get("full_nodecount") if full_ok and isinstance(o.get("full_nodecount"), int) else None
+    full_edges = o.get("full_edgecount") if full_ok and isinstance(o.get("full_edgecount"), int) else None
+    imports = o.get("imports") if isinstance(o.get("imports"), int) else None
+    if import_only:
+        blurb = "BioPortal ontology — import-only: the base graph is just the header" + (
+            "; use the full graph" if full_ok else "")
+    elif ok:
+        blurb = "BioPortal ontology transformed to KGX" + (
+            " (base and full graphs)" if full_ok else "")
     elif licensed:
         blurb = "BioPortal ontology — not available under our license"
     else:
         blurb = "BioPortal ontology — " + (status.lower() or "not transformed") + (
             f" ({o.get('reason')})" if o.get("reason") else "")
+    fmts = (["kgx", "full"] if full_ok else ["kgx"]) if ok else []
+    if import_only:
+        status_label, status_cls = "Import-only", "info"
+    elif licensed:
+        status_label, status_cls = "Licensed", "warn"
+    else:
+        status_label, status_cls = (status or "—"), ("ok" if ok else "warn")
     return {
         "source": "bioportal", "source_label": "BioPortal ontology", "source_cls": "bp",
         "id": oid, "acr": oid.upper(), "name": name, "ok": ok,
         "blurb": blurb,
-        "nodes": nodes, "edges": edges, "fmts": ["kgx"] if ok else [], "domains": [],
-        "status_label": "Licensed" if licensed else (status or "—"),
-        "status_cls": "ok" if ok else "warn",
+        "nodes": nodes, "edges": edges, "fmts": fmts, "domains": [],
+        "status_label": status_label,
+        "status_cls": status_cls,
         "updated": transform_date or "",
+        "import_only": import_only, "imports": imports,
+        "full_status": full_status, "full_ok": full_ok,
+        "full_reason": o.get("full_reason") or "",
+        "full_nodes": full_nodes, "full_edges": full_edges,
+        "full_download_url": o.get("full_download_url") or "",
         # Every transformed-ontology entry now gets a page — OK ones with the KGX
         # download, non-OK ones collecting the metadata we do have + why there's no artifact.
         "href": f"resource/{oid}/", "has_page": True, "version": ver,
@@ -209,9 +240,39 @@ REASON_MSG = {
     "no_submission": "No submission is currently available for this ontology on BioPortal.",
     "metadata_http_error": "BioPortal metadata for this ontology could not be retrieved.",
     "download_error": "The source download from BioPortal failed.",
+    "import_only": "This ontology has no classes of its own: everything it describes is pulled "
+                   "in through owl:imports. Its base graph (imports stripped) therefore holds "
+                   "only the ontology header, and the full graph is the one to use.",
 }
 def reason_message(reason):
     return REASON_MSG.get(reason, "This ontology has not been transformed to KGX.")
+
+# Why an ontology has no full graph (imports merged in), by full_reason.
+FULL_REASON_MSG = {
+    "no_imports": "This ontology declares no imports, so its base graph already is its full "
+                  "graph; nothing separate was built.",
+    "unresolvable_imports": "At least one of this ontology's imports could not be fetched "
+                            "(a dead, moved, or unreachable URL), so ROBOT could not merge the "
+                            "import closure. The base graph is unaffected.",
+    "transform_error": "The full-graph transform did not complete — ROBOT or the KGX conversion "
+                       "reported an error on the merged ontology. The base graph is unaffected.",
+    "transform_error_merge": "ROBOT fetched this ontology's imports but could not merge them into "
+                             "one ontology (the `merge` step). The base graph is unaffected.",
+    "transform_error_relax": "ROBOT merged the imports but failed to normalise the result (the "
+                             "`relax` step). The base graph is unaffected.",
+    "transform_error_kgx": "The merged ontology converted, but the KGX step failed to turn it into "
+                           "nodes and edges. The base graph is unaffected.",
+    "too_slow": "Merging the imports and transforming the result exceeded the per-graph time "
+                "limit and was stopped. The base graph is unaffected.",
+    "too_large": "With its imports merged in, this ontology exceeds the transform size limit "
+                 "(100 MB), so the full graph is not built on the automated pipeline. The base "
+                 "graph is unaffected.",
+}
+NOT_ATTEMPTED_MSG = ("No full graph has been attempted for this ontology yet: it was last "
+                     "transformed before full graphs were introduced, and will get one the next "
+                     "time its BioPortal submission changes.")
+def full_reason_message(reason):
+    return FULL_REASON_MSG.get(reason, "The full graph for this ontology could not be built.")
 
 def load_ontologies(path):
     """Load onto_stats.yaml -> list of entries. Needs PyYAML (present in the CI build)."""
@@ -362,6 +423,11 @@ def render_browse(items, kg_count, onto_count):
             dom_counts[d] += 1
     top_domains = [d for d, _ in dom_counts.most_common(12)]
 
+    # Base counts on the line, the full graph's beneath them where one exists.
+    def full_sub(it, key):
+        return (f'<div class="sub" title="full graph (imports merged in)">full {abbrev(it[key])}</div>'
+                if it.get("full_ok") and isinstance(it.get(key), int) else "")
+
     rows = []
     for it in sorted(items, key=lambda x: x["name"].lower()):
         acr, name, href = it["acr"], it["name"], it["href"]
@@ -386,8 +452,8 @@ def render_browse(items, kg_count, onto_count):
             <div class="blurb">{esc(it['blurb'])}</div>
             <div class="row-chips">{chips}</div>
           </td>
-          <td class="c-num num">{abbrev(it['nodes'])}</td>
-          <td class="c-num num">{abbrev(it['edges'])}</td>
+          <td class="c-num num">{abbrev(it['nodes'])}{full_sub(it, 'full_nodes')}</td>
+          <td class="c-num num">{abbrev(it['edges'])}{full_sub(it, 'full_edges')}</td>
           <td class="c-fmt">{fmt_chips or '<span class="muted">—</span>'}</td>
           <td class="c-status"><span class="stat {it['status_cls']}">{esc(it['status_label'])}</span></td>
           <td class="c-num num muted">{esc(it['updated'])}</td>
@@ -407,6 +473,7 @@ def render_browse(items, kg_count, onto_count):
     # Only OK ontologies are actual transforms; the rest are listed for reference.
     onto_ok = sum(1 for it in items if it["source"] == "bioportal" and it.get("ok"))
     onto_other = onto_count - onto_ok
+    onto_full = sum(1 for it in items if it["source"] == "bioportal" and it.get("full_ok"))
 
     return head("Browse Graphs · KG-BioPortal") + nav("") + f"""
 <div class="wrap">
@@ -414,7 +481,7 @@ def render_browse(items, kg_count, onto_count):
   <div class="browse-head">
     <div>
       <h1>Browse Graphs</h1>
-      <p class="sub"><b class="num">{onto_ok}</b> BioPortal ontologies transformed to KGX + <b class="num">{kg_count}</b> KG projects (KG&#8209;Registry)<span class="muted"> · {onto_other} more ontologies listed (failed or skipped)</span></p>
+      <p class="sub"><b class="num">{onto_ok}</b> BioPortal ontologies transformed to KGX (<b class="num">{onto_full}</b> also as full graphs with imports merged in) + <b class="num">{kg_count}</b> KG projects (KG&#8209;Registry)<span class="muted"> · {onto_other} more ontologies listed (failed or skipped)</span></p>
     </div>
     <div class="browse-search">
       <svg width=16 height=16 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2.2 style="opacity:.5;flex:none"><circle cx=11 cy=11 r=7/><path d="M21 21l-4.3-4.3"/></svg>
@@ -566,9 +633,11 @@ def render_summary(totals, kg_count, onto_items):
     )
 
     # Transform status: one part-to-whole bar over every ontology we attempt.
-    def seg(cls, n):
-        return (f'<span class="seg {cls}" style="width:{n / (attempted or 1) * 100:.2f}%"></span>'
+    def seg_of(cls, n, whole):
+        return (f'<span class="seg {cls}" style="width:{n / (whole or 1) * 100:.2f}%"></span>'
                 if n else "")
+    def seg(cls, n):
+        return seg_of(cls, n, attempted)
     def key(cls, n, label):
         return (f'<span class="key"><span class="sw {cls}"></span>{label}'
                 f'<b class="num">{commafy(n)}</b></span>')
@@ -615,6 +684,35 @@ def render_summary(totals, kg_count, onto_items):
         <p class="muted mt">{MULTI_CAT_NOTE} Ontologies last transformed before these counts
           were recorded contribute nothing to them.</p>
       </section>"""
+    # Full graphs: one part-to-whole bar over the transformed ontologies. Counted
+    # from the entries rather than the totals because "not yet attempted" (an
+    # entry from before full graphs existed) is only visible there.
+    full_built = sum(1 for it in ok_ontos if it.get("full_ok"))
+    full_same = sum(1 for it in ok_ontos if it.get("full_reason") == "no_imports")
+    full_failed = sum(1 for it in ok_ontos if it.get("full_status") == "Failed")
+    full_skipped = sum(1 for it in ok_ontos
+                       if it.get("full_status") == "Skipped" and it.get("full_reason") != "no_imports")
+    full_pending = onto_ok - full_built - full_same - full_failed - full_skipped
+    import_only = sorted((it for it in ok_ontos if it.get("import_only")), key=lambda it: it["acr"])
+    import_only_html = ""
+    if import_only:
+        links = ", ".join(f'<a href="../resource/{esc(it["id"])}/" class="mono">{esc(it["acr"])}</a>'
+                          for it in import_only)
+        import_only_html = (
+            f'<p class="muted mt"><b class="num">{len(import_only)}</b> import-only '
+            f'{"ontology" if len(import_only) == 1 else "ontologies"}, whose base graph is only the '
+            f'ontology header and whose content lives in the full graph: {links}.</p>')
+    full_block = f"""
+        <section class="block">
+          <p class="eyebrow">Full graphs <span class="eb-count">{commafy(onto_ok)} transformed ontologies</span></p>
+          <div class="stack">{seg_of('full', full_built, onto_ok)}{seg_of('same', full_same, onto_ok)}{seg_of('fail', full_failed, onto_ok)}{seg_of('skip', full_skipped, onto_ok)}{seg_of('pend', full_pending, onto_ok)}</div>
+          <div class="keys">{key('full', full_built, 'Built')}{key('same', full_same, 'Same as base (no imports)')}
+            {key('fail', full_failed, 'Failed')}{key('skip', full_skipped, 'Skipped')}{key('pend', full_pending, 'Not yet attempted') if full_pending else ''}</div>
+          <p class="muted mt">Every ontology is published as a <b>base</b> graph (its own content,
+            imports stripped) and, where it declares imports, a <b>full</b> graph with the import
+            closure merged in by ROBOT. A full graph fails when an import cannot be fetched; the
+            base graph beside it is unaffected.</p>{import_only_html}
+        </section>"""
 
     return head("Summary · KG-BioPortal") + nav("../", active="summary") + f"""
 <div class="wrap">
@@ -634,11 +732,13 @@ def render_summary(totals, kg_count, onto_items):
       <section class="block">
         <p class="eyebrow">The collection at a glance</p>
         <div class="metrics">{metrics}</div>
-        <p class="muted mt">Node and edge totals cover the transformed ontologies only; each
-          ontology is transformed on its own, so nodes shared between ontologies are counted once
-          per ontology.</p>
+        <p class="muted mt">Node and edge totals cover the base graphs of the transformed
+          ontologies only; each ontology is transformed on its own, so nodes shared between
+          ontologies are counted once per ontology. Full graphs are not summed, since they
+          repeat whatever they import.</p>
       </section>
 {status_block}
+{full_block}
       <section class="block">
         <p class="eyebrow">Largest ontologies by node count</p>
         {bar_chart(top_rows('nodes'), 'node', 'nodes')}
@@ -958,6 +1058,12 @@ def render_ontology_resource(it):
     date = it["transform_date"]
     sub = it["submission_id"]
     reason = it["reason"]
+    import_only = it.get("import_only", False)
+    full_ok = it.get("full_ok", False)
+    full_url = it.get("full_download_url", "")
+    full_status = it.get("full_status", "")
+    full_reason = it.get("full_reason", "")
+    imports = it.get("imports")
 
     def metric(cls, v, k):
         return f'<div class="metric {cls}"><div class="v">{v}</div><div class="k">{k}</div></div>'
@@ -981,31 +1087,94 @@ def render_ontology_resource(it):
               '1 1h14a1 1 0 0 0 1-1v-2"/></svg>')
     bp_svg = ('<svg width=16 height=16 viewBox="0 0 24 24" fill=none stroke=currentColor '
               'stroke-width=2.2><path d="M7 17L17 7M9 7h8v8"/></svg>')
-    if ok and it["download_url"]:
-        cta = (f'<a class="btn btn-primary" href="{esc(it["download_url"])}">{dl_svg} Download KGX</a>'
-               f'<a class="btn btn-ghost" href="{esc(it["bioportal_url"])}" target="_blank" '
-               f'rel="noopener">{bp_svg} View on BioPortal</a>')
+    bp_btn = (f'<a class="btn btn-ghost" href="{esc(it["bioportal_url"])}" target="_blank" '
+              f'rel="noopener">{bp_svg} View on BioPortal</a>')
+    base_btn = (f'<a class="btn btn-primary" href="{esc(it["download_url"])}">{dl_svg} Download base graph</a>'
+                if ok and it["download_url"] else "")
+    full_btn = (f'<a class="btn btn-primary" href="{esc(full_url)}">{dl_svg} Download full graph</a>'
+                if full_ok and full_url else "")
+    # An import-only ontology leads with its full graph: the base is a header.
+    if import_only and full_btn:
+        base_btn = base_btn.replace("btn-primary", "btn-ghost")
+        cta = full_btn + base_btn + bp_btn
+    elif base_btn:
+        if full_btn:
+            full_btn = full_btn.replace("btn-primary", "btn-ghost")
+        cta = base_btn + full_btn + bp_btn
     else:
-        cta = (f'<a class="btn btn-primary" href="{esc(it["bioportal_url"])}" target="_blank" '
-               f'rel="noopener">{bp_svg} View on BioPortal</a>')
+        cta = bp_btn.replace("btn-ghost", "btn-primary")
 
     # main body — lead + (download section | location-unknown | not-available notice)
+    dl_icon = ('<svg width=18 height=18 viewBox="0 0 24 24" fill=none stroke=currentColor '
+               'stroke-width=2.1><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M5 19h14"/></svg>')
+
+    def product(fmt_cls, fmt, title, fname, url, n, e):
+        counts = (f'<span class="prod-size">{abbrev(n)} node{"" if n == 1 else "s"} · '
+                  f'{abbrev(e)} edge{"" if e == 1 else "s"}</span>'
+                  if isinstance(n, int) and isinstance(e, int) else "")
+        return f"""
+          <div class="prod">
+            <span class="fmt {fmt_cls}">{fmt}</span>
+            <div class="prod-main"><div class="t">{title}</div><div class="f">{esc(fname)}</div></div>
+            {counts}
+            <a class="dl" href="{esc(url)}" aria-label="Download {esc(title)}">{dl_icon}</a>
+          </div>"""
+
+    # What the page says about the full graph, whatever became of it.
+    if full_ok and full_url:
+        full_html = product("full", "Full", "KGX full graph (imports merged in)",
+                            f"{it['id']}_full.tar.gz", full_url, it.get("full_nodes"), it.get("full_edges"))
+        full_note = (f'The full graph contains <span class="mono">{esc(acr)}_full_nodes.tsv</span> and '
+                     f'<span class="mono">{esc(acr)}_full_edges.tsv</span>: this ontology plus the '
+                     f'{imports if isinstance(imports, int) else "ontologies"} it imports'
+                     f'{" (and their imports in turn)" if isinstance(imports, int) else ""}, merged by ROBOT. '
+                     f'Use it when the imported terms matter; the base graph merges more cleanly with other graphs.')
+    else:
+        if full_ok:
+            full_title, full_text = ("Full graph location not recorded",
+                                     f"The full graph was built, but the index does not say which release holds it. "
+                                     f"Look for <span class='mono'>{esc(acr)}_full.tar.gz</span> on the "
+                                     f"<a href='{esc(RELEASES_PAGE)}' target='_blank' rel='noopener'>releases page</a>.")
+        elif not full_status:
+            full_title, full_text = "No full graph yet", esc(NOT_ATTEMPTED_MSG)
+        elif full_reason == "no_imports":
+            full_title, full_text = "Base graph is the full graph", esc(full_reason_message(full_reason))
+        else:
+            full_title, full_text = (f"Full graph not built ({esc(full_reason or full_status.lower())})",
+                                     esc(full_reason_message(full_reason)))
+        full_html = f"""
+          <div class="notice">
+            <div class="notice-t">{full_title}</div>
+            <p>{full_text}</p>
+          </div>"""
+        full_note = ""
+
     if ok and it["download_url"]:
-        lead = (f'A KGX transformation of the BioPortal ontology <b>{esc(name)}</b> ({esc(acr)}), '
-                f'produced by KG&#8209;Bioportal. Nodes are ontology classes; edges are the '
-                f'relations between them.')
-        fname = f"{it['id']}.tar.gz"
+        if import_only:
+            lead = (f'<b>{esc(name)}</b> ({esc(acr)}) is an <b>import-only</b> BioPortal ontology: it '
+                    f'declares {imports if isinstance(imports, int) else "its"} import'
+                    f'{"" if imports == 1 else "s"} and no classes of its own. Its base graph holds only '
+                    f'the ontology header. '
+                    + ('The full graph, with the imports merged in, is the one to use.' if full_ok
+                       else 'No full graph could be built, so there is nothing of it to use yet.'))
+        else:
+            lead = (f'A KGX transformation of the BioPortal ontology <b>{esc(name)}</b> ({esc(acr)}), '
+                    f'produced by KG&#8209;Bioportal. Nodes are ontology classes; edges are the '
+                    f'relations between them. The base graph is the ontology on its own, imports '
+                    f'stripped; the full graph, where built, has the import closure merged in.')
+        base_html = product("kgx", "Base", "KGX base graph (imports stripped)",
+                            f"{it['id']}.tar.gz", it["download_url"], nodes, edges)
+        import_only_html = (f"""
+        <div class="notice">
+          <div class="notice-t">Import-only ontology</div>
+          <p>{esc(reason_message("import_only"))}</p>
+        </div>""" if import_only else "")
         body_section = f"""
       <section class="block">
-        <p class="eyebrow">Products &amp; downloads</p>
-        <div class="prod-list">
-          <div class="prod">
-            <span class="fmt kgx">KGX</span>
-            <div class="prod-main"><div class="t">KGX nodes &amp; edges</div><div class="f">{esc(fname)}</div></div>
-            <a class="dl" href="{esc(it['download_url'])}" aria-label="Download KGX"><svg width=18 height=18 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2.1><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M5 19h14"/></svg></a>
-          </div>
+        <p class="eyebrow">Products &amp; downloads</p>{import_only_html}
+        <div class="prod-list">{base_html}{full_html}
         </div>
-        <p class="muted mt">Contains <span class="mono">{esc(acr)}_nodes.tsv</span> and <span class="mono">{esc(acr)}_edges.tsv</span>. Releases are incremental, so this points at whichever release most recently rebuilt this ontology.</p>
+        <p class="muted mt">The base graph contains <span class="mono">{esc(acr)}_nodes.tsv</span> and <span class="mono">{esc(acr)}_edges.tsv</span>. {full_note} Releases are incremental, so each link points at whichever release most recently rebuilt this ontology.</p>
       </section>"""
     elif ok:
         # Transformed, but the index doesn't record where the artifact lives.
@@ -1056,6 +1225,14 @@ def render_ontology_resource(it):
             "Malformed literals",
             f'{commafy(it["malformed_literals"])} <span class="muted">'
             "(lexical form does not match the declared datatype; kept as written)</span>"))
+    if ok:
+        detail_rows.append(drow("Imports", esc(str(imports)) if isinstance(imports, int) else "—"))
+        if full_status:
+            full_label = ("Built" if full_ok else
+                          f"{esc(full_status)}" + (f' <span class="mono">({esc(full_reason)})</span>' if full_reason else ""))
+        else:
+            full_label = "Not yet attempted"
+        detail_rows.append(drow("Full graph", full_label))
     detail_rows += [
         drow("Version", esc(ver or "—")),
         drow("Submission", f'<span class="mono">{esc(sub)}</span>'),
@@ -1102,8 +1279,8 @@ def render_ontology_resource(it):
 
   <div class="tabs" role="tablist">
     <button class="tab on" data-tab="summary">Summary</button>
-    <button class="tab" data-tab="nodes">Nodes <span class="cnt">{abbrev(nodes)}</span></button>
-    <button class="tab" data-tab="edges">Edges <span class="cnt">{abbrev(edges)}</span></button>
+    <button class="tab" data-tab="nodes">Nodes <span class="cnt">{abbrev(nodes)}{f' · full {abbrev(it["full_nodes"])}' if full_ok and isinstance(it.get("full_nodes"), int) else ''}</span></button>
+    <button class="tab" data-tab="edges">Edges <span class="cnt">{abbrev(edges)}{f' · full {abbrev(it["full_edges"])}' if full_ok and isinstance(it.get("full_edges"), int) else ''}</span></button>
   </div>
 
   <div class="grid">
@@ -1114,7 +1291,7 @@ def render_ontology_resource(it):
           <p class="lead">{lead}</p>
         </section>
         <section class="block">
-          <p class="eyebrow">Graph at a glance</p>
+          <p class="eyebrow">Base graph at a glance</p>
           <div class="metrics">{metrics}</div>
         </section>
 {body_section}
@@ -1351,6 +1528,8 @@ text-transform:uppercase;color:var(--ink-soft);font-weight:700;padding:9px 10px;
 .stat{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;padding:3px 9px;border-radius:999px}
 .stat.ok{background:color-mix(in srgb,var(--prod) 15%,transparent);color:var(--prod)}
 .stat.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.stat.info{background:color-mix(in srgb,var(--node) 15%,transparent);color:var(--node)}
+.c-num .sub{font-size:10.5px;color:var(--ink-faint);margin-top:2px;white-space:nowrap}
 .noresults{padding:26px;text-align:center;color:var(--ink-faint)}
 /* resource */
 .head{display:flex;align-items:flex-start;gap:18px;padding:8px 0 16px;flex-wrap:wrap}
@@ -1359,6 +1538,7 @@ text-transform:uppercase;color:var(--ink-soft);font-weight:700;padding:9px 10px;
 .status{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:11.5px;padding:4px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.4px}
 .status.ok{background:color-mix(in srgb,var(--prod) 16%,transparent);color:var(--prod)}
 .status.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.status.info{background:color-mix(in srgb,var(--node) 16%,transparent);color:var(--node)}
 .status .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
 .fullname{margin:6px 0 0;color:var(--ink-soft);font-size:17px}
 .chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
@@ -1412,12 +1592,14 @@ padding:3px 5px;border-radius:7px;color:var(--ink)}
 .stack .seg{display:block;height:100%}
 .seg.ok{background:var(--prod)}.seg.fail{background:var(--warn)}.seg.skip{background:var(--ink-faint)}
 .seg.lic{background:var(--primary)}
+.seg.full{background:var(--node)}.seg.same{background:color-mix(in srgb,var(--node) 45%,var(--panel-2))}.seg.pend{background:var(--border-strong)}
 .keys{display:flex;flex-wrap:wrap;gap:16px;margin-top:10px;font-size:12.5px;color:var(--ink-soft)}
 .key{display:inline-flex;align-items:center;gap:6px}
 .key b{color:var(--ink)}
 .sw{width:9px;height:9px;border-radius:2px;flex:none}
 .sw.ok{background:var(--prod)}.sw.fail{background:var(--warn)}.sw.skip{background:var(--ink-faint)}
 .sw.lic{background:var(--primary)}
+.sw.full{background:var(--node)}.sw.same{background:color-mix(in srgb,var(--node) 45%,var(--panel-2))}.sw.pend{background:var(--border-strong)}
 .cloud{display:flex;flex-wrap:wrap;gap:6px}
 .tok{font-size:12px;padding:4px 9px;border-radius:6px;border:1px solid var(--border);background:var(--panel)}
 .tok.cat{color:var(--c-chem);border-color:color-mix(in srgb,var(--c-chem) 30%,transparent)}
@@ -1431,6 +1613,7 @@ padding:3px 5px;border-radius:7px;color:var(--ink)}
 .prod:hover{border-color:var(--border-strong)}
 .fmt{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.3px;padding:4px 8px;border-radius:5px;flex:none;text-transform:uppercase;min-width:60px;text-align:center;display:inline-block}
 .fmt.kgx{background:color-mix(in srgb,var(--node) 15%,transparent);color:var(--node)}
+.fmt.full{background:color-mix(in srgb,var(--prod) 15%,transparent);color:var(--prod)}
 .fmt.jsonl{background:color-mix(in srgb,var(--edge) 16%,transparent);color:var(--edge)}
 .fmt.rdf{background:color-mix(in srgb,var(--c-chem) 15%,transparent);color:var(--c-chem)}
 .fmt.neo4j{background:color-mix(in srgb,var(--primary) 15%,transparent);color:var(--primary)}

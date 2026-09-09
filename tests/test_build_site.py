@@ -33,7 +33,12 @@ class TestReasonMessages(TestCase):
         "transform_error_relax", "transform_error_kgx", "invalid_source",
         "not_downloadable", "license_restricted", "no_download_file",
         "download_http_error", "no_submission", "metadata_http_error",
-        "download_error",
+        "download_error", "import_only",
+    ]
+    # Reasons a full graph can be missing (full_reason in the index).
+    FULL_REASONS = [
+        "no_imports", "unresolvable_imports", "transform_error", "transform_error_merge",
+        "transform_error_relax", "transform_error_kgx", "too_slow", "too_large",
     ]
 
     def test_every_known_reason_has_a_specific_message(self):
@@ -46,6 +51,19 @@ class TestReasonMessages(TestCase):
 
     def test_unknown_reason_still_returns_a_message(self):
         self.assertTrue(bs.reason_message("brand-new-reason"))
+
+    def test_every_full_reason_has_a_specific_message(self):
+        generic = bs.full_reason_message("something-nobody-defined")
+        for reason in self.FULL_REASONS:
+            self.assertNotEqual(
+                bs.full_reason_message(reason), generic,
+                f"{reason} falls back to the generic full-graph message",
+            )
+
+    def test_unresolvable_imports_message_says_the_base_graph_stands(self):
+        msg = bs.full_reason_message("unresolvable_imports").lower()
+        self.assertIn("import", msg)
+        self.assertIn("base graph is unaffected", msg)
 
     def test_license_message_says_it_is_not_a_failure(self):
         msg = bs.reason_message("license_restricted").lower()
@@ -322,7 +340,151 @@ class TestSummaryCounts(TestCase):
         totals = dict(self.TOTALS, licensedcount=0)
         self.assertNotIn("Licensed", self.keys_block(self.render(totals)))
 
+    def bars(self, html):
+        """Each <div class="stack"> as a list of its segment widths."""
+        return [
+            [float(w) for w in re.findall(r'class="seg [^"]*" style="width:([\d.]+)%', stack)]
+            for stack in re.findall(r'<div class="stack">.*?</div>', html, re.S)
+        ]
+
     def test_segment_widths_do_not_exceed_the_bar(self):
         html = self.render(self.TOTALS)
-        widths = [float(w) for w in re.findall(r'class="seg [^"]*" style="width:([\d.]+)%', html)]
-        self.assertAlmostEqual(sum(widths), 100.0, delta=1.0)
+        bars = self.bars(html)
+        self.assertEqual(len(bars), 2, "one bar for transform status, one for full graphs")
+        for widths in bars:
+            self.assertAlmostEqual(sum(widths), 100.0, delta=1.0)
+
+
+class TestFullGraphItems(TestCase):
+    """The full graph is a second product with its own status (#177)."""
+
+    BASE_URL = "https://github.com/ncbo/kg-bioportal/releases/download/data-2026.09/OBOE.tar.gz"
+    FULL_URL = "https://github.com/ncbo/kg-bioportal/releases/download/data-2026.09/OBOE_full.tar.gz"
+
+    def both(self, **kw):
+        return item("OBOE", "OK", nodecount=1, edgecount=0, imports=3, download_url=self.BASE_URL,
+                    full_status="OK", full_nodecount=478, full_edgecount=900,
+                    full_download_url=self.FULL_URL, **kw)
+
+    def test_full_fields_are_carried(self):
+        it = self.both()
+        self.assertTrue(it["full_ok"])
+        self.assertEqual(it["full_nodes"], 478)
+        self.assertEqual(it["full_download_url"], self.FULL_URL)
+        self.assertEqual(it["imports"], 3)
+
+    def test_full_chip_only_when_a_full_graph_exists(self):
+        self.assertIn("full", self.both()["fmts"])
+        self.assertNotIn("full", item("AGRO", "OK", full_status="Skipped", full_reason="no_imports")["fmts"])
+        self.assertNotIn("full", item("AGRO", "OK")["fmts"])
+
+    def test_full_counts_are_suppressed_unless_full_is_ok(self):
+        it = item("X", "OK", full_status="Failed", full_reason="unresolvable_imports",
+                  full_nodecount=0, full_edgecount=0)
+        self.assertIsNone(it["full_nodes"])
+        self.assertFalse(it["full_ok"])
+
+    def test_entry_predating_full_graphs_is_not_called_failed(self):
+        it = item("OLD", "OK", nodecount=5, edgecount=6,
+                  download_url="https://github.com/ncbo/kg-bioportal/releases/download/t/OLD.tar.gz")
+        self.assertEqual(it["full_status"], "")
+        page = bs.render_ontology_resource(it)
+        self.assertIn("No full graph yet", page)
+        self.assertNotIn("Full graph not built", page)
+
+
+class TestImportOnlyItems(TestCase):
+    def sweet(self, **kw):
+        base = dict(nodecount=2, edgecount=0, imports=1,
+                    download_url="https://github.com/ncbo/kg-bioportal/releases/download/t/SWEET.tar.gz")
+        base.update(kw)
+        return item("SWEET", "OK", "import_only", **base)
+
+    def test_import_only_is_still_ok_but_labelled(self):
+        it = self.sweet()
+        self.assertTrue(it["ok"])
+        self.assertTrue(it["import_only"])
+        self.assertEqual(it["status_label"], "Import-only")
+        self.assertNotEqual(it["status_cls"], "ok", "must not look like a healthy graph")
+
+    def test_import_only_blurb_says_so(self):
+        self.assertIn("import-only", self.sweet()["blurb"].lower())
+
+    def test_page_carries_the_import_only_notice(self):
+        page = bs.render_ontology_resource(self.sweet())
+        self.assertIn("Import-only ontology", page)
+        self.assertIn(bs.reason_message("import_only"), page.replace("&#x27;", "'"))
+
+    def test_page_leads_with_the_full_graph_when_there_is_one(self):
+        full = "https://github.com/ncbo/kg-bioportal/releases/download/t/SWEET_full.tar.gz"
+        page = bs.render_ontology_resource(self.sweet(
+            full_status="OK", full_nodecount=10240, full_edgecount=20000, full_download_url=full))
+        self.assertIn(full, page)
+        primary = re.search(r'<a class="btn btn-primary" href="([^"]+)"', page).group(1)
+        self.assertEqual(primary, full, "the primary download must be the full graph")
+
+    def test_ordinary_ontology_leads_with_the_base_graph(self):
+        base = "https://github.com/ncbo/kg-bioportal/releases/download/t/AGRO.tar.gz"
+        full = "https://github.com/ncbo/kg-bioportal/releases/download/t/AGRO_full.tar.gz"
+        page = bs.render_ontology_resource(item(
+            "AGRO", "OK", nodecount=5000, edgecount=8000, imports=2, download_url=base,
+            full_status="OK", full_nodecount=90000, full_edgecount=150000, full_download_url=full))
+        primary = re.search(r'<a class="btn btn-primary" href="([^"]+)"', page).group(1)
+        self.assertEqual(primary, base)
+        self.assertIn(full, page)
+
+
+class TestFullGraphPages(TestCase):
+    """Whatever became of the full graph, the page says so in words."""
+
+    def page(self, **kw):
+        return bs.render_ontology_resource(item(
+            "X", "OK", nodecount=5, edgecount=6, imports=2,
+            download_url="https://github.com/ncbo/kg-bioportal/releases/download/t/X.tar.gz", **kw))
+
+    def test_unresolvable_imports_are_explained(self):
+        page = self.page(full_status="Failed", full_reason="unresolvable_imports")
+        self.assertIn("Full graph not built (unresolvable_imports)", page)
+        self.assertIn("could not be fetched", page)
+
+    def test_no_imports_is_not_presented_as_a_failure(self):
+        page = self.page(full_status="Skipped", full_reason="no_imports")
+        self.assertIn("Base graph is the full graph", page)
+        self.assertNotIn("not built", page)
+
+    def test_too_slow_full_graph_is_explained(self):
+        page = self.page(full_status="Skipped", full_reason="too_slow")
+        self.assertIn("time limit", page)
+
+    def test_built_full_graph_is_listed_as_a_product(self):
+        full = "https://github.com/ncbo/kg-bioportal/releases/download/t/X_full.tar.gz"
+        page = self.page(full_status="OK", full_nodecount=70, full_edgecount=80, full_download_url=full)
+        self.assertIn("X_full.tar.gz", page)
+        self.assertIn("X_full_nodes.tsv", page)
+        self.assertIn(full, page)
+
+    def test_no_full_page_links_at_the_latest_download_pattern(self):
+        for kw in (dict(full_status="OK", full_nodecount=1, full_edgecount=1),
+                   dict(full_status="Failed", full_reason="transform_error")):
+            self.assertNotIn("releases/latest/download", self.page(**kw))
+
+
+class TestSummaryFullGraphs(TestCase):
+    def render(self, items):
+        return bs.render_summary(TestSummaryCounts.TOTALS, 3, items)
+
+    def test_import_only_ontologies_are_listed_by_name(self):
+        items = [item("SWEET", "OK", "import_only", nodecount=2, edgecount=0, imports=1),
+                 item("AGRO", "OK", nodecount=5, edgecount=6)]
+        html = self.render(items)
+        self.assertIn("import-only", html)
+        self.assertIn('href="../resource/SWEET/"', html)
+
+    def test_full_graph_keys_are_rendered(self):
+        items = [item("A", "OK", nodecount=1, edgecount=1, full_status="OK", full_nodecount=2, full_edgecount=2),
+                 item("B", "OK", nodecount=1, edgecount=1, full_status="Skipped", full_reason="no_imports"),
+                 item("C", "OK", nodecount=1, edgecount=1, full_status="Failed", full_reason="unresolvable_imports"),
+                 item("D", "OK", nodecount=1, edgecount=1)]
+        html = self.render(items)
+        for label in ("Built", "Same as base", "Failed", "Not yet attempted"):
+            self.assertIn(label, html)
