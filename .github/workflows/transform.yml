@@ -1,7 +1,9 @@
 name: Transform ontologies to KGX
 
 # Downloads BioPortal ontologies, transforms each to KGX (nodes/edges), and
-# publishes the results as assets on a GitHub Release of this repo.
+# publishes the results as assets on a GitHub Release of this repo. Each
+# ontology yields a base graph (<ACRONYM>.tar.gz, imports stripped) and, where
+# it declares imports, a full graph (<ACRONYM>_full.tar.gz, imports merged in).
 #
 # Ontologies too large or too slow for a GitHub-hosted runner are skipped:
 #   - a static skiplist of known giants (src/kg_bioportal/config.py),
@@ -26,9 +28,14 @@ on:
         required: false
         default: "250"
       timeout_min:
-        description: "Per-ontology wall-clock cap (minutes)"
+        description: "Per-graph wall-clock cap (minutes); the base and full graph of one ontology each get this"
         required: false
         default: "30"
+      full_graphs:
+        description: "Also build each ontology's full graph (imports merged in by ROBOT) as <ACRONYM>_full.tar.gz"
+        required: false
+        type: boolean
+        default: true
   # Monthly. Version-skip (in prepare) means a scheduled run only (re)transforms
   # ontologies whose BioPortal submission changed since the last index, so each
   # run's release stays well under the 1000-asset cap; a month with no changes is
@@ -47,6 +54,8 @@ env:
   MAX_SOURCE_MB: ${{ github.event.inputs.max_source_mb || '250' }}
   TIMEOUT_MIN: ${{ github.event.inputs.timeout_min || '30' }}
   NUM_SHARDS: ${{ github.event.inputs.num_shards || '20' }}
+  # A scheduled run has no inputs; full graphs are on unless a dispatch turns them off.
+  FULL_FLAG: ${{ github.event.inputs.full_graphs == 'false' && '--no_full' || '--full' }}
 
 jobs:
   prepare:
@@ -109,7 +118,7 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           gh release create "$TAG" --latest=false \
             --title "KGX transforms $TAG" \
-            --notes "BioPortal ontologies transformed to KGX nodes/edges in this run. Assets are <ACRONYM>.tar.gz. The onto_stats.yaml here is the full cross-release index."
+            --notes "BioPortal ontologies transformed to KGX nodes/edges in this run. Assets are <ACRONYM>.tar.gz (base graph, imports stripped) and <ACRONYM>_full.tar.gz (full graph, imports merged in). The onto_stats.yaml here is the full cross-release index."
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
@@ -140,7 +149,10 @@ jobs:
         env:
           NCBO_API_KEY: ${{ secrets.NCBO_API_KEY }}
       - name: Transform shard
-        run: kgbioportal -v transform -i data/raw -o data/transformed --timeout_min "$TIMEOUT_MIN" --max_source_mb "$MAX_SOURCE_MB"
+        # Writes <ACRONYM>.tar.gz (base graph, imports stripped) and, where the
+        # ontology declares imports ROBOT can fetch, <ACRONYM>_full.tar.gz (full
+        # graph, imports merged in). Each graph gets its own timeout.
+        run: kgbioportal -v transform -i data/raw -o data/transformed --timeout_min "$TIMEOUT_MIN" --max_source_mb "$MAX_SOURCE_MB" $FULL_FLAG
         env:
           ROBOT_JAVA_ARGS: "-Xmx13g -XX:+UseG1GC"
       - name: Upload KGX artifacts to release

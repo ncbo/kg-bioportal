@@ -32,11 +32,20 @@ so the **index is authoritative** — resolve each graph through it rather than 
   — one entry per ontology: `id, name, version, status (OK/Failed/Skipped), reason, nodecount,
   edgecount, submission_id`, and for OK entries a **`download_url`** pointing at whichever release
   holds that graph's most recent artifact.
-- **Per-graph artifact:** the OK entry's `download_url`, e.g.
+- **Per-graph artifact (base graph):** the OK entry's `download_url`, e.g.
   `.../releases/download/data-2026.08.01-42/<ID>.tar.gz` — contains `<ID>_nodes.tsv` and
   `<ID>_edges.tsv`. `<ID>` is the BioPortal acronym (uppercase). Only `status: OK` ontologies have one.
+  This is the ontology **alone, imports stripped**; references to imported terms are dangling edges.
+- **Full graph:** where the ontology declares imports ROBOT could fetch, the entry also has
+  `full_status: OK`, `full_nodecount`, `full_edgecount` and a **`full_download_url`** →
+  `<ID>_full.tar.gz` containing `<ID>_full_nodes.tsv` / `<ID>_full_edges.tsv`: the ontology **with its
+  import closure merged in**. `full_reason: no_imports` means the base graph already is the full graph.
+  `full_reason: unresolvable_imports` means an import URL was dead; the base graph is unaffected.
+- **Import-only ontologies:** `reason: import_only` on an OK entry (SWEET, OBOE, FNS-H) means the base
+  graph is only the ontology header (no edges, a node or two). Use the full graph if there is one.
 - **Totals:** `.../releases/latest/download/total_stats.yaml` — `totalcount, skippedcount,
-  failedcount, totalnodecount, totaledgecount, transform_date`.
+  failedcount, licensedcount, importonlycount, fullcount, fullskippedcount, fullfailedcount,
+  totalnodecount, totaledgecount, transform_date`.
 
 The `scripts/` here resolve `download_url` from the index for you.
 
@@ -59,10 +68,16 @@ https://ncbo.github.io/kg-bioportal/graphs/ .
 
 ### 2. Download one or more graphs
 ```bash
-python scripts/fetch_graph.py GO AGRO             # -> ./GO/GO_nodes.tsv, ./AGRO/AGRO_nodes.tsv …
+python scripts/fetch_graph.py GO AGRO             # base graphs -> ./GO/GO_nodes.tsv, ./AGRO/AGRO_nodes.tsv …
 python scripts/fetch_graph.py GO -o data/graphs   # into a directory
+python scripts/fetch_graph.py SWEET --full        # the full graph -> ./SWEET/SWEET_full_nodes.tsv …
 ```
-Or by hand: read `GO`'s `download_url` from the index and `curl -L <that url> | tar xz`.
+Or by hand: read `GO`'s `download_url` (or `full_download_url`) from the index and
+`curl -L <that url> | tar xz`.
+
+Which graph to take: the **base** graph for merging several ontologies (nothing is counted twice);
+the **full** graph when the user wants one ontology with everything it imports, or when the entry
+is `import_only`.
 
 ### 3. Load the data
 KGX TSVs are plain tab-separated files — load them however suits the task:
@@ -84,4 +99,8 @@ merge and produces a QC report over the combined graph.
 - A graph you expected may be missing because its transform Failed or was Skipped (too large / too
   slow). `list_graphs.py --all` shows the status and reason; its BioPortal source is still available
   at `https://bioportal.bioontology.org/ontologies/<ID>`.
+- A tiny graph (a node or two, no edges) with `reason: import_only` is not broken: the ontology is a
+  header over imports. Its full graph, if built, holds the content.
+- An entry with no `full_*` fields was last transformed before full graphs existed (or its base
+  failed); it gets a full graph when its BioPortal submission next changes.
 - Counts and `transform_date` reflect the latest transform run recorded in `total_stats.yaml`.
