@@ -21,6 +21,7 @@ from kg_bioportal.robot_utils import RobotResult, mentions_unloadable_import
 from kg_bioportal.transformer import (
     BASE,
     FULL,
+    SourceInfo,
     SourceTooLarge,
     TransformOutcome,
     Transformer,
@@ -286,7 +287,7 @@ class TestIndexEntries(FullGraphTestCase):
         self.write_source(SOURCE_WITH_IMPORTS)
         # The base graph has to pass its own gate; only the merged output is weighed.
         with mock.patch.object(self.txr, "_prepare_source",
-                               return_value=(self.write_source(SOURCE_WITH_IMPORTS), 2)):
+                               return_value=SourceInfo(self.write_source(SOURCE_WITH_IMPORTS), 2)):
             index, _ = self.run_all()
         entry = index["ONTO"]
         self.assertEqual(entry["status"], "OK")

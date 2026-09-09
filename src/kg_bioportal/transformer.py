@@ -522,6 +522,168 @@ def count_imports(path: str) -> int:
     return count
 
 
+# Where the import declarations name their target, per serialization. The
+# strippers above find the declarations; these read the IRI out of them.
+_XML_IMPORT_IRI = re.compile(
+    r"""<(?:[A-Za-z_][\w.\-]*:)?imports\b[^>]*?\brdf:resource\s*=\s*(["'])(.*?)\1""", re.S
+)
+_XML_IMPORT_NESTED_IRI = re.compile(
+    r"""<(?:[A-Za-z_][\w.\-]*:)?imports\b[^>]*>\s*<[^>]*\brdf:about\s*=\s*(["'])(.*?)\1""", re.S
+)
+_OWLXML_IMPORT_IRI = re.compile(r"<(?:[A-Za-z_][\w.\-]*:)?Import\b[^>]*>\s*([^<\s]+)\s*</", re.S)
+_OBO_IMPORT_IRI = re.compile(r"^import:[ \t]+(\S+)", re.M)
+_FUNCTIONAL_IMPORT_IRI = re.compile(r"^\s*Import\(\s*<([^>]+)>\s*\)", re.M)
+_MANCHESTER_IMPORT_IRI = re.compile(r"^\s*Import:\s*<([^>]+)>", re.M)
+# <!ENTITY oboe-base "http://ecoinformatics.org/oboe/oboe.1.2/"> in an RDF/XML
+# DOCTYPE, used as &oboe-base;oboe-core.owl in the file. XML expands them;
+# these regexes do not, so it is done by hand on what they capture.
+_XML_ENTITY = re.compile(r"""<!ENTITY\s+([\w.\-]+)\s+(["'])(.*?)\2\s*>""", re.S)
+_TTL_TERM = re.compile(_TTL_IRI.pattern + "|" + _TTL_PNAME.pattern)
+_TTL_PREFIX_LINE = re.compile(
+    r"^[ \t]*@?prefix[ \t]+([A-Za-z_][\w.\-]*)?:[ \t]*<([^>]*)>", re.I | re.M
+)
+
+# Where the ontology names itself, per serialization.
+_RDFXML_ONTOLOGY_IRI = re.compile(
+    r"""<(?:[A-Za-z_][\w.\-]*:)?Ontology\b[^>]*?\brdf:about\s*=\s*(["'])(.*?)\1""", re.S
+)
+_XML_BASE = re.compile(r"""\bxml:base\s*=\s*(["'])(.*?)\1""")
+_OWLXML_ONTOLOGY_IRI = re.compile(r"""\bontologyIRI\s*=\s*(["'])(.*?)\1""")
+_TTL_ONTOLOGY_IRI = re.compile(
+    r"^[ \t]*(<[^>]*>|[A-Za-z_][\w.\-]*:[\w.\-%]*)[ \t]+(?:a|rdf:type)[ \t]+"
+    r"(?:owl:Ontology|<http://www\.w3\.org/2002/07/owl#Ontology>)", re.M
+)
+_TTL_BASE = re.compile(r"^[ \t]*@?base[ \t]+<([^>]*)>", re.I | re.M)
+_OBO_ONTOLOGY_ID = re.compile(r"^ontology:[ \t]+(\S+)", re.M)
+_FUNCTIONAL_ONTOLOGY_IRI = re.compile(r"^\s*Ontology\(\s*<([^>]+)>", re.M)
+_MANCHESTER_ONTOLOGY_IRI = re.compile(r"^\s*Ontology:\s*<([^>]+)>", re.M)
+
+
+def _turtle_prefixes(text: str) -> Dict[str, str]:
+    return {m.group(1) or "": m.group(2) for m in _TTL_PREFIX_LINE.finditer(text)}
+
+
+def _expand_turtle_term(term: str, prefixes: Dict[str, str]) -> str:
+    """``<iri>`` -> iri; ``pfx:local`` -> the IRI, if the prefix is bound."""
+    if term.startswith("<") and term.endswith(">"):
+        return term[1:-1]
+    prefix, _, local = term.partition(":")
+    if prefix in prefixes:
+        return prefixes[prefix] + local
+    return term
+
+
+def _turtle_import_iris(text: str) -> List[str]:
+    prefixes = _turtle_prefixes(text)
+    iris: List[str] = []
+    for match in _turtle_imports_predicate(text).finditer(text):
+        span = _object_list_end(text, match.end())
+        if span is None:
+            continue
+        objects = text[match.end():span[0]]
+        # One scan, in declared order. The IRI alternative comes first so
+        # the "http:" inside an IRI is never read as a prefixed name.
+        for term in _TTL_TERM.findall(objects):
+            iri = _expand_turtle_term(term, prefixes)
+            if iri and iri not in iris:
+                iris.append(iri)
+    return iris
+
+
+def _expand_xml_entities(iri: str, text: str) -> str:
+    """Expand the DOCTYPE entities an RDF/XML file declares, inside one IRI."""
+    if "&" not in iri:
+        return iri
+    for m in _XML_ENTITY.finditer(text[:_SNIFF_CHARS]):
+        iri = iri.replace(f"&{m.group(1)};", m.group(3))
+    return iri
+
+
+def list_imports(text: str, kind: Optional[str]) -> List[str]:
+    """The IRIs an ontology source imports, in order of first appearance.
+
+    Best effort, and a subset of what ``count_imports`` counts wherever the
+    declaration does not name its target in a form these patterns read.
+    The site lists these by name and links what it can (#185).
+    """
+    if kind == "xml":
+        found = [m.group(2) for m in _XML_IMPORT_IRI.finditer(text)]
+        found += [m.group(2) for m in _XML_IMPORT_NESTED_IRI.finditer(text)]
+        found += _OWLXML_IMPORT_IRI.findall(text)
+        found = [_expand_xml_entities(iri, text) for iri in found]
+    elif kind == "turtle":
+        found = _turtle_import_iris(text)
+    elif kind == "obo":
+        found = _OBO_IMPORT_IRI.findall(text)
+    else:
+        found = []
+    if not found:
+        found = _FUNCTIONAL_IMPORT_IRI.findall(text) + _MANCHESTER_IMPORT_IRI.findall(text)
+    iris: List[str] = []
+    for iri in found:
+        iri = iri.strip()
+        if iri and iri not in iris:
+            iris.append(iri)
+    return iris
+
+
+def ontology_iri(text: str, kind: Optional[str]) -> str:
+    """The IRI an ontology source gives itself, or "" if it gives none.
+
+    Recorded in the index so the site can tell when one ontology's import is
+    another ontology KG-Bioportal has transformed (#185). An OBO source names
+    itself by id; the IRI is the OBO Foundry PURL that id stands for.
+    """
+    if kind == "xml":
+        m = _RDFXML_ONTOLOGY_IRI.search(text)
+        if m:
+            iri = m.group(2)
+            if iri:
+                return _expand_xml_entities(iri, text)
+            base = _XML_BASE.search(text)
+            return _expand_xml_entities(base.group(2), text) if base else ""
+        m = _OWLXML_ONTOLOGY_IRI.search(text)
+        return m.group(2) if m else ""
+    if kind == "turtle":
+        m = _TTL_ONTOLOGY_IRI.search(text)
+        if not m:
+            return ""
+        iri = _expand_turtle_term(m.group(1), _turtle_prefixes(text))
+        if iri == "":
+            base = _TTL_BASE.search(text)
+            return base.group(1) if base else ""
+        return iri
+    if kind == "obo":
+        m = _OBO_ONTOLOGY_ID.search(text)
+        return f"http://purl.obolibrary.org/obo/{m.group(1)}.owl" if m else ""
+    for pattern in (_FUNCTIONAL_ONTOLOGY_IRI, _MANCHESTER_ONTOLOGY_IRI):
+        m = pattern.search(text)
+        if m:
+            return m.group(1)
+    return ""
+
+
+class SourceInfo(NamedTuple):
+    """What ``_prepare_source`` learned about a downloaded source."""
+
+    path: Optional[str]          # decompressed file to transform, None if unusable
+    imports: int = 0             # import declarations, see count_imports
+    import_iris: List[str] = []  # their targets, as far as list_imports reads them
+    ontology_iri: str = ""       # the ontology's own IRI, see ontology_iri
+
+
+def describe_source(path: str) -> SourceInfo:
+    """Read a source once for its import count, import IRIs and own IRI."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    except OSError as e:
+        logging.warning(f"Could not read {path} to describe its imports: {e}")
+        return SourceInfo(path)
+    kind = _sniff_serialization(text)
+    return SourceInfo(path, count_imports(path), list_imports(text, kind), ontology_iri(text, kind))
+
+
 def is_import_only(imports: int, nodecount: int, edgecount: int) -> bool:
     """Is a base graph nothing but the ontology's header?
 
@@ -1046,6 +1208,10 @@ class TransformOutcome(NamedTuple):
     # (#177). A success carries reason=import_only when the base graph is
     # nothing but the ontology's header; see is_import_only.
     imports: int = 0
+    # Their targets, and the ontology's own IRI, for the site to name and link
+    # the imports (#185). Shared empty defaults, never mutated.
+    import_iris: List[str] = []
+    ontology_iri: str = ""
 
     @classmethod
     def failed(
@@ -1540,6 +1706,12 @@ class Transformer:
                 "source_bytes": int(report_row.get("source_bytes") or 0),
                 "imports": base.imports,
             }
+            # The ontology's own IRI and what it imports, for the site to match
+            # one against the other (#185). Recorded only where there is one.
+            if base.ontology_iri:
+                entry["ontology_iri"] = base.ontology_iri
+            if base.import_iris:
+                entry["import_iris"] = list(base.import_iris)
             # Only failures have anything to explain; an empty field on every OK
             # entry would be a thousand lines of noise in the index.
             if detail:
@@ -1663,13 +1835,11 @@ class Transformer:
                 logging.info(f"Skipped the {label} ({reason}).")
         return outcome, status, reason, detail
 
-    def _prepare_source(
-        self, ontology_path: str, ontology_name: str
-    ) -> Tuple[Optional[str], int]:
-        """Decompress the download if needed, gate its size, and count its imports.
+    def _prepare_source(self, ontology_path: str, ontology_name: str) -> SourceInfo:
+        """Decompress the download if needed, gate its size, and read its imports.
 
         Memoized per downloaded path, so the base and full graphs share one
-        unpacking. Returns ``(None, 0)`` when the archive cannot be opened.
+        unpacking. The path is None when the archive cannot be opened.
         """
         # Created here rather than only in __init__ so a Transformer built
         # without it (the tests do) still works.
@@ -1686,7 +1856,7 @@ class Transformer:
             )
             if new_path == ontology_path:
                 logging.error(f"Failed to decompress {ontology_path}")
-                self._sources[ontology_path] = (None, 0)
+                self._sources[ontology_path] = SourceInfo(None)
                 return self._sources[ontology_path]
             source_path = new_path
 
@@ -1700,7 +1870,7 @@ class Transformer:
                     f"(> {self.max_source_mb} MB limit)"
                 )
 
-        self._sources[ontology_path] = (source_path, count_imports(source_path))
+        self._sources[ontology_path] = describe_source(source_path)
         return self._sources[ontology_path]
 
     def transform(
@@ -1752,7 +1922,8 @@ class Transformer:
 
         # Keep what BioPortal served. From here on ontology_path may be a file
         # we wrote, and a failure over it is not upstream's to answer for.
-        source_path, imports = self._prepare_source(ontology_path, ontology_name)
+        source = self._prepare_source(ontology_path, ontology_name)
+        source_path, imports = source.path, source.imports
         if source_path is None:
             return TransformOutcome.failed(
                 "decompress",
@@ -2086,6 +2257,8 @@ class Transformer:
             node_categories=node_categories,
             edge_categories=edge_categories,
             imports=imports,
+            import_iris=source.import_iris,
+            ontology_iri=source.ontology_iri,
         )
 
     def decompress(self, ontology_path: str, ontology_name: str) -> str:
