@@ -101,6 +101,10 @@ ontologies:
   submission_id: '6'      # BioPortal submission id
   source_bytes: 7501012   # size of the source ontology file
   imports: 2              # owl:imports declarations in the source
+  import_iris:            # their targets, where the declaration names one (absent if none)
+  - http://purl.obolibrary.org/obo/ro.owl
+  - http://purl.obolibrary.org/obo/agro/imports/envo_import.owl
+  ontology_iri: http://purl.obolibrary.org/obo/agro.owl   # what the ontology calls itself
   full_status: OK         # full graph: OK | Failed | Skipped; absent = not attempted
   full_reason: ''         # no_imports (Skipped: base is the full graph) |
                           #   unresolvable_imports (Failed: an import could not be

@@ -18,7 +18,7 @@ Usage:
     python build_site.py IN.jsonld OUT   # explicit paths
     python build_site.py --fetch         # download the JSON-LD first
 """
-import json, os, sys, html, shutil, urllib.request
+import json, os, re, sys, html, shutil, urllib.request
 
 REGISTRY_URL = "https://kghub.org/kg-registry/registry/kgs.jsonld"
 
@@ -184,6 +184,9 @@ def onto_to_item(o, transform_date):
         "status_cls": status_cls,
         "updated": transform_date or "",
         "import_only": import_only, "imports": imports,
+        # What the source imports, by IRI, and what it calls itself (#185).
+        "import_iris": [str(i) for i in (o.get("import_iris") or [])],
+        "ontology_iri": str(o.get("ontology_iri") or ""),
         "full_status": full_status, "full_ok": full_ok,
         "full_reason": o.get("full_reason") or "",
         "full_nodes": full_nodes, "full_edges": full_edges,
@@ -1047,10 +1050,151 @@ def render_resource(r, reverse_index):
 """ + SEARCH_JS + TAB_JS + footer()
 
 # --------------------------------------------------------------------------- #
+#  imports: who an ontology's owl:imports point at (#185)
+# --------------------------------------------------------------------------- #
+OBO_PURL = "http://purl.obolibrary.org/obo/"
+
+def _iri_key(iri):
+    """An IRI stripped to what two spellings of the same ontology share."""
+    k = iri.strip().rstrip("/#")
+    k = re.sub(r"^https?://", "", k)
+    k = re.sub(r"^www\.", "", k)
+    for ext in (".owl", ".obo", ".ttl", ".rdf", ".ofn", ".omn", ".owx"):
+        if k.lower().endswith(ext):
+            k = k[: -len(ext)]
+            break
+    return k.lower()
+
+def _iri_name(iri):
+    """How to call an IRI we cannot place: its namespace, scheme dropped."""
+    n = iri.strip().rstrip("/#")
+    n = re.sub(r"^https?://", "", n)
+    n = re.sub(r"^www\.", "", n)
+    return n or iri
+
+def build_import_resolver(items):
+    """Return ``resolve(iri) -> dict`` over the ontologies this site holds.
+
+    Resolution, in order:
+      1. the IRI is what one of our ontologies calls itself (``ontology_iri``),
+         with ``.owl``-style suffixes and the scheme set aside;
+      2. it is a module under an OBO Foundry PURL whose ontology we hold
+         (``.../obo/uberon/bridge/...``, ``.../obo/go/imports/...``), the
+         ontology being known by its own IRI ``.../obo/uberon.owl``. Never by
+         acronym: BioPortal's RO is the Radiomics Ontology, and the Relations
+         Ontology is OBOREL there;
+      3. it is a web address, which is offered as the external link it is;
+      4. it is something else, and is named by its namespace.
+
+    Entries transformed before the IRIs were recorded resolve nothing, and
+    their imports show as external links until they are transformed again.
+
+    Each result has ``kind`` (``kgbp`` | ``module`` | ``external`` | ``name``),
+    ``label``, ``href`` (a site-relative page for the first two, the IRI for
+    the third, "" for the last) and ``iri``.
+    """
+    by_key = {}
+    obo_owner = {}  # OBO id -> the item whose own IRI is that id's PURL
+    for it in items:
+        if it.get("source") != "bioportal" or not it.get("ontology_iri"):
+            continue
+        key = _iri_key(it["ontology_iri"])
+        by_key.setdefault(key, it)
+        m = re.match(r"^purl\.obolibrary\.org/obo/([a-z0-9_]+)$", key)
+        if m:
+            obo_owner.setdefault(m.group(1), it)
+
+    def page(it, iri, kind, note=""):
+        label = it["acr"] + (f" · {note}" if note else "")
+        return {"kind": kind, "label": label, "name": it["name"],
+                "href": f"../{it['id']}/", "iri": iri, "ok": bool(it.get("ok"))}
+
+    def resolve(iri):
+        iri = str(iri).strip()
+        hit = by_key.get(_iri_key(iri))
+        if hit is not None:
+            return page(hit, iri, "kgbp")
+        if iri.startswith(OBO_PURL):
+            rest = iri[len(OBO_PURL):]
+            head, _, module = rest.partition("/")
+            owner = obo_owner.get(head.lower()) if module else None
+            if owner is not None:
+                return page(owner, iri, "module", module)
+        if re.match(r"^https?://", iri):
+            return {"kind": "external", "label": _iri_name(iri), "name": "",
+                    "href": iri, "iri": iri, "ok": False}
+        return {"kind": "name", "label": _iri_name(iri), "name": "", "href": "",
+                "iri": iri, "ok": False}
+
+    return resolve
+
+IMPORT_KIND_LABEL = {
+    "kgbp": "KG‑Bioportal", "module": "module", "external": "external", "name": "unresolved",
+}
+# Past this many imports the list folds, so a page like SWEET's (222 of them)
+# stays readable and the ones that resolve to our pages come first.
+IMPORTS_SHOWN = 12
+
+def render_imports(it, resolve):
+    """The Imports section of an ontology page, or "" when there is nothing to list."""
+    iris = it.get("import_iris") or []
+    imports = it.get("imports")
+    if not iris:
+        if isinstance(imports, int) and imports > 0:
+            return (f'<section class="block"><p class="eyebrow">Imports <span class="eb-count">{imports}</span></p>'
+                    f'<p class="muted">This ontology declares {imports} import{"" if imports == 1 else "s"}, '
+                    f'but the index does not record which: it was last transformed before import targets '
+                    f'were kept. They will be listed the next time it is transformed.</p></section>')
+        return ""
+    resolved = [resolve(i) for i in iris]
+    # Ours first, then modules of ours, then the rest as declared.
+    order = {"kgbp": 0, "module": 1, "external": 2, "name": 3}
+    resolved.sort(key=lambda r: order[r["kind"]])
+    def row(r):
+        kind = f'<span class="imp-kind {r["kind"]}">{IMPORT_KIND_LABEL[r["kind"]]}</span>'
+        if r["kind"] in ("kgbp", "module"):
+            head = f'<a href="{esc(r["href"])}" class="mono">{esc(r["label"])}</a>'
+            name = f'<span class="imp-name">{esc(r["name"])}</span>' if r["name"] else ""
+            iri = f'<a class="imp-iri" href="{esc(r["iri"])}" target="_blank" rel="noopener">{esc(r["iri"])}</a>'
+        elif r["kind"] == "external":
+            head = f'<a href="{esc(r["href"])}" target="_blank" rel="noopener" class="mono">{esc(r["label"])}</a>'
+            name, iri = "", ""
+        else:
+            head = f'<span class="mono">{esc(r["label"])}</span>'
+            name, iri = "", f'<span class="imp-iri">{esc(r["iri"])}</span>'
+        return f'<li class="imp">{kind}<span class="imp-main">{head}{name}{iri}</span></li>'
+    rows = [row(r) for r in resolved]
+    n_ours = sum(1 for r in resolved if r["kind"] in ("kgbp", "module"))
+    if len(rows) > IMPORTS_SHOWN:
+        body = (f'<ul class="imports">{"".join(rows[:IMPORTS_SHOWN])}</ul>'
+                f'<details class="imports-more"><summary>Show all {len(rows)} imports</summary>'
+                f'<ul class="imports">{"".join(rows[IMPORTS_SHOWN:])}</ul></details>')
+    else:
+        body = f'<ul class="imports">{"".join(rows)}</ul>'
+    count_note = f"{len(iris)}" + (f" · {n_ours} in KG‑Bioportal" if n_ours else "")
+    return f"""
+      <section class="block">
+        <p class="eyebrow">Imports <span class="eb-count">{count_note}</span></p>
+        {body}
+        <p class="muted mt">What this ontology pulls in through <span class="mono">owl:imports</span>. An
+          import that is itself a BioPortal ontology links to its page here; a module of one links to
+          the ontology it belongs to; anything else links out, or is named by its namespace when it is
+          not a web address. The base graph leaves all of these out; the full graph, where built, has
+          them merged in.</p>
+      </section>"""
+
+# --------------------------------------------------------------------------- #
 #  ontology resource page (transformed BioPortal ontology)
 # --------------------------------------------------------------------------- #
-def render_ontology_resource(it):
-    """Summary page for a transformed BioPortal ontology (OK or not) from onto_stats."""
+def render_ontology_resource(it, resolve=None):
+    """Summary page for a transformed BioPortal ontology (OK or not) from onto_stats.
+
+    ``resolve`` is the import resolver from ``build_import_resolver``; without
+    one, every import is named and linked as an external address.
+    """
+    if resolve is None:
+        resolve = build_import_resolver([])
+    imports_section = render_imports(it, resolve) if it["ok"] else ""
     ok = it["ok"]
     acr, name = it["acr"], it["name"]
     nodes, edges = it["nodes"], it["edges"]
@@ -1308,6 +1452,7 @@ def render_ontology_resource(it):
           <div class="metrics">{metrics}</div>
         </section>
 {body_section}
+{imports_section}
       </div>
       <div class="panel" data-panel="nodes"><section class="block">{ont_nodes_panel}</section></div>
       <div class="panel" data-panel="edges"><section class="block">{ont_edges_panel}</section></div>
@@ -1428,11 +1573,12 @@ def main():
     # Transformed-ontology resource pages — every entry gets a page: OK ones with
     # the KGX download, non-OK ones collecting the metadata we have + why there's no artifact.
     onto_ok = 0
+    resolve = build_import_resolver(onto_items)
     for it in onto_items:
         d = os.path.join(out, "resource", it["id"])
         os.makedirs(d, exist_ok=True)
         with open(os.path.join(d, "index.html"), "w") as f:
-            f.write(render_ontology_resource(it))
+            f.write(render_ontology_resource(it, resolve))
         if it["ok"]:
             onto_ok += 1
 
@@ -1618,6 +1764,17 @@ padding:3px 5px;border-radius:7px;color:var(--ink)}
 .tok.cat{color:var(--c-chem);border-color:color-mix(in srgb,var(--c-chem) 30%,transparent)}
 .tok.pred{color:var(--ink-soft);font-family:var(--mono);font-size:11.5px}
 .tok.more{color:var(--ink-faint);background:transparent;border-style:dashed}
+.imports{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.imp{display:flex;gap:10px;align-items:flex-start;padding:7px 10px;background:var(--panel);border:1px solid var(--border);border-radius:8px;font-size:13px}
+.imp-kind{flex:none;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;padding:2px 7px;border-radius:999px;margin-top:2px;background:var(--chip);color:var(--chip-ink)}
+.imp-kind.kgbp{background:color-mix(in srgb,var(--prod) 15%,transparent);color:var(--prod)}
+.imp-kind.module{background:color-mix(in srgb,var(--node) 15%,transparent);color:var(--node)}
+.imp-kind.name{background:color-mix(in srgb,var(--warn) 15%,transparent);color:var(--warn)}
+.imp-main{display:flex;flex-direction:column;gap:1px;min-width:0}
+.imp-main .mono{font-weight:700}
+.imp-name{color:var(--ink-soft)}
+.imp-iri{font-family:var(--mono);font-size:11px;color:var(--ink-faint);overflow-wrap:anywhere}
+.imports-more{margin-top:8px}.imports-more summary{cursor:pointer;color:var(--link);font-size:13px;margin-bottom:8px}
 .notice{background:color-mix(in srgb,var(--warn) 8%,var(--panel));border:1px solid color-mix(in srgb,var(--warn) 32%,transparent);border-radius:10px;padding:14px 16px;font-size:14px}
 .notice-t{font-weight:700;color:var(--warn);margin-bottom:5px}
 .notice p{margin:0;color:var(--ink-soft)}

@@ -507,3 +507,113 @@ class TestSummaryFullGraphs(TestCase):
         html = self.render(items)
         for label in ("Built", "Same as base", "Failed", "Not yet attempted"):
             self.assertIn(label, html)
+
+
+class TestImportResolution(TestCase):
+    """Each import is named, and linked as far as it can be placed (#185)."""
+
+    def items(self):
+        return [
+            item("RO", "OK", nodecount=1, edgecount=1,
+                 ontology_iri="http://purl.obolibrary.org/obo/ro.owl", name="Relations Ontology"),
+            item("UBERON", "OK", nodecount=1, edgecount=1,
+                 ontology_iri="http://purl.obolibrary.org/obo/uberon.owl", name="Uberon"),
+            item("OBOE", "OK", "import_only", nodecount=1, edgecount=0,
+                 ontology_iri="http://ecoinformatics.org/oboe/oboe.1.2/oboe.owl"),
+            item("GONE", "Failed", "no_download_file", ontology_iri="http://example.org/gone"),
+        ]
+
+    def resolve(self, iri):
+        return bs.build_import_resolver(self.items())(iri)
+
+    def test_an_import_that_is_one_of_ours_links_to_its_page(self):
+        r = self.resolve("http://purl.obolibrary.org/obo/ro.owl")
+        self.assertEqual((r["kind"], r["href"]), ("kgbp", "../RO/"))
+        self.assertEqual(r["name"], "Relations Ontology")
+
+    def test_spelling_differences_still_match(self):
+        for iri in ("https://purl.obolibrary.org/obo/ro.owl", "http://purl.obolibrary.org/obo/ro",
+                    "http://purl.obolibrary.org/obo/RO.owl/"):
+            self.assertEqual(self.resolve(iri)["kind"], "kgbp", iri)
+
+    def test_an_obo_module_links_to_the_ontology_it_belongs_to(self):
+        r = self.resolve("http://purl.obolibrary.org/obo/uberon/bridge/uberon-bridge-to-zfa.owl")
+        self.assertEqual((r["kind"], r["href"]), ("module", "../UBERON/"))
+        self.assertIn("bridge/uberon-bridge-to-zfa.owl", r["label"])
+
+    def test_an_obo_purl_we_do_not_hold_is_external(self):
+        r = self.resolve("http://purl.obolibrary.org/obo/nothere.owl")
+        self.assertEqual((r["kind"], r["href"]), ("external", "http://purl.obolibrary.org/obo/nothere.owl"))
+
+    def test_an_acronym_alone_never_resolves_an_obo_purl(self):
+        # BioPortal's RO is the Radiomics Ontology; the Relations Ontology is
+        # OBOREL. Only an ontology's own recorded IRI can claim a PURL.
+        radiomics = item("RO", "OK", nodecount=1, edgecount=1, name="Radiomics Ontology")
+        resolve = bs.build_import_resolver([radiomics])
+        self.assertEqual(resolve("http://purl.obolibrary.org/obo/ro.owl")["kind"], "external")
+        self.assertEqual(resolve("http://purl.obolibrary.org/obo/ro/imports/x.owl")["kind"], "external")
+
+    def test_a_purl_resolves_to_whoever_calls_itself_that(self):
+        oborel = item("OBOREL", "OK", nodecount=1, edgecount=1, name="Relations Ontology",
+                      ontology_iri="http://purl.obolibrary.org/obo/ro.owl")
+        r = bs.build_import_resolver([oborel])("http://purl.obolibrary.org/obo/ro.owl")
+        self.assertEqual((r["kind"], r["href"]), ("kgbp", "../OBOREL/"))
+
+    def test_a_web_address_is_external_and_named_by_its_path(self):
+        r = self.resolve("http://sweetontology.net/human")
+        self.assertEqual(r["kind"], "external")
+        self.assertEqual(r["label"], "sweetontology.net/human")
+        self.assertEqual(r["href"], "http://sweetontology.net/human")
+
+    def test_a_non_web_iri_is_named_only(self):
+        r = self.resolve("urn:example:thing")
+        self.assertEqual((r["kind"], r["href"]), ("name", ""))
+        self.assertEqual(r["label"], "urn:example:thing")
+
+    def test_an_ontology_we_hold_but_did_not_transform_still_resolves(self):
+        r = self.resolve("http://example.org/gone")
+        self.assertEqual(r["kind"], "kgbp")
+        self.assertFalse(r["ok"])
+
+
+class TestImportsSection(TestCase):
+    def page(self, iris, imports=None, items=()):
+        it = item("X", "OK", nodecount=5, edgecount=6, imports=len(iris) if imports is None else imports,
+                  import_iris=iris, download_url="https://github.com/ncbo/kg-bioportal/releases/download/t/X.tar.gz",
+                  full_status="Failed", full_reason="unresolvable_imports")
+        return bs.render_ontology_resource(it, bs.build_import_resolver(list(items) + [it]))
+
+    def test_imports_are_listed_by_name(self):
+        page = self.page(["http://sweetontology.net/human", "urn:x:y"])
+        self.assertIn("sweetontology.net/human", page)
+        self.assertIn('href="http://sweetontology.net/human"', page)
+        self.assertIn("urn:x:y", page)
+
+    def test_ours_link_to_our_pages_and_come_first(self):
+        ro = item("RO", "OK", nodecount=1, edgecount=1, ontology_iri="http://purl.obolibrary.org/obo/ro.owl")
+        page = self.page(["http://sweetontology.net/human", "http://purl.obolibrary.org/obo/ro.owl"], items=[ro])
+        self.assertIn('href="../RO/"', page)
+        self.assertLess(page.index('href="../RO/"'), page.index("sweetontology.net/human"))
+
+    def test_long_lists_fold(self):
+        iris = [f"http://sweetontology.net/part{i}" for i in range(30)]
+        page = self.page(iris)
+        self.assertIn("Show all 30 imports", page)
+        self.assertIn("<details", page)
+
+    def test_short_lists_do_not_fold(self):
+        self.assertNotIn("<details", self.page(["http://e/a", "http://e/b"]))
+
+    def test_count_without_targets_says_so(self):
+        page = self.page([], imports=7)
+        self.assertIn("declares 7 imports", page)
+        self.assertIn("last transformed before import targets were kept", page)
+
+    def test_no_imports_means_no_section(self):
+        page = self.page([], imports=0)
+        self.assertNotIn('Imports <span class="eb-count">', page)
+
+    def test_import_iris_survive_item_normalisation(self):
+        it = item("X", "OK", import_iris=["http://e/a"], ontology_iri="http://e/x")
+        self.assertEqual(it["import_iris"], ["http://e/a"])
+        self.assertEqual(it["ontology_iri"], "http://e/x")
