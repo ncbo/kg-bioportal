@@ -1064,6 +1064,12 @@ def render_ontology_resource(it):
     full_status = it.get("full_status", "")
     full_reason = it.get("full_reason", "")
     imports = it.get("imports")
+    # An ontology with no imports has one graph, and the page should say so
+    # in the singular: the base/full distinction is an answer to a question
+    # this ontology never raises. The "base graph is the full graph" notice
+    # stays, so a reader who knows the distinction gets the answer.
+    single = full_reason == "no_imports"
+    graph_word = "graph" if single else "base graph"
 
     def metric(cls, v, k):
         return f'<div class="metric {cls}"><div class="v">{v}</div><div class="k">{k}</div></div>'
@@ -1089,7 +1095,7 @@ def render_ontology_resource(it):
               'stroke-width=2.2><path d="M7 17L17 7M9 7h8v8"/></svg>')
     bp_btn = (f'<a class="btn btn-ghost" href="{esc(it["bioportal_url"])}" target="_blank" '
               f'rel="noopener">{bp_svg} View on BioPortal</a>')
-    base_btn = (f'<a class="btn btn-primary" href="{esc(it["download_url"])}">{dl_svg} Download base graph</a>'
+    base_btn = (f'<a class="btn btn-primary" href="{esc(it["download_url"])}">{dl_svg} Download {graph_word}</a>'
                 if ok and it["download_url"] else "")
     full_btn = (f'<a class="btn btn-primary" href="{esc(full_url)}">{dl_svg} Download full graph</a>'
                 if full_ok and full_url else "")
@@ -1160,10 +1166,15 @@ def render_ontology_resource(it):
         else:
             lead = (f'A KGX transformation of the BioPortal ontology <b>{esc(name)}</b> ({esc(acr)}), '
                     f'produced by KG&#8209;Bioportal. Nodes are ontology classes; edges are the '
-                    f'relations between them. The base graph is the ontology on its own, imports '
-                    f'stripped; the full graph, where built, has the import closure merged in.')
-        base_html = product("kgx", "Base", "KGX base graph (imports stripped)",
-                            f"{it['id']}.tar.gz", it["download_url"], nodes, edges)
+                    f'relations between them.'
+                    + ('' if single else
+                       ' The base graph is the ontology on its own, imports stripped; the full '
+                       'graph, where built, has the import closure merged in.'))
+        base_html = (product("kgx", "KGX", "KGX nodes &amp; edges",
+                             f"{it['id']}.tar.gz", it["download_url"], nodes, edges)
+                     if single else
+                     product("kgx", "Base", "KGX base graph (imports stripped)",
+                             f"{it['id']}.tar.gz", it["download_url"], nodes, edges))
         import_only_html = (f"""
         <div class="notice">
           <div class="notice-t">Import-only ontology</div>
@@ -1174,7 +1185,7 @@ def render_ontology_resource(it):
         <p class="eyebrow">Products &amp; downloads</p>{import_only_html}
         <div class="prod-list">{base_html}{full_html}
         </div>
-        <p class="muted mt">The base graph contains <span class="mono">{esc(acr)}_nodes.tsv</span> and <span class="mono">{esc(acr)}_edges.tsv</span>. {full_note} Releases are incremental, so each link points at whichever release most recently rebuilt this ontology.</p>
+        <p class="muted mt">The {graph_word} contains <span class="mono">{esc(acr)}_nodes.tsv</span> and <span class="mono">{esc(acr)}_edges.tsv</span>. {full_note} Releases are incremental, so each link points at whichever release most recently rebuilt this ontology.</p>
       </section>"""
     elif ok:
         # Transformed, but the index doesn't record where the artifact lives.
@@ -1227,7 +1238,9 @@ def render_ontology_resource(it):
             "(lexical form does not match the declared datatype; kept as written)</span>"))
     if ok:
         detail_rows.append(drow("Imports", esc(str(imports)) if isinstance(imports, int) else "—"))
-        if full_status:
+        if single:
+            full_label = "Same as the base graph (no imports)"
+        elif full_status:
             full_label = ("Built" if full_ok else
                           f"{esc(full_status)}" + (f' <span class="mono">({esc(full_reason)})</span>' if full_reason else ""))
         else:
@@ -1291,7 +1304,7 @@ def render_ontology_resource(it):
           <p class="lead">{lead}</p>
         </section>
         <section class="block">
-          <p class="eyebrow">Base graph at a glance</p>
+          <p class="eyebrow">{'Graph' if single else 'Base graph'} at a glance</p>
           <div class="metrics">{metrics}</div>
         </section>
 {body_section}
