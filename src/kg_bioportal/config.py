@@ -79,6 +79,37 @@ def is_skiplisted(acronym: str) -> bool:
     return acronym.strip().upper() in KNOWN_GIANTS
 
 
+# --- Base and full graphs -------------------------------------------------- #
+
+# Every ontology is transformed twice, after the OBO Foundry's distinction:
+#   base  = the ontology alone, its owl:imports stripped (what KG-Bioportal has
+#           always published), released as <ACRONYM>.tar.gz;
+#   full  = the ontology with its import closure merged in by ROBOT, released
+#           beside it as <ACRONYM><FULL_SUFFIX>.tar.gz.
+# Base graphs merge cleanly (nothing is counted twice); full graphs are
+# self-contained. Which one a reader wants depends on what they know about the
+# ontology's imports, so the index records both.
+FULL_SUFFIX: str = "_full"
+
+# Recorded on an OK base graph that is nothing but the ontology's header: the
+# source declares imports and every class lives behind them (SWEET, OBOE). The
+# artifact is honest, and it is also useless; the full graph is the one to use.
+IMPORT_ONLY_REASON: str = "import_only"
+
+# A header-only base graph still carries a few nodes: KGX makes one of the
+# ontology IRI itself and one of each IRI-valued header annotation (a license,
+# a creator). No edges and at most this many nodes, from a source that declares
+# imports, reads as import-only.
+IMPORT_ONLY_MAX_NODES: int = int(os.environ.get("KGBP_IMPORT_ONLY_MAX_NODES", 10))
+
+# Why a full graph was not built.
+NO_IMPORTS_REASON: str = "no_imports"  # nothing to merge: the base graph is the full graph
+UNRESOLVABLE_IMPORTS_REASON: str = "unresolvable_imports"  # an import could not be fetched
+
+# Reasons that mean "not attempted, or cut off by a gate" rather than "broken".
+# An entry with one of these is Skipped; any other non-OK reason is Failed.
+SKIP_REASONS: frozenset = frozenset({"too_slow", "too_large", NO_IMPORTS_REASON})
+
 # --- Download outcomes ----------------------------------------------------- #
 
 # Recorded when BioPortal declines to serve the source file because the
