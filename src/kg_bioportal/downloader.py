@@ -3,7 +3,8 @@
 import csv
 import logging
 import os
-from typing import Union
+import time
+from typing import Optional, Tuple, Union
 
 import requests
 from requests.adapters import HTTPAdapter, Retry
@@ -23,6 +24,20 @@ DOWNLOAD_REPORT_NAME = "download_report.tsv"
 
 # Streaming chunk size (bytes).
 _CHUNK = 1024 * 1024
+
+# (connect, read) timeout for every request to BioPortal, in seconds. Without
+# one a stalled connection hangs the shard for the rest of the job's six hours.
+# The read timeout is per chunk, not per file: a 200 MB source that trickles is
+# fine, a source that stops is not.
+_TIMEOUT = (30, 300)
+
+# How many times to fetch a source whose byte stream breaks partway, and how
+# long to wait between tries. On 2026-09-09 BioPortal closed every large
+# download after a megabyte or two for an evening; the retry is for the
+# ordinary dropped connection, and the wait is so twenty shards do not all
+# come straight back at once (#180).
+_STREAM_ATTEMPTS = 3
+_STREAM_BACKOFF_S = 15
 
 
 class Downloader:
@@ -77,13 +92,14 @@ class Downloader:
 
     def _record(
         self, acronym, submission_id, source_bytes, path, status, reason,
-        name="", version="", http_status: Union[int, str] = "",
+        name="", version="", http_status: Union[int, str] = "", detail: str = "",
     ):
         """Append a per-ontology outcome to the results list.
 
         ``http_status`` is the response code from BioPortal, recorded for the
         outcomes that hinge on it so the reason can be audited later without
-        re-running the download.
+        re-running the download. ``detail`` is the error text for an outcome
+        that has one, on one line, the way the transformer records its own.
         """
         self.results.append(
             {
@@ -96,8 +112,83 @@ class Downloader:
                 "status": status,
                 "reason": reason,
                 "http_status": http_status,
+                "detail": " ".join(str(detail).split())[:500],
             }
         )
+
+    def _stream_to_file(self, response, outpath: str) -> Tuple[int, bool]:
+        """Write a streaming response to ``outpath`` under the size gate.
+
+        Returns ``(bytes_written, too_large)``. Raises whatever ``requests``
+        raises when the connection breaks partway; the caller decides whether
+        to try again.
+        """
+        bytes_written = 0
+        try:
+            with open(outpath, "wb") as outfile:
+                for chunk in response.iter_content(chunk_size=_CHUNK):
+                    if not chunk:
+                        continue
+                    bytes_written += len(chunk)
+                    if bytes_written > self.max_source_bytes:
+                        return bytes_written, True
+                    outfile.write(chunk)
+        finally:
+            response.close()
+        return bytes_written, False
+
+    def _fetch_source(
+        self, ontology: str, download_url: str, headers: dict, response, outpath: str
+    ) -> Tuple[int, bool, str]:
+        """Stream a source to disk, fetching it again if the stream breaks.
+
+        ``response`` is the already-opened streaming response for the first
+        try; later tries open their own. A broken stream used to escape as a
+        ChunkedEncodingError and end the whole shard, every ontology behind it
+        included (#180). Now it costs at most this one ontology.
+
+        Returns ``(bytes_written, too_large, error)``; ``error`` is "" on
+        success and the last exception's text when every try failed.
+        """
+        error = ""
+        for attempt in range(1, _STREAM_ATTEMPTS + 1):
+            if response is None:
+                try:
+                    response = self.requests_session.get(
+                        download_url, headers=headers, allow_redirects=True,
+                        stream=True, timeout=_TIMEOUT,
+                    )
+                except requests.RequestException as e:
+                    error = f"{type(e).__name__}: {e}"
+                    logging.warning(f"{ontology}: fetch attempt {attempt} failed to connect: {error}")
+                    response = None
+                    self._wait_before_retry(attempt)
+                    continue
+                if not response.ok:
+                    error = f"HTTP {response.status_code} on retry"
+                    response.close()
+                    response = None
+                    self._wait_before_retry(attempt)
+                    continue
+            try:
+                return (*self._stream_to_file(response, outpath), "")
+            except (requests.RequestException, OSError) as e:
+                error = f"{type(e).__name__}: {e}"
+                logging.warning(
+                    f"{ontology}: download broke on attempt {attempt} of {_STREAM_ATTEMPTS}: {error}"
+                )
+                try:
+                    os.remove(outpath)
+                except OSError:
+                    pass
+                response = None
+                self._wait_before_retry(attempt)
+        return 0, False, error
+
+    @staticmethod
+    def _wait_before_retry(attempt: int) -> None:
+        if attempt < _STREAM_ATTEMPTS:
+            time.sleep(_STREAM_BACKOFF_S * attempt)
 
     @staticmethod
     def _body_snippet(response) -> str:
@@ -146,7 +237,17 @@ class Downloader:
                 f"https://data.bioontology.org/ontologies/{ontology}/download"
             )
 
-            metadata_resp = self.requests_session.get(metadata_url, headers=headers)
+            # The metadata calls are guarded like the download: a connection
+            # that drops here is this ontology's problem, not the shard's.
+            try:
+                metadata_resp = self.requests_session.get(
+                    metadata_url, headers=headers, timeout=_TIMEOUT
+                )
+            except requests.RequestException as e:
+                logging.error(f"Failed to fetch metadata for {ontology}: {e}")
+                self._record(ontology, "NA", 0, "", "error", "metadata_http_error",
+                             detail=f"{type(e).__name__}: {e}")
+                continue
             if metadata_resp.status_code != 200:
                 logging.error(
                     f"Failed to fetch metadata for {ontology}: HTTP {metadata_resp.status_code}"
@@ -157,9 +258,15 @@ class Downloader:
             metadata = metadata_resp.json()
             onto_name = str(metadata.get("name") or ontology)
             logging.info(f"Name: {onto_name}")
-            latest_submission = self.requests_session.get(
-                latest_submission_url, headers=headers
-            ).json()
+            try:
+                latest_submission = self.requests_session.get(
+                    latest_submission_url, headers=headers, timeout=_TIMEOUT
+                ).json()
+            except (requests.RequestException, ValueError) as e:
+                logging.error(f"Failed to fetch the latest submission for {ontology}: {e}")
+                self._record(ontology, "NA", 0, "", "error", "metadata_http_error",
+                             name=onto_name, detail=f"{type(e).__name__}: {e}")
+                continue
             if len(latest_submission) > 0:
                 submission_id = latest_submission["submissionId"]
                 onto_version = str(latest_submission.get("version") or "NA")
@@ -175,12 +282,14 @@ class Downloader:
             # the whole (potentially huge) file into memory or onto disk.
             try:
                 download_onto = self.requests_session.get(
-                    download_url, headers=headers, allow_redirects=True, stream=True
+                    download_url, headers=headers, allow_redirects=True, stream=True,
+                    timeout=_TIMEOUT,
                 )
             except requests.RequestException as e:
                 logging.warning(f"Could not download {ontology}: {e}")
                 self._record(ontology, submission_id, 0, "", "error", "download_error",
-                             name=onto_name, version=onto_version)
+                             name=onto_name, version=onto_version,
+                             detail=f"{type(e).__name__}: {e}")
                 continue
 
             # Why we didn't get a file matters, and the status code is the only
@@ -244,21 +353,17 @@ class Downloader:
                 os.makedirs(outdir)
 
             # Size gate 2: enforce the cap while streaming, in case the header
-            # was missing or wrong. Abort and clean up if we blow past it.
-            bytes_written = 0
-            too_large = False
-            try:
-                with open(outpath, "wb") as outfile:
-                    for chunk in download_onto.iter_content(chunk_size=_CHUNK):
-                        if not chunk:
-                            continue
-                        bytes_written += len(chunk)
-                        if bytes_written > self.max_source_bytes:
-                            too_large = True
-                            break
-                        outfile.write(chunk)
-            finally:
-                download_onto.close()
+            # was missing or wrong. Abort and clean up if we blow past it. A
+            # stream that breaks is fetched again, and if it keeps breaking
+            # this ontology is recorded as the failure, not the shard.
+            bytes_written, too_large, error = self._fetch_source(
+                ontology, download_url, headers, download_onto, outpath
+            )
+            if error:
+                logging.error(f"Could not download {ontology}: {error}")
+                self._record(ontology, submission_id, 0, "", "error", "download_error",
+                             name=onto_name, version=onto_version, detail=error)
+                continue
 
             if too_large:
                 logging.warning(
@@ -305,7 +410,7 @@ class Downloader:
         """Write per-ontology download outcomes to a TSV in the output dir."""
         report_path = os.path.join(self.output_dir, DOWNLOAD_REPORT_NAME)
         fieldnames = ["id", "name", "version", "submission_id", "source_bytes", "status", "reason",
-                      "http_status", "path"]
+                      "http_status", "detail", "path"]
         with open(report_path, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter="\t")
             writer.writeheader()

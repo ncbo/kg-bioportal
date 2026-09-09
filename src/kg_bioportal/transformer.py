@@ -1506,6 +1506,10 @@ class Transformer:
                 http_status = row.get("http_status") or ""
                 if http_status:
                     entry["http_status"] = int(http_status)
+                # The downloader's error text, where it has one, the same way
+                # a transform failure carries the stage's message.
+                if row.get("detail"):
+                    entry["detail"] = row["detail"]
                 onto_log[onto_id] = entry
 
         filepaths = []
