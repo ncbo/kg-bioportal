@@ -174,6 +174,20 @@ each gets its own reason:
 The response code is kept in the `http_status` field of both
 `download_report.tsv` and the affected `onto_stats.yaml` entries.
 
+Two more come from the connection rather than the response:
+
+- **`download_error`** — the source could not be fetched whole. A byte stream
+  that breaks partway is fetched again, up to three times with a pause between
+  tries; if it keeps breaking, this is recorded and the shard moves on to the
+  next ontology. Before #180 the exception ended the shard and every ontology
+  behind it went unrecorded.
+- **`metadata_http_error`** also covers a connection that drops on the
+  metadata calls, not only a non-200 response.
+
+Both carry the error text in `detail`, as transform failures do. Every request
+to BioPortal has a timeout, so a stalled connection costs minutes, not the
+rest of the job.
+
 `total_stats.yaml` counts license-restricted ontologies on their own
 `licensedcount` line, and **excludes them from `failedcount`** — they are
 unavailable by design, so counting them as failures overstates how much of the
