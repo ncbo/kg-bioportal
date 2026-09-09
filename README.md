@@ -71,7 +71,9 @@ graph, as they always were; the full graph gets the same fields under a
 `full_` prefix (`full_status`, `full_reason`, `full_detail`, `full_nodecount`,
 `full_edgecount`, `full_node_categories`, `full_edge_categories`,
 `full_download_url`), plus `imports`, the number of import declarations in the
-source:
+source, `import_iris`, their targets, and `ontology_iri`, the IRI the ontology
+gives itself. The site uses the last two to list each ontology's imports by
+name and link the ones that are themselves ontologies here:
 
 ```yaml
 - id: OBOE
@@ -80,6 +82,11 @@ source:
   nodecount: 1
   edgecount: 0
   imports: 3
+  import_iris:
+  - http://ecoinformatics.org/oboe/oboe.1.2/oboe-core.owl
+  - http://ecoinformatics.org/oboe/oboe.1.2/oboe-characteristics.owl
+  - http://ecoinformatics.org/oboe/oboe.1.2/oboe-standards.owl
+  ontology_iri: http://ecoinformatics.org/oboe/oboe.1.2/oboe.owl
   full_status: OK
   full_reason: ''
   full_nodecount: 509
