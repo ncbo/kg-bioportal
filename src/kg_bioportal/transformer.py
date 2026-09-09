@@ -17,8 +17,11 @@ import yaml
 from kgx.transformer import Transformer as KGXTransformer
 
 from kg_bioportal.config import (
-    LICENSE_RESTRICTED_REASON,
+    FULL_SUFFIX,
+    IMPORT_ONLY_MAX_NODES,
+    IMPORT_ONLY_REASON,
     MAX_SOURCE_MB,
+    NO_IMPORTS_REASON,
     PER_ONTOLOGY_TIMEOUT_MIN,
 )
 from kg_bioportal.categories import categorize
@@ -29,7 +32,13 @@ from kg_bioportal.kgx_patches import (
     patch_mixed_type_sorting,
     patch_owl_source_format,
 )
-from kg_bioportal.robot_utils import initialize_robot, robot_convert, robot_relax
+from kg_bioportal.robot_utils import (
+    initialize_robot,
+    robot_convert,
+    robot_merge,
+    robot_relax,
+)
+from kg_bioportal.stats import status_for, summarize  # noqa: F401  (summarize re-exported)
 
 # Applied at import so it is in place for any use of the KGX transform, not just
 # the ones that go through Transformer. See kgx_patches for what and why.
@@ -320,6 +329,39 @@ def _tidy(text: str, start: int, end: int) -> Tuple[int, int]:
     return start, end
 
 
+def _turtle_imports_predicate(text: str) -> "re.Pattern":
+    """The owl:imports predicate as this Turtle/N3 file may write it.
+
+    Full IRI, or a prefixed name under every prefix the file binds to the OWL
+    namespace (the label can be empty when owl is the default prefix).
+    """
+    prefixes = {m.group(1) or "" for m in _TTL_PREFIX_OWL.finditer(text)}
+    prefixes.add("owl")
+    alt = "|".join(re.escape(p) for p in sorted(prefixes, key=len, reverse=True))
+    return re.compile(
+        r"<%s>|(?<![\w:.\-])(?:%s):imports(?![\w.\-])"
+        % (re.escape(_OWL_NS + "imports"), alt)
+    )
+
+
+def _count_turtle_imports(text: str) -> int:
+    """How many ontologies a Turtle/N3 file imports.
+
+    Objects, not predicates: one ``owl:imports`` can carry a comma-separated
+    list, and SWEET's carries 222 (#177). The stripper counts the statements
+    it cuts, which is the right number for its log line and the wrong one
+    for the index.
+    """
+    count = 0
+    for match in _turtle_imports_predicate(text).finditer(text):
+        span = _object_list_end(text, match.end())
+        if span is None:
+            count += 1  # a shape the scanner declines; there is at least one
+            continue
+        count += text[match.end():span[0]].count(",") + 1
+    return count
+
+
 def _strip_turtle_imports(text: str) -> Tuple[str, int]:
     """Remove owl:imports statements from Turtle or N3.
 
@@ -328,13 +370,7 @@ def _strip_turtle_imports(text: str) -> Tuple[str, int]:
     would replace a file that is otherwise fine with a round-tripped one. Cutting
     the statement leaves every other byte where it was.
     """
-    prefixes = {m.group(1) or "" for m in _TTL_PREFIX_OWL.finditer(text)}
-    prefixes.add("owl")
-    alt = "|".join(re.escape(p) for p in sorted(prefixes, key=len, reverse=True))
-    predicate = re.compile(
-        r"<%s>|(?<![\w:.\-])(?:%s):imports(?![\w.\-])"
-        % (re.escape(_OWL_NS + "imports"), alt)
-    )
+    predicate = _turtle_imports_predicate(text)
 
     out: List[str] = []
     pos = removed = declined = 0
@@ -437,6 +473,72 @@ def strip_imports(path: str) -> str:
         f.write(cleaned)
     logging.info(f"Stripped {removed} import declaration(s) from {os.path.basename(path)}.")
     return new_path
+
+
+# Import declarations in the serializations the strippers do not cover, so the
+# count is right for every source: OWL functional syntax (Import(<iri>)) and
+# Manchester syntax (Import: <iri>). Neither fires on the other.
+_TEXT_IMPORT_PATTERNS = [
+    re.compile(r"^\s*Import\(", re.M),
+    re.compile(r"^\s*Import:\s*\S", re.M),
+]
+
+
+def count_imports(path: str) -> int:
+    """Count the import declarations in an ontology source.
+
+    This is what decides whether a full graph is worth building (no imports
+    means the base graph already is the full graph) and, with the base graph's
+    counts, whether an ontology is import-only (#177). Only a count: the
+    targets are ROBOT's business. For the serializations the strippers know,
+    it is the number they would cut, so one Turtle owl:imports predicate with
+    224 objects behind it (SWEET) counts 224.
+
+    Args:
+        path: Path to the ontology file, imports intact.
+
+    Returns:
+        Number of import declarations, or 0 if the file cannot be read.
+    """
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    except OSError as e:
+        logging.warning(f"Could not read {path} to count imports: {e}")
+        return 0
+
+    kind = _sniff_serialization(text)
+    if kind == "turtle":
+        count = _count_turtle_imports(text)
+    elif kind is not None:
+        count = _STRIPPERS[kind](text)[1]
+    else:
+        count = 0
+    # The sniffer reads a functional-syntax "Prefix(" line as Turtle and a
+    # Manchester "Ontology:" line as OBO, where their counts find nothing;
+    # those syntaxes spell their imports in ways none of the others use.
+    if count == 0:
+        count = sum(len(pattern.findall(text)) for pattern in _TEXT_IMPORT_PATTERNS)
+    return count
+
+
+def is_import_only(imports: int, nodecount: int, edgecount: int) -> bool:
+    """Is a base graph nothing but the ontology's header?
+
+    SWEET is the type specimen (#177): one header, 224 component files behind
+    owl:imports, and a base graph of two nodes and no edges that looked exactly
+    like a healthy one. The nodes a header yields are the ontology IRI and any
+    IRI-valued annotation on it, so a small node count with no edges at all,
+    from a source that does declare imports, is the shape to catch. A source
+    without imports is never import-only, whatever its size: an ontology of a
+    few unrelated classes is small, not hollow.
+    """
+    return imports > 0 and edgecount == 0 and nodecount <= IMPORT_ONLY_MAX_NODES
+
+
+# The two graphs built for each ontology. See config.FULL_SUFFIX.
+BASE = "base"
+FULL = "full"
 
 
 # XML 1.0 forbids the C0 control characters outright -- only tab, newline and
@@ -571,37 +673,6 @@ def strip_invalid_lang_tags(path: str, ontology_name: str = "") -> str:
             f"({removed.count(value)} occurrence(s)); rdflib rejects it as a language tag."
         )
     return new_path
-
-
-def summarize(onto_log: dict) -> dict:
-    """Roll a per-ontology log up into the fields of total_stats.yaml.
-
-    License-restricted ontologies get their own count and are *excluded* from
-    ``failedcount``. They keep ``status: Failed`` in onto_stats (no artifact
-    exists for them either way), but nothing about them is broken and no rerun
-    will change that, so counting them as failures overstates how much of the
-    pipeline needs fixing.
-
-    Args:
-        onto_log: {acronym: entry} as built by ``transform_all``.
-
-    Returns:
-        Ordered mapping of total_stats.yaml field name to value.
-    """
-    def by_status(status):
-        return sum(1 for e in onto_log.values() if e["status"] == status)
-
-    licensed = sum(
-        1 for e in onto_log.values() if e.get("reason") == LICENSE_RESTRICTED_REASON
-    )
-    return {
-        "totalcount": by_status("OK"),
-        "skippedcount": by_status("Skipped"),
-        "failedcount": by_status("Failed") - licensed,
-        "licensedcount": licensed,
-        "totalnodecount": sum(e["nodecount"] for e in onto_log.values()),
-        "totaledgecount": sum(e["edgecount"] for e in onto_log.values()),
-    }
 
 
 # Extensions BioPortal sources actually arrive in. Used to find the ontology
@@ -928,7 +999,9 @@ MAX_DETAIL_CHARS = 500
 # Stages a transform can fail at, in the order it runs them. The reason written
 # to onto_stats is "transform_error_<stage>", so every transform failure still
 # greps as transform_error while saying which step lost the ontology (#134).
-TRANSFORM_STAGES = ("decompress", "convert", "relax", "kgx")
+# "merge" is the full graph's counterpart of "convert": ROBOT reading the source
+# and its whole import closure, where "convert" reads the stripped source alone.
+TRANSFORM_STAGES = ("decompress", "convert", "merge", "relax", "kgx")
 
 
 def reason_for_stage(stage: str) -> str:
@@ -968,6 +1041,11 @@ class TransformOutcome(NamedTuple):
     # nothing here mutates a tally after it is built.
     node_categories: Dict[str, int] = {}
     edge_categories: Dict[str, int] = {}
+    # Import declarations in the source, filled in whenever the source was
+    # read, so the caller can decide whether a full graph is worth attempting
+    # (#177). A success carries reason=import_only when the base graph is
+    # nothing but the ontology's header; see is_import_only.
+    imports: int = 0
 
     @classmethod
     def failed(
@@ -1310,6 +1388,7 @@ class Transformer:
         output_dir: str = "data/transformed",
         timeout_min: float = PER_ONTOLOGY_TIMEOUT_MIN,
         max_source_mb: float = MAX_SOURCE_MB,
+        full_graphs: bool = True,
     ) -> None:
         """Initializes the Transformer class.
 
@@ -1318,11 +1397,16 @@ class Transformer:
         Args:
             input_dir: A string pointing to the location of the raw data.
             output_dir: A string pointing to the location to write products to.
-            timeout_min: Per-ontology wall-clock cap in minutes. An ontology that
-                runs longer is killed and recorded as skipped (too_slow).
+            timeout_min: Per-graph wall-clock cap in minutes. A graph that runs
+                longer is killed and recorded as skipped (too_slow). The base
+                and full graphs of one ontology each get the full budget.
             max_source_mb: Size gate re-applied to a *decompressed* source, which
-                the downloader's gate could not weigh. Over this, the ontology is
-                recorded as skipped (too_large) instead of being handed to ROBOT.
+                the downloader's gate could not weigh, and to the merged source
+                a full graph is built from. Over this, the graph is recorded as
+                skipped (too_large) instead of being handed to ROBOT.
+            full_graphs: Also build each ontology's full graph (imports merged
+                in) beside its base graph. Off, only base graphs are built and
+                the index carries no full_* fields.
 
         Returns:
             None.
@@ -1333,6 +1417,10 @@ class Transformer:
         self.timeout_sec = int(timeout_min * 60)
         self.max_source_mb = max_source_mb
         self.max_source_bytes = int(max_source_mb * 1024 * 1024)
+        self.full_graphs = full_graphs
+        # Decompressed source path and import count, by downloaded path, so the
+        # full graph does not unpack and scan what the base graph already did.
+        self._sources: Dict[str, Tuple[Optional[str], int]] = {}
 
         # If the output directory does not exist, create it
         if not os.path.exists(self.output_dir):
@@ -1363,14 +1451,23 @@ class Transformer:
                 report[row["id"]] = row
         return report
 
+    def _ontology_name(self, ontology_path: str) -> str:
+        """``<input_dir>/<ACRONYM>/<submission>/<file>`` -> ``<ACRONYM>``."""
+        return os.path.relpath(ontology_path, self.input_dir).split(os.sep)[0]
+
     def transform_all(self, compress: bool) -> None:
         """Transforms all ontologies in the input directory to KGX nodes and edges.
+
+        Each ontology gets a base graph (imports stripped) and, when it declares
+        imports and the base graph came through, a full graph (imports merged
+        in). Each is built under its own wall-clock cap (#177).
 
         Yields two log files: total_stats.yaml and onto_stats.yaml.
         The first contains the total counts of Bioportal ontologies and transforms.
         The second contains the counts of nodes and edges for each ontology, plus
         its status (OK / Failed / Skipped), the reason for any skip or failure,
-        and -- for a failure -- a detail field carrying the message that caused it.
+        and -- for a failure -- a detail field carrying the message that caused it;
+        and the same again under ``full_*`` for its full graph.
 
         Args:
             compress: If True, compresses the output nodes and edges to tar.gz.
@@ -1424,69 +1521,68 @@ class Transformer:
             logging.info(f"Found {len(filepaths)} ontologies to transform.")
 
         for filepath in filepaths:
-            ontology_name = (os.path.relpath(filepath, self.input_dir)).split(os.sep)[0]
+            ontology_name = self._ontology_name(filepath)
             report_row = download_report.get(ontology_name, {})
-            reason = ""
-            detail = ""
-            try:
-                with deadline(self.timeout_sec):
-                    outcome = self.transform(filepath, compress)
-            except TransformTimeout:
-                logging.error(
-                    f"Transform of {ontology_name} exceeded {self.timeout_min} min; skipping."
-                )
-                outcome = TransformOutcome(False)
-                reason = "too_slow"
-                detail = f"exceeded the per-ontology limit of {self.timeout_min} min"
-            except SourceTooLarge as e:
-                logging.warning(f"Skipping {ontology_name}: {e}.")
-                outcome = TransformOutcome(False)
-                reason = "too_large"
-                detail = summarize_detail(e)
 
-            nodecount, edgecount = outcome.nodecount, outcome.edgecount
-            if not outcome.success:
-                strstatus = "Skipped" if reason in ("too_slow", "too_large") else "Failed"
-                # A deliberate skip is not an error; saying so in the log made
-                # the two indistinguishable when reading a run afterwards.
-                if strstatus == "Failed":
-                    logging.error(f"Error transforming {filepath}.")
-                else:
-                    logging.info(f"Skipped {filepath} ({reason}).")
-                nodecount = 0
-                edgecount = 0
-                if not reason:
-                    # Name the stage that lost it, so the next audit is a grep of
-                    # onto_stats.yaml rather than an archaeology of expiring logs.
-                    reason = outcome.reason or reason_for_stage(outcome.stage)
-                    detail = outcome.detail
-            else:
-                logging.info(f"Transformed {filepath}.")
-                strstatus = "OK"
-
+            base, status, reason, detail = self._build(filepath, compress, BASE)
             entry = {
-                "status": strstatus,
+                "status": status,
                 "reason": reason,
                 "name": report_row.get("name", ""),
                 "version": report_row.get("version", ""),
-                "nodecount": nodecount,
-                "edgecount": edgecount,
+                "nodecount": base.nodecount,
+                "edgecount": base.edgecount,
                 "submission_id": report_row.get("submission_id", "NA"),
                 "source_bytes": int(report_row.get("source_bytes") or 0),
+                "imports": base.imports,
             }
             # Only failures have anything to explain; an empty field on every OK
             # entry would be a thousand lines of noise in the index.
             if detail:
                 entry["detail"] = detail
             # Same reasoning: recorded only for the ontologies that have any.
-            if outcome.malformed_literals:
-                entry["malformed_literals"] = outcome.malformed_literals
+            if base.malformed_literals:
+                entry["malformed_literals"] = base.malformed_literals
             # What kinds of node and edge this ontology actually produced (#98).
             # Only OK entries have any; a failure has no files to tally.
-            if outcome.node_categories:
-                entry["node_categories"] = dict(outcome.node_categories)
-            if outcome.edge_categories:
-                entry["edge_categories"] = dict(outcome.edge_categories)
+            if base.node_categories:
+                entry["node_categories"] = dict(base.node_categories)
+            if base.edge_categories:
+                entry["edge_categories"] = dict(base.edge_categories)
+
+            # A full graph is only ever attempted on top of a working base
+            # graph: whatever stopped the base (a size gate, a parse error)
+            # stops the larger full graph sooner. An entry without full_*
+            # fields is one where no full graph was attempted.
+            # getattr: a Transformer built without __init__ (the tests do
+            # that) has no full_graphs, and the default is to build them.
+            if getattr(self, "full_graphs", True) and base.success:
+                if base.imports == 0:
+                    logging.info(
+                        f"{ontology_name} declares no imports; its base graph is its full graph."
+                    )
+                    full, full_status, full_reason, full_detail = (
+                        TransformOutcome(False), "Skipped", NO_IMPORTS_REASON, "",
+                    )
+                else:
+                    full, full_status, full_reason, full_detail = self._build(
+                        filepath, compress, FULL
+                    )
+                entry.update(
+                    {
+                        "full_status": full_status,
+                        "full_reason": full_reason,
+                        "full_nodecount": full.nodecount,
+                        "full_edgecount": full.edgecount,
+                    }
+                )
+                if full_detail:
+                    entry["full_detail"] = full_detail
+                if full.node_categories:
+                    entry["full_node_categories"] = dict(full.node_categories)
+                if full.edge_categories:
+                    entry["full_edge_categories"] = dict(full.edge_categories)
+
             onto_log[ontology_name] = entry
 
         # Write total stats to a yaml
@@ -1508,15 +1604,120 @@ class Transformer:
 
         return None
 
-    def transform(self, ontology_path: str, compress: bool) -> TransformOutcome:
+    def _build(
+        self, ontology_path: str, compress: bool, variant: str
+    ) -> Tuple[TransformOutcome, str, str, str]:
+        """Build one graph under the wall-clock cap, and log how it went.
+
+        Turns the two ways a transform can be cut short (the deadline, the size
+        gate) into a Skipped result, and anything else that did not produce an
+        artifact into a Failed one, so ``transform`` itself only has to return.
+
+        Returns:
+            ``(outcome, status, reason, detail)``: the outcome, and the three
+            index fields that describe it.
+        """
+        ontology_name = self._ontology_name(ontology_path)
+        label = f"{variant} graph of {ontology_name}"
+        reason = ""
+        detail = ""
+        try:
+            with deadline(self.timeout_sec):
+                outcome = self.transform(ontology_path, compress, variant)
+        except TransformTimeout:
+            logging.error(f"The {label} exceeded {self.timeout_min} min; skipping.")
+            outcome = TransformOutcome(False)
+            reason = "too_slow"
+            detail = f"exceeded the per-graph limit of {self.timeout_min} min"
+        except SourceTooLarge as e:
+            logging.warning(f"Skipping the {label}: {e}.")
+            outcome = TransformOutcome(False)
+            reason = "too_large"
+            detail = summarize_detail(e)
+
+        if outcome.success:
+            logging.info(f"Built the {label}.")
+            reason = outcome.reason
+            if reason == IMPORT_ONLY_REASON:
+                logging.warning(
+                    f"{ontology_name} is import-only: its base graph is just the header "
+                    f"({outcome.nodecount} nodes, {outcome.edgecount} edges); "
+                    f"everything else lives in its {outcome.imports} import(s)."
+                )
+        elif not reason:
+            # Name the stage that lost it, so the next audit is a grep of
+            # onto_stats.yaml rather than an archaeology of expiring logs.
+            reason = outcome.reason or reason_for_stage(outcome.stage)
+            detail = outcome.detail
+        status = status_for(outcome.success, reason)
+        if not outcome.success:
+            # A deliberate skip is not an error; saying so in the log made
+            # the two indistinguishable when reading a run afterwards.
+            if status == "Failed":
+                logging.error(f"Error building the {label} ({reason}).")
+            else:
+                logging.info(f"Skipped the {label} ({reason}).")
+        return outcome, status, reason, detail
+
+    def _prepare_source(
+        self, ontology_path: str, ontology_name: str
+    ) -> Tuple[Optional[str], int]:
+        """Decompress the download if needed, gate its size, and count its imports.
+
+        Memoized per downloaded path, so the base and full graphs share one
+        unpacking. Returns ``(None, 0)`` when the archive cannot be opened.
+        """
+        # Created here rather than only in __init__ so a Transformer built
+        # without it (the tests do) still works.
+        if not hasattr(self, "_sources"):
+            self._sources = {}
+        if ontology_path in self._sources:
+            return self._sources[ontology_path]
+
+        source_path = ontology_path
+        # If the downloaded file is compressed, we need to decompress it
+        if ontology_path.endswith((".gz", ".zip")):
+            new_path = self.decompress(
+                ontology_path=ontology_path, ontology_name=ontology_name
+            )
+            if new_path == ontology_path:
+                logging.error(f"Failed to decompress {ontology_path}")
+                self._sources[ontology_path] = (None, 0)
+                return self._sources[ontology_path]
+            source_path = new_path
+
+            # Re-apply the size gate now that we can see the real size. The
+            # downloader weighed the compressed file, which understates a
+            # gzipped ontology by an order of magnitude.
+            unpacked = os.path.getsize(source_path)
+            if self.max_source_bytes and unpacked > self.max_source_bytes:
+                raise SourceTooLarge(
+                    f"{ontology_name} unpacks to {unpacked / 1024 / 1024:.1f} MB "
+                    f"(> {self.max_source_mb} MB limit)"
+                )
+
+        self._sources[ontology_path] = (source_path, count_imports(source_path))
+        return self._sources[ontology_path]
+
+    def transform(
+        self, ontology_path: str, compress: bool, variant: str = BASE
+    ) -> TransformOutcome:
         """Transforms a single ontology to KGX nodes and edges.
 
+        The base graph is the ontology on its own: its owl:imports are stripped
+        before ROBOT sees it, so references to imported terms become dangling
+        edges, resolved at merge time. The full graph is the ontology with its
+        import closure merged in by ROBOT, so it stands alone. From ROBOT's
+        first output onward the two take the same road (#177).
+
         The compressed product is written flat as ``<output_dir>/<ACRONYM>.tar.gz``
-        so it can be uploaded directly as a GitHub Release asset.
+        (base) or ``<output_dir>/<ACRONYM>_full.tar.gz`` (full) so it can be
+        uploaded directly as a GitHub Release asset.
 
         Args:
             ontology_path: A string of the path to the ontology file to transform.
             compress: If True, compresses the output nodes and edges to tar.gz.
+            variant: ``BASE`` or ``FULL``.
 
         Returns:
             A TransformOutcome: whether it succeeded, the node and edge counts,
@@ -1526,76 +1727,78 @@ class Transformer:
         nodecount = 0
         edgecount = 0
 
-        ontology_name = (os.path.relpath(ontology_path, self.input_dir)).split(os.sep)[
-            0
-        ]
+        ontology_name = self._ontology_name(ontology_path)
         ontology_submission_id = (os.path.relpath(ontology_path, self.input_dir)).split(
             os.sep
         )[1]
 
         logging.info(
-            f"Transforming {ontology_name}, submission ID {ontology_submission_id}, to nodes and edges."
+            f"Transforming {ontology_name}, submission ID {ontology_submission_id}, "
+            f"to {variant} nodes and edges."
         )
 
         workdir = os.path.join(
             self.output_dir, f"{ontology_name}", f"{ontology_submission_id}"
         )
-        owl_output_path = os.path.join(workdir, f"{ontology_name}.owl")
-
-        # If the downloaded file is compressed, we need to decompress it
-        if ontology_path.endswith((".gz", ".zip")):
-            new_path = self.decompress(
-                ontology_path=ontology_path, ontology_name=ontology_name
-            )
-            if new_path != ontology_path:
-                ontology_path = new_path
-            else:
-                logging.error(f"Failed to decompress {ontology_path}")
-                return TransformOutcome.failed(
-                    "decompress",
-                    f"could not decompress {os.path.basename(ontology_path)}",
-                )
-
-            # Re-apply the size gate now that we can see the real size. The
-            # downloader weighed the compressed file, which understates a
-            # gzipped ontology by an order of magnitude.
-            unpacked = os.path.getsize(ontology_path)
-            if self.max_source_bytes and unpacked > self.max_source_bytes:
-                raise SourceTooLarge(
-                    f"{ontology_name} unpacks to {unpacked / 1024 / 1024:.1f} MB "
-                    f"(> {self.max_source_mb} MB limit)"
-                )
+        # Every file of the full graph carries the suffix, from ROBOT's output
+        # to the TSVs inside the tarball, so the two graphs never collide when
+        # unpacked side by side.
+        stem = ontology_name + (FULL_SUFFIX if variant == FULL else "")
+        owl_output_path = os.path.join(workdir, f"{stem}.owl")
 
         # Keep what BioPortal served. From here on ontology_path may be a file
         # we wrote, and a failure over it is not upstream's to answer for.
-        source_path = ontology_path
-
-        # Remove owl:imports so ROBOT doesn't try (and fail) to fetch external
-        # ontologies over the network — the dominant cause of transform errors.
-        # Each ontology is transformed standalone; references to imported terms
-        # simply become dangling edges, resolved later at merge time.
-        ontology_path = strip_imports(ontology_path)
-
-        # Drop invalid xml:lang here, on the way in, and not only from ROBOT's
-        # output further down. An XML attribute takes any string, but a Turtle
-        # language tag is part of the grammar, so when ROBOT writes one of these
-        # out as Turtle -- which it does on either fallback below -- it emits
-        # `"x"@editor@example.com`, which is not Turtle at all and takes the
-        # ontology out at the KGX step instead. Cleaning the source means no
-        # serialization ROBOT picks can carry the problem forward. XML-only, and
-        # a no-op for a file with no xml:lang in it, so a Turtle source (where
-        # such a tag could never have parsed) is untouched.
-        ontology_path = strip_invalid_lang_tags(ontology_path, ontology_name)
-
-        # Convert
-        def convert_to(output_path):
-            return robot_convert(
-                robot_path=self.robot_path,
-                input_path=ontology_path,
-                output_path=output_path,
-                robot_env=self.robot_env,
-                timeout=self.timeout_sec,
+        source_path, imports = self._prepare_source(ontology_path, ontology_name)
+        if source_path is None:
+            return TransformOutcome.failed(
+                "decompress",
+                f"could not decompress {os.path.basename(ontology_path)}",
             )
+        ontology_path = source_path
+
+        if variant == FULL:
+            # The full graph starts from the source with its imports intact:
+            # ROBOT merge resolves them over the network and writes one
+            # ontology holding the whole closure. It stands in for convert
+            # below, fallbacks included, so the same wall (RDF/XML that cannot
+            # hold the ontology) is gone through the same way.
+            def convert_to(output_path):
+                return robot_merge(
+                    robot_path=self.robot_path,
+                    input_path=source_path,
+                    output_path=output_path,
+                    robot_env=self.robot_env,
+                    timeout=self.timeout_sec,
+                )
+            first_stage = "merge"
+        else:
+            # Remove owl:imports so ROBOT doesn't try (and fail) to fetch external
+            # ontologies over the network — the dominant cause of transform errors.
+            # The base graph is the ontology standalone; references to imported
+            # terms simply become dangling edges, resolved later at merge time.
+            ontology_path = strip_imports(ontology_path)
+
+            # Drop invalid xml:lang here, on the way in, and not only from ROBOT's
+            # output further down. An XML attribute takes any string, but a Turtle
+            # language tag is part of the grammar, so when ROBOT writes one of these
+            # out as Turtle -- which it does on either fallback below -- it emits
+            # `"x"@editor@example.com`, which is not Turtle at all and takes the
+            # ontology out at the KGX step instead. Cleaning the source means no
+            # serialization ROBOT picks can carry the problem forward. XML-only, and
+            # a no-op for a file with no xml:lang in it, so a Turtle source (where
+            # such a tag could never have parsed) is untouched.
+            ontology_path = strip_invalid_lang_tags(ontology_path, ontology_name)
+
+            # Convert
+            def convert_to(output_path):
+                return robot_convert(
+                    robot_path=self.robot_path,
+                    input_path=ontology_path,
+                    output_path=output_path,
+                    robot_env=self.robot_env,
+                    timeout=self.timeout_sec,
+                )
+            first_stage = "convert"
 
         intermediate_path = owl_output_path
         converted = convert_to(intermediate_path)
@@ -1608,10 +1811,17 @@ class Transformer:
                 f"({converted.error}); retrying as {FALLBACK_SERIALIZATION}."
             )
             intermediate_path = os.path.join(
-                workdir, f"{ontology_name}{FALLBACK_SERIALIZATION}"
+                workdir, f"{stem}{FALLBACK_SERIALIZATION}"
             )
             converted = convert_to(intermediate_path)
         if not converted:
+            if variant == FULL:
+                # An import ROBOT could not fetch, or a merge that ran out of
+                # time, has a name of its own in the index; anything else is
+                # the merge stage's failure. The base graph beside it stands.
+                return TransformOutcome.failed(
+                    first_stage, converted.error, reason=converted.reason
+                )
             if is_load_failure(converted.error):
                 # ROBOT could not read the file at all. That is usually a source
                 # we were never going to transform, recorded apart from the
@@ -1633,6 +1843,17 @@ class Transformer:
                 )
             return TransformOutcome.failed("convert", converted.error)
 
+        if variant == FULL:
+            # What ROBOT fetched may be far bigger than what BioPortal served,
+            # so the size gate applies again to the merged closure.
+            merged_bytes = os.path.getsize(intermediate_path)
+            if self.max_source_bytes and merged_bytes > self.max_source_bytes:
+                os.remove(intermediate_path)
+                raise SourceTooLarge(
+                    f"{ontology_name} with its imports merged is "
+                    f"{merged_bytes / 1024 / 1024:.1f} MB (> {self.max_source_mb} MB limit)"
+                )
+
         # ROBOT can write a character into its own output that no XML parser will
         # read back, so `relax` fails on a file `convert` exited 0 over (#141).
         # Only XML has that problem, and only an XML file is worth rewriting for it.
@@ -1653,7 +1874,7 @@ class Transformer:
             )
 
         relaxed_outpath = os.path.join(
-            workdir, f"{ontology_name}_relaxed{intermediate_ext}"
+            workdir, f"{stem}_relaxed{intermediate_ext}"
         )
         relaxed = relax_to(relaxed_outpath, relax_input_path)
         if (
@@ -1668,7 +1889,7 @@ class Transformer:
                 f"({relaxed.error}); retrying as {FALLBACK_SERIALIZATION}."
             )
             relaxed_outpath = os.path.join(
-                workdir, f"{ontology_name}_relaxed{FALLBACK_SERIALIZATION}"
+                workdir, f"{stem}_relaxed{FALLBACK_SERIALIZATION}"
             )
             relaxed = relax_to(relaxed_outpath, relax_input_path)
         elif (
@@ -1692,13 +1913,13 @@ class Transformer:
                 f"({relaxed.error}); converting to {FALLBACK_SERIALIZATION} instead."
             )
             fallback_path = os.path.join(
-                workdir, f"{ontology_name}{FALLBACK_SERIALIZATION}"
+                workdir, f"{stem}{FALLBACK_SERIALIZATION}"
             )
             reconverted = convert_to(fallback_path)
             if reconverted:
                 intermediate_ext = FALLBACK_SERIALIZATION
                 relaxed_outpath = os.path.join(
-                    workdir, f"{ontology_name}_relaxed{FALLBACK_SERIALIZATION}"
+                    workdir, f"{stem}_relaxed{FALLBACK_SERIALIZATION}"
                 )
                 relaxed = relax_to(relaxed_outpath, fallback_path)
         if not relaxed:
@@ -1711,6 +1932,7 @@ class Transformer:
         # return, and an ontology that succeeded silently absorbed whatever was
         # at those URLs that day. Stripping here makes the KGX step hermetic.
         # ROBOT always writes RDF/XML for a .owl output, so the stripper applies.
+        # For the full graph the imports are already merged in, so nothing is lost.
         stripped_path = strip_imports(relaxed_outpath)
 
         # Same pass, same reason: rdflib raises on an invalid xml:lang instead
@@ -1721,7 +1943,7 @@ class Transformer:
         kgx_input_path = strip_invalid_lang_tags(stripped_path, ontology_name)
 
         # Transform to KGX nodes + edges
-        outfilename = os.path.join(workdir, f"{ontology_name}")
+        outfilename = os.path.join(workdir, stem)
         nodefilename = outfilename + "_nodes.tsv"
         edgefilename = outfilename + "_edges.tsv"
         # Provenance goes in input_args, not output_args. KGX reads it in
@@ -1805,13 +2027,13 @@ class Transformer:
             )
 
             # Compress if requested. Product is written flat at the top of the
-            # output dir as <ACRONYM>.tar.gz for direct release upload.
+            # output dir as <stem>.tar.gz for direct release upload.
             if compress:
                 logging.info("Compressing nodes and edges.")
-                tar_path = os.path.join(self.output_dir, f"{ontology_name}.tar.gz")
+                tar_path = os.path.join(self.output_dir, f"{stem}.tar.gz")
                 with tarfile.open(tar_path, "w:gz") as tar:
-                    tar.add(nodefilename, arcname=f"{ontology_name}_nodes.tsv")
-                    tar.add(edgefilename, arcname=f"{ontology_name}_edges.tsv")
+                    tar.add(nodefilename, arcname=f"{stem}_nodes.tsv")
+                    tar.add(edgefilename, arcname=f"{stem}_edges.tsv")
 
                 os.remove(nodefilename)
                 os.remove(edgefilename)
@@ -1832,7 +2054,7 @@ class Transformer:
 
         except Exception as e:
             logging.error(
-                f"Error transforming {ontology_name} to KGX nodes and edges: {e}"
+                f"Error transforming {ontology_name} to {variant} KGX nodes and edges: {e}"
             )
             # The exception type carries as much as its message does when the
             # message is empty, which some of KGX's are.
@@ -1844,13 +2066,22 @@ class Transformer:
                 malformed_literals=literals.count,
             )
 
+        # An import-only ontology comes through this far with nothing to show
+        # for it (#177). The artifact stands, since it is a faithful base graph;
+        # the reason tells the index and the site that it is only a header.
+        reason = ""
+        if variant == BASE and is_import_only(imports, nodecount, edgecount):
+            reason = IMPORT_ONLY_REASON
+
         return TransformOutcome(
             True,
             nodecount,
             edgecount,
+            reason=reason,
             malformed_literals=literals.count,
             node_categories=node_categories,
             edge_categories=edge_categories,
+            imports=imports,
         )
 
     def decompress(self, ontology_path: str, ontology_name: str) -> str:
