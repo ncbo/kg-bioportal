@@ -1,0 +1,815 @@
+# Roots whose Biolink category was decided by review, one ontology at a time.
+#
+# The seed table in categories.py holds terms whose meaning is not in doubt.
+# Everything here needed a judgement about one ontology -- what an ICD chapter
+# holds, what HGNC's locus groups are -- and each judgement was made by reading
+# the root and its subclasses in the published graph, with the assistance of
+# an AI agent. That is why this is a file and not a table: every entry carries
+# who decided it, when, from which graph, what they read, and whether a
+# maintainer has since confirmed it. The transform counts the nodes that owe
+# their category to these roots apart from the rest, and the site says so on
+# every page it applies to.
+#
+# The bar each root had to clear is REVIEW_BAR in categories.py. Roots that
+# were read and turned down are listed under `refused`, with the reason: a
+# refusal is part of the record, and stops the same root being re-read later.
+#
+# Shape:
+#   ACRONYM:
+#     graph:        the release whose artifact was read
+#     reviewed:     date
+#     reviewer:     who, as specifically as is known
+#     confirmed_by: a maintainer's handle once checked by a person; blank until then
+#     also:         other ontologies the same roots apply to, if any
+#     roots:        [{id, label, category, reach, evidence: [child labels], note?}]
+#     refused:      [{id, label, why}]
+#
+# `reach` is the number of nodes beneath the root in the graph read, before
+# the review; the transform's own count is the one the site shows.
+
+# --------------------------------------------------------------------------
+# Reviewed 2026-08-26 for #176, in the session that added them to the seed
+# table. Moved here on 2026-09-10 because they were never facts about a term;
+# they were readings of an ontology, and belong with the other readings.
+# --------------------------------------------------------------------------
+
+OMIT:
+  graph: data-2026.08.26-16
+  reviewed: 2026-08-26
+  reviewer: Claude (model version not recorded), in a Claude Code session with the maintainer; shipped in #176
+  confirmed_by: ""
+  roots:
+    - id: NCRO:0000025
+      label: ""
+      category: biolink:Gene
+      reach: 59874
+      evidence: [A1BG, A2M, NAT1, NAT2]
+      note: The root carries no label of its own; its subclasses are gene symbols.
+
+SIO:
+  graph: data-2026.08.26-16
+  reviewed: 2026-08-26
+  reviewer: Claude (model version not recorded), in a Claude Code session with the maintainer; shipped in #176
+  confirmed_by: ""
+  # GEXO, REXO and RETO are rooted at SIO:000000 and hang their classes off
+  # these three; GSSO puts BFO's qualities under SIO's attribute, and HASCO,
+  # HHEAR, MATERIALSMINE, POEM and MSV each hang a few dozen classes off
+  # them. SIO's own graph is where the labels were read. Measured on
+  # data-2026.09.09: without this list GSSO loses 1,222 nodes and the other
+  # five lose 200 between them.
+  also: [GEXO, REXO, RETO, GSSO, HASCO, HHEAR, MATERIALSMINE, POEM, MSV]
+  roots:
+    - id: SIO:000776
+      label: object
+      category: biolink:PhysicalEntity
+      reach: 1583
+      evidence: [material entity, spatial region, information content entity]
+    - id: SIO:000614
+      label: attribute
+      category: biolink:Attribute
+      reach: 0
+      evidence: [quality, realizable entity, quantity]
+    - id: SIO:000006
+      label: process
+      category: biolink:Activity
+      reach: 0
+      evidence: [procedure, interaction, biological process]
+  refused:
+    - id: SIO:000000
+      label: entity
+      why: The top. Seeding it only re-derives NamedThing.
+
+FMA:
+  graph: data-2026.08.26-16
+  reviewed: 2026-08-26
+  reviewer: Claude (model version not recorded), in a Claude Code session with the maintainer; shipped in #176
+  confirmed_by: ""
+  # BIOMODELS carries 78,542 FMA classes under this same root, under the same
+  # IRI. Measured on data-2026.09.09: without this it loses all of them.
+  also: [BIOMODELS]
+  roots:
+    - id: http://purl.org/obo/owlapi/fma#FMA_62955
+      label: ""
+      category: biolink:AnatomicalEntity
+      reach: 78558
+      evidence: [Physical anatomical entity, Non-physical anatomical entity]
+      note: FMA's "anatomical entity", under the IRI the OWL API rewrote it to.
+
+HRA:
+  graph: data-2026.08.26-16
+  reviewed: 2026-08-26
+  reviewer: Claude (model version not recorded), in a Claude Code session with the maintainer; shipped in #176
+  confirmed_by: ""
+  also: [CCF]
+  roots:
+    - id: http://purl.org/ccf/AnatomicalStructure
+      label: ""
+      category: biolink:AnatomicalEntity
+      reach: 7838
+      evidence: [labelled in CCF itself, where these classes are defined]
+    - id: http://purl.org/ccf/CellType
+      label: ""
+      category: biolink:Cell
+      reach: 1831
+      evidence: [labelled in CCF itself, where these classes are defined]
+    # Added 2026-09-10 (Claude Fable 5.1, data-2026.09.09-25): HRA's Biomarker
+    # branch holds HGNC's gene classes, whose children are gene symbols.
+    - id: http://purl.bioontology.org/ontology/HGNC/gene
+      label: ""
+      category: biolink:Gene
+      reach: 1812
+      evidence: [RGS5, RGS6, RHAG, XIST, LINC00261, TRAC]
+  refused:
+    - id: http://purl.org/ccf/Biomarker
+      label: ""
+      why: Its subclasses mix gene symbols with peptides; no one category is true of them.
+    - id: http://purl.org/ccf/Antibody
+      label: ""
+      why: 670 commercial antibody products, identified by RRID. Not a Biolink node kind.
+
+ITO:
+  graph: data-2026.09.09-25
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots:
+    # From #176 (2026-08-26, Claude, model version not recorded).
+    - id: https://identifiers.org/ito:Process
+      label: ""
+      category: biolink:Activity
+      reach: 14351
+      evidence: [read from ITO's own labels of the classes beneath]
+    - id: https://identifiers.org/ito:performance_measure
+      label: Performance measure
+      category: biolink:Attribute
+      reach: 3175
+      evidence: [Accuracy, F-measure, Precision, Recall, Intersection over Union, Hits-at-k]
+    - id: https://identifiers.org/ito:Data
+      label: Data
+      category: biolink:InformationContentEntity
+      reach: 970
+      evidence: [Data, Dataset]
+    - id: https://identifiers.org/ito:Format
+      label: Data format
+      category: biolink:InformationContentEntity
+      reach: 573
+      evidence: [Textual format, HTML, XML, Binary format]
+  refused:
+    - id: https://identifiers.org/ito:Data_property_requiring_curation
+      label: "Meta: Data property requiring curation"
+      why: A curation queue, not a kind of thing.
+    - id: https://identifiers.org/ito:Class_requiring_curation
+      label: "Meta: Class requiring curation"
+      why: A curation queue, not a kind of thing.
+    - id: https://identifiers.org/ito:Topic
+      label: Topic
+      why: Language, Knowledge domain. No Biolink node class is true of a topic.
+
+HOOM:
+  graph: data-2026.09.09-25
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots:
+    # From #176 (2026-08-26, Claude, model version not recorded).
+    - id: http://www.semanticweb.org/ontology/HOOM#HPO_id
+      label: HPO_id
+      category: biolink:PhenotypicFeature
+      reach: 8763
+      evidence: [HP identifiers, kept under a class of their own]
+    - id: http://www.semanticweb.org/ontology/HOOM#OrphaCode
+      label: OrphaCode
+      category: biolink:Disease
+      reach: 4362
+      evidence: [Orphanet identifiers, kept under a class of their own]
+  refused:
+    - id: http://www.semanticweb.org/ontology/HOOM#Association
+      label: Association
+      why: 116,834 HPO-to-Orphanet association instances. Biolink has no node class for an association.
+    - id: http://www.semanticweb.org/ontology/HOOM#Provenance
+      label: Provenance
+      why: Provenance records for the associations, not entities.
+    - id: http://www.semanticweb.org/ontology/HOOM#Evidence
+      label: Evidence
+      why: Evidence codes attached to the associations; too few and too mixed to place.
+
+RCTV2:
+  graph: data-2026.09.09-25
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  # Read Codes are chaptered, and each chapter is coherent even though the
+  # ontology as a whole is not. Chapters 7, 4, 3 and S are from #176
+  # (2026-08-26, Claude, model version not recorded); the rest were read on
+  # 2026-09-10 from the same shape of evidence.
+  roots:
+    - id: http://purl.bioontology.org/ontology/RCTV2/7....00
+      label: Operations, procedures, sites
+      category: biolink:Procedure
+      reach: 14984
+      evidence: [Artery and vein operations, Urinary operations, Male genital organ operations]
+    - id: http://purl.bioontology.org/ontology/RCTV2/4....00
+      label: Laboratory procedures
+      category: biolink:Procedure
+      reach: 5992
+      evidence: [Vomit examination, Synovial fluid examination, Bone marrow examination]
+    - id: http://purl.bioontology.org/ontology/RCTV2/3....00
+      label: Diagnostic procedures
+      category: biolink:Procedure
+      reach: 1401
+      evidence: [Disability assessment, Biopsy admin, Exhaled nitric oxide test]
+    - id: http://purl.bioontology.org/ontology/RCTV2/5....00
+      label: Radiology/physics in medicine
+      category: biolink:Procedure
+      reach: 1190
+      evidence: [Plain radiography, Contrast radiography excl.CVS, Diagnostic nuclear medicine, External radiotherapy]
+      note: '"Imaging interpretation" (13 nodes) rides along; the chapter is procedures.'
+    - id: http://purl.bioontology.org/ontology/RCTV2/6....00
+      label: Preventive procedures
+      category: biolink:Procedure
+      reach: 3267
+      evidence: [Screening, Chronic disease monitoring, Counselling/health education, Primary prevention]
+    - id: http://purl.bioontology.org/ontology/RCTV2/8....00
+      label: Other therapeutic procedures
+      category: biolink:Procedure
+      reach: 3610
+      evidence: [Monitoring of patient, Other therapy, Other care, Referral for further care]
+    - id: http://purl.bioontology.org/ontology/RCTV2/2....00
+      label: Examination / Signs
+      category: biolink:ClinicalFinding
+      reach: 2734
+      evidence: [O/E - weight, O/E - cardiac thrill, O/E - heart sounds, O/E - knee reflex, O/E - macules]
+      note: '"Depth of examination" (51 nodes) rides along; the chapter is findings on examination.'
+    - id: http://purl.bioontology.org/ontology/RCTV2/S....00
+      label: Injury and poisoning
+      category: biolink:Disease
+      reach: 7013
+      evidence: [Fracture of skull, Fracture of neck and trunk, Fracture of upper limb]
+    - id: http://purl.bioontology.org/ontology/RCTV2/A....00
+      label: Infectious and parasitic diseases
+      category: biolink:Disease
+      reach: 1986
+      evidence: [Intestinal infectious diseases, Tuberculosis, Zoonotic bacterial diseases]
+    - id: http://purl.bioontology.org/ontology/RCTV2/B....00
+      label: Neoplasms
+      category: biolink:Disease
+      reach: 3558
+      evidence: [Benign neoplasms, Malignant neoplasm of lymphatic tissue, Malig neop of bone and connective tissue]
+    - id: http://purl.bioontology.org/ontology/RCTV2/C....00
+      label: Endocrine, nutritional, metabolic and immunity disorders
+      category: biolink:Disease
+      reach: 1240
+      evidence: [Disorders of thyroid gland, Other endocrine gland diseases, Nutritional deficiencies]
+    - id: http://purl.bioontology.org/ontology/RCTV2/D....00
+      label: Diseases of blood and blood-forming organs
+      category: biolink:Disease
+      reach: 388
+      evidence: [Deficiency anaemias, Haemolytic anaemias, Aplastic and other anaemias]
+    - id: http://purl.bioontology.org/ontology/RCTV2/E....00
+      label: Mental disorders
+      category: biolink:Disease
+      reach: 1328
+      evidence: [Organic psychotic conditions, Non-organic psychoses, Neurotic and personality disorders]
+    - id: http://purl.bioontology.org/ontology/RCTV2/F....00
+      label: Nervous system and sense organ diseases
+      category: biolink:Disease
+      reach: 2746
+      evidence: [Inflammatory diseases of CNS, Hereditary and degenerative CNS diseases, Disorders of eye and adnexa]
+    - id: http://purl.bioontology.org/ontology/RCTV2/G....00
+      label: Circulatory system diseases
+      category: biolink:Disease
+      reach: 1235
+      evidence: [Acute rheumatic fever, Chronic rheumatic heart disease, Hypertensive disease, Ischaemic heart disease]
+    - id: http://purl.bioontology.org/ontology/RCTV2/H....00
+      label: Respiratory system diseases
+      category: biolink:Disease
+      reach: 802
+      evidence: [Acute respiratory infections, Pneumonia and influenza, Chronic obstructive airways disease]
+    - id: http://purl.bioontology.org/ontology/RCTV2/J....00
+      label: Digestive system diseases
+      category: biolink:Disease
+      reach: 1763
+      evidence: [Oesophageal stomach and duodenal diseases, Appendicitis, Hernia]
+    - id: http://purl.bioontology.org/ontology/RCTV2/K....00
+      label: Genitourinary system diseases
+      category: biolink:Disease
+      reach: 1427
+      evidence: [Nephritis nephrosis and nephrotic syndrome, Other urinary system diseases, Male genital organ diseases]
+    - id: http://purl.bioontology.org/ontology/RCTV2/L....00
+      label: Complications of pregnancy, childbirth and the puerperium
+      category: biolink:Disease
+      reach: 2020
+      evidence: [Pregnancy with abortive outcome, Pregnancy complications, Risk factors in pregnancy]
+    - id: http://purl.bioontology.org/ontology/RCTV2/M....00
+      label: Skin and subcutaneous tissue diseases
+      category: biolink:Disease
+      reach: 1078
+      evidence: [Skin and subcutaneous tissue infections, Other skin and subcutaneous tissue diseases]
+    - id: http://purl.bioontology.org/ontology/RCTV2/N....00
+      label: Musculoskeletal and connective tissue diseases
+      category: biolink:Disease
+      reach: 2645
+      evidence: [Arthropathies and related disorders, Vertebral column syndromes, Rheumatism excluding the back]
+    - id: http://purl.bioontology.org/ontology/RCTV2/P....00
+      label: Congenital anomalies
+      category: biolink:DiseaseOrPhenotypicFeature
+      reach: 2673
+      evidence: [Anencephalus and similar anomalies, Spina bifida, Congenital eye anomalies]
+      note: Anomalies are read as disease by ICD and as phenotype by HPO; the class that covers both is the honest one.
+    - id: http://purl.bioontology.org/ontology/RCTV2/Q....00
+      label: Perinatal conditions
+      category: biolink:Disease
+      reach: 788
+      evidence: [Fetus/neonate affected by maternal conditions, Birth trauma and asphyxia]
+    - id: http://purl.bioontology.org/ontology/RCTV2/R....00
+      label: "[D]Symptoms, signs and ill-defined conditions"
+      category: biolink:PhenotypicFeature
+      reach: 1000
+      evidence: ["[D]Symptoms", "[D]Nonspecific abnormal findings"]
+  refused:
+    - id: http://purl.bioontology.org/ontology/RCTV2/T....00
+      label: Causes of injury and poisoning
+      why: Its subclasses are accidents ("Railway accidents"), which is not a disease and not clearly anything else in Biolink either.
+    - id: http://purl.bioontology.org/ontology/RCTV2/U....00
+      label: "[X]External causes of morbidity and mortality"
+      why: Same as chapter T.
+    - id: http://purl.bioontology.org/ontology/RCTV2/0....00
+      label: Occupations
+      why: Biolink has no node class for an occupation.
+    - id: http://purl.bioontology.org/ontology/RCTV2/1....00
+      label: History / symptoms
+      why: Mixed. Social/personal history and family history beside nervous system symptoms and pain.
+    - id: http://purl.bioontology.org/ontology/RCTV2/9....00
+      label: Administration
+      why: Rent and rates payments, certificates, record transfers.
+    - id: http://purl.bioontology.org/ontology/RCTV2/Z....00
+      label: Unspecified conditions
+      why: Health status qualifiers and temporary qualifying codes.
+
+# --------------------------------------------------------------------------
+# Reviewed 2026-09-10 from the data-2026.09.09 artifacts, by Claude Fable 5.1
+# (claude-fable-5-1) in a Claude Code session with the maintainer.
+# --------------------------------------------------------------------------
+
+ICD10PCS:
+  graph: data-2026.09.09-25
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  # Seventeen sections, every one labelled "(Procedure)" or "(Therapy)".
+  roots:
+    - {id: "http://purl.bioontology.org/ontology/ICD10PCS/0", label: "Medical and Surgical (Procedure)", category: biolink:Procedure, reach: 164650, evidence: ["Medical and Surgical @ Respiratory System", "Medical and Surgical @ Mouth and Throat"]}
+    - {id: "http://purl.bioontology.org/ontology/ICD10PCS/1", label: "Obstetrics (Procedure)", category: biolink:Procedure, reach: 471, evidence: ["Obstetrics @ Pregnancy (Procedure)"]}
+    - {id: "http://purl.bioontology.org/ontology/ICD10PCS/2", label: "Placement (Procedure)", category: biolink:Procedure, reach: 2190, evidence: ["Placement @ Anatomical Regions", "Placement @ Anatomical Orifices"]}
+    - {id: "http://purl.bioontology.org/ontology/ICD10PCS/3", label: "Administration (Procedure)", category: biolink:Procedure, reach: 2390, evidence: ["Administration @ Indwelling Device", "Administration @ Physiological Systems"]}
+    - {id: "http://purl.bioontology.org/ontology/ICD10PCS/4", label: "Measurement and Monitoring (Procedure)", category: biolink:Procedure, reach: 879, evidence: ["Measurement and Monitoring @ Physiological Systems"]}
+    - {id: "http://purl.bioontology.org/ontology/ICD10PCS/5", label: "Extracorporeal or Systemic Assistance and Performance (Procedure)", category: biolink:Procedure, reach: 129, evidence: ["Extracorporeal or Systemic Assistance and Performance @ Physiological Systems"]}
+    - {id: "http://purl.bioontology.org/ontology/ICD10PCS/6", label: "Extracorporeal or Systemic Therapies (Procedure)", category: biolink:Procedure, reach: 134, evidence: ["Extracorporeal or Systemic Therapies @ Physiological Systems"]}
+    - {id: "http://purl.bioontology.org/ontology/ICD10PCS/7", label: "Osteopathic (Procedure)", category: biolink:Procedure, reach: 222, evidence: ["Osteopathic @ Anatomical Regions"]}
+    - {id: "http://purl.bioontology.org/ontology/ICD10PCS/8", label: "Other Procedures (Procedure)", category: biolink:Procedure, reach: 208, evidence: ["Other Procedures @ Indwelling Device", "Other Procedures @ Physiological Systems"]}
+    - {id: "http://purl.bioontology.org/ontology/ICD10PCS/9", label: "Chiropractic (Procedure)", category: biolink:Procedure, reach: 202, evidence: ["Chiropractic @ Anatomical Regions"]}
+    - {id: "http://purl.bioontology.org/ontology/ICD10PCS/B", label: "Imaging (Procedure)", category: biolink:Procedure, reach: 8999, evidence: ["Imaging @ Central Nervous System", "Imaging @ Heart (Procedure)"]}
+    - {id: "http://purl.bioontology.org/ontology/ICD10PCS/C", label: "Nuclear Medicine (Procedure)", category: biolink:Procedure, reach: 1615, evidence: ["Nuclear Medicine @ Central Nervous System", "Nuclear Medicine @ Heart"]}
+    - {id: "http://purl.bioontology.org/ontology/ICD10PCS/D", label: "Radiation Therapy (Procedure)", category: biolink:Procedure, reach: 5532, evidence: ["Radiation Therapy @ Central and Peripheral Nervous System", "Radiation Therapy @ Heart and Great Vessels"]}
+    - {id: "http://purl.bioontology.org/ontology/ICD10PCS/F", label: "Physical Rehabilitation and Diagnostic Audiology (Procedure)", category: biolink:Procedure, reach: 3183, evidence: ["Physical Rehabilitation and Diagnostic Audiology @ Rehabilitation"]}
+    - {id: "http://purl.bioontology.org/ontology/ICD10PCS/G", label: "Mental Health (Procedure)", category: biolink:Procedure, reach: 125, evidence: ["Mental Health @ None (Procedure)"]}
+    - {id: "http://purl.bioontology.org/ontology/ICD10PCS/H", label: "Substance Abuse Treatment (Therapy)", category: biolink:Procedure, reach: 244, evidence: ["Substance Abuse Treatment @ None"]}
+    - {id: "http://purl.bioontology.org/ontology/ICD10PCS/X", label: "New Technology (Procedure)", category: biolink:Procedure, reach: 1370, evidence: ["New Technology @ Nervous System", "New Technology @ Cardiovascular System"]}
+
+SNMI:
+  graph: data-2026.09.09-26
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  # SNOMED International's axes, one class each under owl:Thing.
+  roots:
+    - id: http://purl.bioontology.org/ontology/SNMI/D
+      label: DISEASES/DIAGNOSES
+      category: biolink:Disease
+      reach: 25192
+      evidence: [Disease of skin and subcutaneous tissue, Disease of the musculoskeletal system, Disease of respiratory system]
+    - id: http://purl.bioontology.org/ontology/SNMI/P
+      label: PROCEDURES
+      category: biolink:Procedure
+      reach: 22155
+      evidence: [Operative procedure NOS, Medical procedure NOS, LABORATORY PROCEDURES AND SERVICES]
+    - id: http://purl.bioontology.org/ontology/SNMI/L
+      label: LIVING ORGANISMS
+      category: biolink:OrganismTaxon
+      reach: 17556
+      evidence: [Bacterium NOS, Virus NOS, Fungus NOS, Parasite NOS]
+    - id: http://purl.bioontology.org/ontology/SNMI/T
+      label: TOPOGRAPHY
+      category: biolink:AnatomicalEntity
+      reach: 10277
+      evidence: [Integumentary system NOS, Musculoskeletal system NOS, Respiratory system NOS, Digestive system NOS]
+    - id: http://purl.bioontology.org/ontology/SNMI/C-00000
+      label: Chemical, drug or biological product, NOS
+      category: biolink:ChemicalEntity
+      reach: 12526
+      evidence: [PROPRIETARY DRUGS AND BIOLOGICALS, Drug NOS, Chemical element NOS, Plant product NOS, Animal vaccine NOS, Food NOS]
+      note: '"Industrial product, NOS" (glass, glue, paint; 1,119 nodes) is the loosest fit, and still a substance.'
+    - id: http://purl.bioontology.org/ontology/SNMI/F-E0000
+      label: Gene, NOS
+      category: biolink:Gene
+      reach: 255
+      evidence: [Human gene NOS, Animal gene NOS, Bacterial gene, Viral gene]
+      note: Under the FUNCTION axis, which is refused as a whole; this branch on its own is genes.
+    - id: http://purl.bioontology.org/ontology/SNMI/M-80000
+      label: Neoplasm, benign
+      category: biolink:Disease
+      reach: 861
+      evidence: [Neoplasm malignant, Neoplasm metastatic, Tumor cells benign]
+      note: The neoplasm branch of the MORPHOLOGY axis, which is refused as a whole.
+    - id: http://purl.bioontology.org/ontology/SNMI/X-00000
+      label: LIST OF PHARMACEUTICAL COMPANIES
+      category: biolink:Agent
+      reach: 362
+      evidence: [A.H. Robins, Ayerst, Abbott, Adria]
+  refused:
+    - id: http://purl.bioontology.org/ontology/SNMI/F
+      label: FUNCTION
+      why: Mixed. Metabolic function and hematopoiesis (processes) beside immune state, mental state, hormone (a substance) and gene.
+    - id: http://purl.bioontology.org/ontology/SNMI/M
+      label: MORPHOLOGY
+      why: Mixed. Neoplasm, calculus and injury beside "Normal cytology" and "Morphology not applicable".
+    - id: http://purl.bioontology.org/ontology/SNMI/J
+      label: OCCUPATIONS
+      why: Biolink has no node class for an occupation.
+    - id: http://purl.bioontology.org/ontology/SNMI/A
+      label: PHYSICAL AGENTS, FORCES, AND ACTIVITIES
+      why: Physical forces, hazards and activities together.
+    - id: http://purl.bioontology.org/ontology/SNMI/G
+      label: GENERAL LINKAGE/MODIFIERS
+      why: Qualifiers, not entities.
+    - id: http://purl.bioontology.org/ontology/SNMI/S
+      label: SOCIAL CONTEXT
+      why: Family, life style, spiritual belief. Nothing in Biolink is true of all of it.
+
+ICD9CM:
+  graph: data-2026.09.09-27
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots:
+    - id: http://purl.bioontology.org/ontology/ICD9CM/001-999.99
+      label: DISEASES AND INJURIES
+      category: biolink:Disease
+      reach: 14869
+      evidence: [INFECTIOUS AND PARASITIC DISEASES, NEOPLASMS, ENDOCRINE NUTRITIONAL AND METABOLIC DISEASES, DISEASES OF THE BLOOD]
+    - id: http://purl.bioontology.org/ontology/ICD9CM/00-99.99
+      label: PROCEDURES
+      category: biolink:Procedure
+      reach: 4669
+      evidence: [OPERATIONS ON THE NERVOUS SYSTEM, OPERATIONS ON THE ENDOCRINE SYSTEM, OPERATIONS ON THE EYE]
+  refused:
+    - id: http://purl.bioontology.org/ontology/ICD9CM/E000-E999.9
+      label: SUPPLEMENTARY CLASSIFICATION OF EXTERNAL CAUSES OF INJURY AND POISONING
+      why: Transport accidents, places of occurrence, activities. Same as RCTV2's chapter T.
+    - id: http://purl.bioontology.org/ontology/ICD9CM/V01-V91.99
+      label: SUPPLEMENTARY CLASSIFICATION OF FACTORS INFLUENCING HEALTH STATUS
+      why: Persons encountering health services for reasons that are not diseases.
+
+HGNC:
+  graph: data-2026.09.09-27
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots:
+    - id: http://ontology.scibite.com/ontology/hgnc/SHGNC_00001
+      label: all genes
+      category: biolink:Gene
+      reach: 45030
+      evidence: [45,030 direct subclasses, every one a gene symbol]
+    - id: http://ontology.scibite.com/ontology/hgnc/SHGNC_00002
+      label: gene by locus group
+      category: biolink:Gene
+      reach: 45056
+      evidence: [protein-coding gene, pseudogene, non-coding RNA, other]
+    - id: http://ontology.scibite.com/ontology/hgnc/SHGNC_00030
+      label: gene by gene group
+      category: biolink:GeneFamily
+      reach: 30308
+      evidence: [Non-coding RNAs, Zinc fingers, 7TM proteins, Kinases, Solute carrier families, Immunoglobulins]
+      note: Its direct subclasses are HGNC gene groups. The genes beneath them are one step nearer "all genes", so they take Gene; only the groups take GeneFamily.
+
+HGNC-NR:
+  graph: data-2026.09.09-27
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  # The classes carry no labels; their children are gene symbols.
+  roots:
+    - {id: "http://purl.bioontology.org/ontology/HGNC/protein_coding_gene", label: "", category: biolink:Gene, reach: 19296, evidence: [ASIC1, RGS4, RGS5, RGS6]}
+    - {id: "http://purl.bioontology.org/ontology/HGNC/pseudogene", label: "", category: biolink:Gene, reach: 14650, evidence: [RHEBP1, RN7SL4P, RN7SL5P]}
+    - {id: "http://purl.bioontology.org/ontology/HGNC/non_coding_rna", label: "", category: biolink:Gene, reach: 10036, evidence: [RMRP, RN7SK, RN7SL1, RNR1]}
+    - {id: "http://purl.bioontology.org/ontology/HGNC/other", label: "", category: biolink:Gene, reach: 1004, evidence: [BVR1, TBXA1R, TRAC, TRAJ1]}
+  refused:
+    - id: http://purl.bioontology.org/ontology/HGNC/gene
+      label: ""
+      why: The top, and it carries the withdrawn symbols too. The four locus groups beneath it are seeded instead.
+    - id: http://purl.bioontology.org/ontology/HGNC/withdrawn
+      label: ""
+      why: 5,288 withdrawn symbols. A deprecated branch.
+
+ORDO:
+  graph: data-2026.09.09-28
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots:
+    - {id: "ORPHA:557493", label: Disorder, category: biolink:Disease, reach: 6665, evidence: [48 XXYY syndrome, Ataxia-telangiectasia, Extraneural perineurioma]}
+    - {id: "ORPHA:557492", label: Group of disorders, category: biolink:Disease, reach: 2264, evidence: [Primary interstitial lung disease, Duodenal neuroendocrine tumor, Rare thyroid tumor]}
+    - {id: "ORPHA:557494", label: Subtype of a disorder, category: biolink:Disease, reach: 1178, evidence: [Reticular perineurioma, Sclerosing perineurioma, ABeta amyloidosis Dutch type]}
+    - {id: "ORPHA:410298", label: gene with protein product, category: biolink:Gene, reach: 4548, evidence: [PHD finger protein 6, septin 9, aladin WD repeat nucleoporin]}
+    - {id: "ORPHA:410299", label: non coding RNA, category: biolink:Gene, reach: 42, evidence: [H19 imprinted maternally expressed transcript, telomerase RNA component]}
+    - {id: "ORPHA:410297", label: disorder-associated locus, category: biolink:Gene, reach: 33, evidence: [UDP glucuronosyltransferase family 1, fragile X mental retardation associated locus]}
+  refused:
+    - {id: "ORPHA:C041", label: Inactive clinical entity, why: Obsolete, deprecated and non-rare entities. A deprecated branch.}
+    - {id: "ORPHA:C001", label: Clinical entity, why: The top of the disorder axis; its three children are seeded instead.}
+    - {id: "ORPHA:C010", label: genetic material, why: The top of the gene axis; its three children are seeded instead.}
+
+CRISP:
+  graph: data-2026.09.09-27
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots:
+    - {id: "http://purl.bioontology.org/ontology/CSP/4000-0145", label: chemical, category: biolink:ChemicalEntity, reach: 2796, evidence: [chemical aggregate, chemical group, element, mineral, organic chemical]}
+    - {id: "http://purl.bioontology.org/ontology/CSP/0944-4756", label: disease/disorder, category: biolink:Disease, reach: 1600, evidence: [blood disorder, lymphatic disorder, cardiovascular disorder, congenital disorder]}
+    - {id: "http://purl.bioontology.org/ontology/CSP/4000-0131", label: anatomy, category: biolink:AnatomicalEntity, reach: 731, evidence: [body fluid, body region, cardiovascular system, liver]}
+    - {id: "http://purl.bioontology.org/ontology/CSP/4000-0232", label: organism, category: biolink:OrganismTaxon, reach: 549, evidence: [Animalia, Fungi, microorganism, plant]}
+  refused:
+    - {id: "http://purl.bioontology.org/ontology/CSP/4000-0348", label: technology/technique, why: Biomedical resource, biotechnology, analytical method, computer. Mixed.}
+    - {id: "http://purl.bioontology.org/ontology/CSP/0418-4282", label: biology, why: Disciplines (cell biology, ecology) beside biomarker.}
+    - {id: "http://purl.bioontology.org/ontology/CSP/4000-0292", label: physical science, why: Disciplines.}
+    - {id: "http://purl.bioontology.org/ontology/CSP/4000-0125", label: behavioral/social science, why: Disciplines.}
+    - {id: "http://purl.bioontology.org/ontology/CSP/4000-0244", label: medicine, why: Specialties (hematology, pediatrics) beside disease outbreak.}
+    - {id: "http://purl.bioontology.org/ontology/CSP/4005-0038", label: named group, why: Person with disability, geographic site, occupation, ethnic group. Mixed.}
+    - {id: "http://purl.bioontology.org/ontology/CSP/1178-8975", label: food science/technology, why: Agriculture and food processing beside food itself. Mixed.}
+
+OGCO:
+  graph: data-2026.09.09-27
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots:
+    - id: OGCO:00000813
+      label: chemical_ontology
+      category: biolink:ChemicalEntity
+      reach: 8775
+      evidence: [grouped_by_chemistry (elements ions radicals molecules), grouped_by_functions (ionophores phytoalexins herbicides drugs), unclassifieds (vitexin 3-isochromanone)]
+      note: The ontology's own top, seeded because everything beneath it is a chemical, grouped three ways.
+
+FTC:
+  graph: data-2026.09.09-28
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots:
+    - {id: "schema:Drug", label: drug, category: biolink:Drug, reach: 25098, evidence: [Lepirudin, Cetuximab, Denileukin diftitox, Etanercept]}
+    - {id: "http://www.ebi.ac.uk/chembl/ftc/FTC_C2", label: DrugBank compound, category: biolink:Drug, reach: 1351, evidence: [DrugBank:DB00001 Lepirudin, DrugBank:DB00002 Cetuximab, DrugBank:DB00005 Etanercept]}
+    - {id: "http://purl.uniprot.org/core/Protein", label: protein, category: biolink:Protein, reach: 1305, evidence: [1,305 UniProt proteins]}
+
+RADLEX:
+  graph: data-2026.09.09-28
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  # Labels in this submission are largely German; read as such.
+  roots:
+    - {id: "http://www.radlex.org/RID/RID3", label: "Anatomische Entität", category: biolink:AnatomicalEntity, reach: 38177, evidence: [material anatomical entity, anatomical set, normal anatomy]}
+    - {id: "http://www.radlex.org/RID/RID34785", label: "klinischer Befund", category: biolink:ClinicalFinding, reach: 2239, evidence: [benign finding, Symptom, pathophysiologischer Befund]}
+    - {id: "http://www.radlex.org/RID/RID5", label: imaging observation, category: biolink:ClinicalFinding, reach: 1214, evidence: [Verschattung, Zeichen der Bildgebung, Asymmetrie, Echotextur]}
+    - {id: "http://www.radlex.org/RID/RID1559", label: procedure, category: biolink:Procedure, reach: 613, evidence: [infusion, shunt creation, Drainage, Balloneinsatz]}
+    - {id: "http://www.radlex.org/RID/RID7479", label: "Nicht-anatomischen Substanz", category: biolink:ChemicalEntity, reach: 393, evidence: [Radioisotop, chemisches Element, pharmazeutisch]}
+    - {id: "http://www.radlex.org/RID/RID39128", label: Prozess, category: biolink:Activity, reach: 35, evidence: [anesthesia, Bewegung, imaging protocol, biologischer Prozess]}
+  refused:
+    - {id: "http://www.radlex.org/RID/RID35977", label: property, why: "Image quality, diagnosis, measurement, patient position. Mixed."}
+    - {id: "http://www.radlex.org/RID/RID6", label: RadLex descriptor, why: Modality, thickness and certainty descriptors. Qualifiers.}
+    - {id: "http://www.radlex.org/RID/RID34861", label: Objekt, why: Medical objects, surgical tracts, foreign bodies. Devices, mostly; Biolink has no class for them.}
+    - {id: "http://www.radlex.org/RID/RID15849", label: obsoleter Radlex-Term, why: Obsolete branch.}
+    - {id: "http://www.radlex.org/RID/RID1", label: RadLex entity, why: The top; its branches are seeded one by one.}
+
+BDPM:
+  graph: data-2026.09.09-28
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  # The French public drug database. Labels in French.
+  roots:
+    - {id: "http://www.data.esante.gouv.fr/ANSM/BDPM-core-ontology/CIP_Entity", label: "Entité de Présentation (Code CIP)", category: biolink:Drug, reach: 20910, evidence: ["PEDIAVEN AP-HP G25, solution", "YELLOX 0,9 mg/ml, collyre", "AVONEX 30 microgrammes/0,5 ml"]}
+    - {id: "http://www.data.esante.gouv.fr/ANSM/BDPM-core-ontology/CIS_Entity", label: "Entité de Spécialité (Code CIS)", category: biolink:Drug, reach: 15800, evidence: ["ANASTROZOLE ACCORD 1 mg", "BECLOSPIN 800 microgrammes/2 ml", "FENOFIBRATE"]}
+    - {id: "http://www.data.esante.gouv.fr/ANSM/BDPM-core-ontology/ActiveSubstance_Entity", label: Substance Active, category: biolink:ChemicalEntity, reach: 3865, evidence: ["Lopéramide (chlorhydrate de)", "Acétylsalicylique (acide)", "Acide borique"]}
+  refused:
+    - {id: "http://www.data.esante.gouv.fr/ANSM/BDPM-core-ontology/Qualifier_Entity", label: "Caractéristiques", why: Authorisation procedure types and marketing statuses. Qualifiers.}
+
+ADICAP:
+  graph: data-2026.09.09-28
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  # French pathology coding. Labels in French.
+  roots:
+    - {id: "https://data.esante.gouv.fr/adicap/D4", label: "PATHOLOGIE GÉNÉRALE NON TUMORALE", category: biolink:Disease, reach: 2669, evidence: [MALADIE INNEE ET GRANDE MALFORMATION, LESION TRAUMATIQUE ET MECANIQUE, TROUBLE CIRCULATOIRE]}
+    - {id: "https://data.esante.gouv.fr/adicap/D6", label: "PATHOLOGIE PARTICULIERE DES ORGANES", category: biolink:Disease, reach: 2512, evidence: [STENOSE CHOANALE - ATRESIE CHOANALE, HYPERPLASIE DES VEGETATIONS ADENOIDES]}
+    - {id: "https://data.esante.gouv.fr/adicap/D5", label: PATHOLOGIE TUMORALE, category: biolink:Disease, reach: 1988, evidence: [TYPE DE COMPORTEMENT, FAMILLE HISTOGENETIQUE]}
+    - {id: "https://data.esante.gouv.fr/adicap/D8", label: TOPOGRAPHIE COMPLEMENTAIRE, category: biolink:AnatomicalEntity, reach: 1784, evidence: [LOGE AMYGDALIENNE, PILIER ANTERIEUR, REGION AMYGDALIENNE]}
+    - {id: "https://data.esante.gouv.fr/adicap/D3", label: "APPAREILS, ORGANES ET REGIONS", category: biolink:AnatomicalEntity, reach: 156, evidence: [APPAREIL DIGESTIF, APPAREIL CARDIAQUE ET SES VAISSEAUX, SYSTEME ENDOCRINIEN]}
+    - {id: "https://data.esante.gouv.fr/adicap/D2", label: TYPE DE TECHNIQUE, category: biolink:Procedure, reach: 22, evidence: [AUTO-HISTORADIOGRAPHIE, CYTOLOGIE PAR ETALEMENT, EXTEMPORANE]}
+    - {id: "https://data.esante.gouv.fr/adicap/D1", label: MODE DE PRELEVEMENT, category: biolink:Procedure, reach: 19, evidence: [ASPIRATION, BIOPSIE CHIRURGICALE, CYTOPONCTION]}
+  refused:
+    - {id: "https://data.esante.gouv.fr/adicap/D7", label: CYTOPATHOLOGIE, why: Kinds of cytological material (benign tumoral material, dysplastic material). Specimen findings; no single Biolink class.}
+    - {id: "https://data.esante.gouv.fr/adicap/D8L", label: LATERALITE, why: Left, right, bilateral.}
+
+GS1GPC:
+  graph: data-2026.09.09-27
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots:
+    - {id: "gpc:50000000", label: Food/Beverage, category: biolink:Food, reach: 7956, evidence: [Beverages, Fruits - Unprepared/Unprocessed (Fresh), Meat/Poultry/Other Animals, Bread/Bakery Products]}
+  refused:
+    - {id: "gpc:94000000", label: Crops, why: Crops for food, feed and fibre production. Plants as agricultural produce; neither food nor taxon.}
+    - {id: "gpc:53000000", label: Beauty/Personal Care/Hygiene, why: Retail products outside Biolink. The same holds for the other GS1 segments.}
+
+ARO:
+  graph: data-2026.09.09-27
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots:
+    - id: ARO:3000000
+      label: determinant of antibiotic resistance
+      category: biolink:BiologicalEntity
+      reach: 7802
+      evidence: [antibiotic inactivation enzyme, antibiotic resistance gene variant or mutant, efflux pump complex or subunit, antibiotic resistance gene cluster]
+      note: Genes and their products side by side, as CARD models them. BiologicalEntity is the narrowest class true of both.
+    - {id: "ARO:1000003", label: antibiotic molecule, category: biolink:ChemicalEntity, reach: 719, evidence: [macrolide antibiotic, fluoroquinolone antibiotic, aminoglycoside antibiotic]}
+    - {id: "ARO:0000076", label: resistance-modifying agents, category: biolink:ChemicalEntity, reach: 151, evidence: [inhibitor of antibiotic resistance, adjuvants enhancing antibiotic activity]}
+    - {id: "ARO:1000002", label: mechanism of antibiotic resistance, category: biolink:BiologicalProcess, reach: 33, evidence: [antibiotic target alteration, antibiotic target protection, antibiotic inactivation]}
+    - {id: "ARO:3000082", label: antibiotic biosynthesis, category: biolink:BiologicalProcess, reach: 17, evidence: [streptogramin biosynthesis, glycopeptide biosynthesis]}
+  refused:
+    - {id: "ARO:3000708", label: antibiotic target, why: Enzymes beside membrane components. Mixed.}
+    - {id: "ARO:3000045", label: component of AMR genotypic or phenotypic, why: Phenotypes, tests, MICs and reagents together.}
+    - {id: "ARO:1000001", label: process or component of antibiotic biology or chemistry, why: The top; its branches are seeded one by one.}
+
+HRDO:
+  graph: data-2026.09.09-28
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots:
+    - {id: "http://www.limics.org/hrdo/rdfns#typ_id_4", label: disorder, category: biolink:DiseaseOrPhenotypicFeature, reach: 5819, evidence: [anatomical anomaly, disease, biological anomaly, condition]}
+    - {id: "http://www.limics.org/hrdo/rdfns#typ_id_6", label: group of diseases, category: biolink:Disease, reach: 2114, evidence: ["Doença infecciosa, rara", "Doença hepática rara", "Doença de pele rara"]}
+    - {id: "http://www.limics.org/hrdo/rdfns#typ_id_10", label: subtype, category: biolink:Disease, reach: 1061, evidence: [histopathological subtype, clinical subtype, etiological subtype]}
+    - {id: "http://www.limics.org/hrdo/rdfns#sgn_id_1", label: clinical sign, category: biolink:PhenotypicFeature, reach: 1360, evidence: ["Anomalias do palato", "Anomalias dos dentes e dentição", "Anomalias do ouvido e da audição"]}
+  refused:
+    - {id: "http://www.limics.org/hrdo/rdfns#typ_id_00", label: no type phenome, why: "The ontology itself says it has no type."}
+    - {id: "http://www.limics.org/hrdo/rdfns#typ_id_0", label: phenome, why: The top; its branches are seeded one by one.}
+
+OMCO:
+  graph: data-2026.09.09-28
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots:
+    - id: http://www.semanticweb.org/admin/ontologies/OM2023/4/OMDO#Primary_cancer
+      label: ""
+      category: biolink:Disease
+      reach: 12741
+      evidence: [Genitourinary System Neoplasm, Spinal Neoplasm, Breast Neoplasm, Endocrine Neoplasm]
+      note: Filed under a class named Anatomical_entity, which it is not; the children are neoplasms by site.
+    # NCIT:C9292 "Solid Neoplasm" carries 8,799 more cancers here; it is a
+    # seed term in the table, so it needs no entry.
+  refused:
+    - id: http://www.semanticweb.org/admin/ontologies/OM2023/4/OMDO#Anatomical_entity
+      label: ""
+      why: Named for anatomy and holding cancers. Its Primary_cancer child is seeded instead.
+    - id: http://www.semanticweb.org/admin/ontologies/OM2023/4/OMDO#OLIGOMETASTASES
+      label: ""
+      why: The top; anatomy, procedures, prognosis and mechanisms beneath it.
+
+PDQ:
+  graph: data-2026.09.09-28
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots:
+    - {id: "http://purl.bioontology.org/ontology/PDQ/CDR0000256085", label: Disease/diagnosis, category: biolink:Disease, reach: 2440, evidence: [Neoplasm diagnosis, Genetic condition, precancerous condition]}
+    - {id: "http://purl.bioontology.org/ontology/PDQ/CDR0000256087", label: Intervention or procedure, category: biolink:Procedure, reach: 1095, evidence: [disease screening, diagnostic procedure, surgical procedure]}
+    - {id: "http://purl.bioontology.org/ontology/PDQ/CDR0000042941", label: gene, category: biolink:Gene, reach: 133, evidence: [MLH1, PMS1, PMS2, MSH3]}
+
+JFO:
+  graph: data-2026.09.09-27
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  # Japanese food composition. Labels in Japanese and English.
+  roots:
+    - {id: "http://purl.jp/bio/101/jfo/foodname", label: food name, category: biolink:Food, reach: 2556, evidence: ["穀物", Potatoes and Starches, "豆類"]}
+    - {id: "http://purl.jp/bio/101/jfo/std_foodname", label: "標準食品名", category: biolink:Food, reach: 2121, evidence: [AGRICULTURAL PRODUCTS, SEA FOODS, PROCESSED ANIMAL FOODS]}
+    - {id: "http://purl.jp/bio/101/jfo/FGNHNS", label: Food Group Name and Hierarchy System, category: biolink:Food, reach: 1773, evidence: [Fishes and Shellfishes, Vegetables, Pulses, Meats]}
+    - {id: "http://purl.jp/bio/101/jfo/component", label: "成分", category: biolink:ChemicalEntity, reach: 56, evidence: ["アルコール", "ビオチン", "レチノール活性当量"]}
+  refused:
+    - {id: "http://purl.jp/bio/101/jfo/foodcomp", label: food composition, why: The top of foods and components together.}
+    - {id: "http://purl.jp/bio/101/jfo/food_allergy", label: "食物アレルギー", why: Allergies; 20 nodes; Disease at best and not clearly.}
+
+NUCLEON:
+  graph: data-2026.09.09-27
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots:
+    - {id: "https://rsna.org/radlex/nucleon#Nuclide", label: nuclide, category: biolink:ChemicalEntity, reach: 4105, evidence: [Ac-205, Ac-206, Ac-206m, Ac-207]}
+    - {id: "https://rsna.org/radlex/nucleon#Element", label: element, category: biolink:ChemicalEntity, reach: 118, evidence: [118 chemical elements]}
+
+HENEGEO:
+  graph: data-2026.09.09-28
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots:
+    - id: http://neomark.owl#gene_ontology_term_gene_list
+      label: ""
+      category: biolink:Gene
+      reach: 29770
+      evidence: [A1BG, NAT2, ADA, CDH2, AKT3, GAGE12F]
+      note: 29,770 direct subclasses, every one a gene symbol.
+  refused:
+    - id: http://ontology.lst.tfo.upm.es/BD2D#Follow_Up
+      label: ""
+      why: Clinical data fields with their value lists (Yes, No, Complete response). Not entities.
+
+VFB_DRIVERS:
+  graph: data-2026.09.09-27
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots:
+    - id: SO:0001023
+      label: allele
+      category: biolink:SequenceVariant
+      reach: 18751
+      evidence: ["Abd-B[iab9-Tab]", "Adh[F]", "Adh[nB]", "BicD[r]"]
+      note: FlyBase alleles, driver constructs among them. Scoped to this graph rather than seeded for SO, because what hangs off "allele" elsewhere was not read.
+  refused:
+    - id: OBO:fbbt/vfb/VFBext_0000010
+      label: intersectional expression pattern
+      why: Expression patterns; Biolink has no node class for them.
+    - id: FBcv:0000013
+      label: descriptor
+      why: Experimental tool descriptors. Qualifiers.
+
+ADMO:
+  graph: data-2026.09.09-28
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots:
+    - {id: "http://www.semanticweb.org/DMO#process", label: process, category: biolink:BiologicalProcess, reach: 1128, evidence: [biological process, Cellular and sub cellular process, activation (CASP2 transition to CASP2)]}
+  refused:
+    - {id: "http://www.semanticweb.org/DMO#participant", label: participant, why: "Unmaterial participant, informational molecule segment, material entity. Mixed."}
+
+IOBC:
+  graph: data-2026.09.09-27
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  # Labels in Japanese and English.
+  roots:
+    - {id: "http://purl.jp/bio/4/id/200906084081407822", label: "有機化合物類", category: biolink:ChemicalEntity, reach: 13305, evidence: [Glyfoline (alkaloid), "プロピオナート", AF-301]}
+    - {id: "http://purl.jp/bio/4/id/200906093773434730", label: element, category: biolink:ChemicalEntity, reach: 236, evidence: [Sn, "Ｃｕ金属", "第４族金属"]}
+  refused:
+    - {id: "http://purl.jp/bio/4/subject/LS_ur_c/OWLClass_00000000000000000665", label: Terms related to life science, why: "79,811 nodes: food industry by-product, Malady, and everything between. Mixed."}
+    - {id: "http://purl.jp/bio/4/subject/I", label: General, why: The top of the subject hierarchy.}
+    - {id: "http://purl.jp/bio/4/subject/Organization_cat", label: Anatomical location, why: Anatomical structures beside implants and occlusion. Mixed.}
+    - {id: "http://purl.jp/bio/4/id/200906092439579070", label: chemical reaction, why: Biolink has no node class for a reaction.}
+
+OCHV:
+  graph: data-2026.09.09-27
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots: []
+  refused:
+    - {id: "http://sbmi.uth.tmc.edu/ontology/ochv#UMLS_Concept", label: "", why: "57,819 concepts from amides to posture. Mixed."}
+    - {id: "http://sbmi.uth.tmc.edu/ontology/ochv#CHV_Concept", label: "", why: Same population, the consumer-vocabulary side.}
+
+GAMUTS:
+  graph: data-2026.09.09-28
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots: []
+  refused:
+    - {id: "rgo:00000", label: GamutThing, why: "15,224 direct children: drugs, neoplasms, hernias, syndromes and findings together."}
+
+AURA:
+  graph: data-2026.09.09-28
+  reviewed: 2026-09-10
+  reviewer: Claude Fable 5.1 (claude-fable-5-1), in a Claude Code session with the maintainer
+  confirmed_by: ""
+  roots: []
+  refused:
+    - {id: "http://www.projecthalo.com/aura#Node-ID-Marker-Concept", label: "", why: "21,058 unlabelled children. Nothing to read."}
