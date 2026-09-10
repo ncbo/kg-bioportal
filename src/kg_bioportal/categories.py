@@ -26,6 +26,18 @@ the other way, from a CUI's UMLS semantic type, would have required MRSTY and
 its licence. That direction remains open as a fallback for the ontologies whose
 own classes never get a category.
 
+**Reviewed roots.** The seed table above holds terms whose Biolink meaning
+is not in doubt. Much of what is left uncategorized hangs off roots that need
+a judgement about one ontology: ICD9CM's chapters, HGNC's locus groups, SNMI's
+axes. Those judgements were made by reading each root and its subclasses, with
+the assistance of an AI agent, and are kept in ``reviewed_roots.yaml`` beside
+this module rather than in the table -- with the reviewer, the date, the
+evidence read, and whether a maintainer has confirmed them. The roll-up treats
+a reviewed root exactly as a seed. What differs is the record: a node whose
+category traces to a reviewed root is counted apart, and that count reaches
+the index and the site so the provenance is visible wherever the category is.
+See ``REVIEW_BAR`` for what a root has to show before it is accepted.
+
 Edges are left at ``biolink:Association``. See ``ASSOCIATION_NOTE``.
 """
 
@@ -33,6 +45,8 @@ import collections
 import logging
 import os
 from typing import Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
+
+import yaml
 
 # The root Biolink class, which is what KGX writes and what a node keeps when
 # nothing below establishes anything more specific.
@@ -56,6 +70,18 @@ ASSOCIATION_NOTE = (
 
 SUBCLASS_PREDICATE = "biolink:subclass_of"
 
+# Predicates that put one term beneath another, and which end is the parent.
+# SKOS vocabularies have no subclass axioms at all; their whole hierarchy is
+# skos:broader (NLMVS carries 119,942 of them and not one subclass_of), so a
+# roll-up that reads only subclass_of sees a flat file. narrower is broader
+# written from the other end; both are read so a vocabulary that asserts only
+# one of them is not missed.
+HIERARCHY_PREDICATES: Dict[str, str] = {
+    SUBCLASS_PREDICATE: "object",   # subject subclass_of object: object is the parent
+    "skos:broader": "object",       # subject broader object: object is the parent
+    "skos:narrower": "subject",     # subject narrower object: subject is the parent
+}
+
 # Predicates that assert the same referent, so a category is true of both ends.
 # close_match is deliberately absent: "close" is not "same", and treating it as
 # such would push categories across boundaries the source was careful about.
@@ -75,7 +101,13 @@ SEEDS: Dict[str, str] = {
     "CL:0000000": "biolink:Cell",                    # cell
     "NCBITaxon:1": "biolink:OrganismTaxon",          # root
     "VTO:0000001": "biolink:OrganismTaxon",          # Chordata (VTO's root)
+    "TTO:0": "biolink:OrganismTaxon",                # Chordata (TTO's root)  38,639
     "UBERON:0000105": "biolink:LifeStage",           # life cycle stage
+    # Species anatomy ontologies, each rooted at its own "anatomical entity".
+    # Reach measured on data-2026.09.09.
+    "ZFA:0100000": "biolink:AnatomicalEntity",       # zebrafish anatomical entity
+    "XAO:0000000": "biolink:AnatomicalEntity",       # Xenopus anatomical entity
+    "FBbt:10000000": "biolink:AnatomicalEntity",     # anatomical entity (fly)  27,140
     # -- function, process, component
     "GO:0008150": "biolink:BiologicalProcessOrActivity",   # biological_process
     "GO:0003674": "biolink:BiologicalProcessOrActivity",   # molecular_function
@@ -87,6 +119,12 @@ SEEDS: Dict[str, str] = {
     "HP:0000118": "biolink:PhenotypicFeature",       # phenotypic abnormality
     "MP:0000001": "biolink:PhenotypicFeature",
     "UPHENO:0001001": "biolink:PhenotypicFeature",
+    # Species phenotype ontologies, each rooted at its own "phenotype". Their
+    # base graphs do not reach UPHENO's root because the imports are stripped.
+    "ZP:0000000": "biolink:PhenotypicFeature",       # Zebrafish Phenotype   43,521
+    "XPO:0000000": "biolink:PhenotypicFeature",      # Xenopus phenotype     21,196
+    "FLOPO:0000000": "biolink:PhenotypicFeature",    # flora phenotype       11,680
+    "FYPO:0000001": "biolink:PhenotypicFeature",     # phenotype (yeast)      8,311
     # -- chemistry and molecules
     "CHEBI:24431": "biolink:ChemicalEntity",         # chemical entity
     "PR:000018263": "biolink:Polypeptide",           # amino acid chain (PR's root)
@@ -114,42 +152,28 @@ SEEDS: Dict[str, str] = {
     "CLO:0000031": "biolink:CellLine",               # cell line
     "CHEBI:23367": "biolink:MolecularEntity",        # molecular entity
     "NCBITaxon:131567": "biolink:OrganismTaxon",     # cellular organisms
-    # OMIT's root carries no label of its own; its subclasses are gene symbols
-    # (A1BG, A2M, NAT1, NAT2 ...), which is what identifies it.
-    "NCRO:0000025": "biolink:Gene",                  #                    59,874
-    # SIO's real top level, read from the published SIO graph. (SIO:000000
-    # "entity" is deliberately absent: it is the top, and seeding the top only
-    # re-derives NamedThing.)
-    "SIO:000776": "biolink:PhysicalEntity",          # object
-    "SIO:000614": "biolink:Attribute",               # attribute
-    "SIO:000006": "biolink:Activity",                # process
-    # Roots identified from another published graph rather than from a label of
-    # their own, then confirmed against their subclasses. The reach noted is
-    # measured on data-2026.08.26-16.
-    #
-    # FMA's anatomical entity, under the IRI the OWL API rewrote it to. Its two
-    # subclasses are "Physical anatomical entity" and "Non-physical anatomical
-    # entity", which is what identifies it.
-    "http://purl.org/obo/owlapi/fma#FMA_62955": "biolink:AnatomicalEntity",  # 78,558
-    # CCF, whose classes carry no label inside HRA but do inside CCF itself.
-    "http://purl.org/ccf/AnatomicalStructure": "biolink:AnatomicalEntity",   #  7,838
-    "http://purl.org/ccf/CellType": "biolink:Cell",                          #  1,831
-    # (ccf/Biomarker is deliberately absent: its subclasses mix gene symbols
-    # with peptides, so no one category is true of them.)
-    "https://identifiers.org/ito:Process": "biolink:Activity",               # 14,351
-    # HOOM keeps its HPO and Orphanet identifiers under classes of their own.
-    "http://www.semanticweb.org/ontology/HOOM#HPO_id": "biolink:PhenotypicFeature",  # 8,763
-    "http://www.semanticweb.org/ontology/HOOM#OrphaCode": "biolink:Disease",         # 4,362
-    # Read Codes are chaptered, and each chapter is coherent even though the
-    # ontology as a whole is not. Checked by reading each chapter's subclasses:
-    # "Artery and vein operations" under 7, "Fracture of skull" under S.
-    # Chapter T, "Causes of injury and poisoning", is absent on purpose -- its
-    # subclasses are accidents ("Railway accidents"), which is not a disease and
-    # not clearly anything else in Biolink either.
-    "http://purl.bioontology.org/ontology/RCTV2/7....00": "biolink:Procedure",  # 14,984
-    "http://purl.bioontology.org/ontology/RCTV2/4....00": "biolink:Procedure",  #  5,992
-    "http://purl.bioontology.org/ontology/RCTV2/3....00": "biolink:Procedure",
-    "http://purl.bioontology.org/ontology/RCTV2/S....00": "biolink:Disease",    #  7,013
+    # NCIt's top-level kinds. NCIt itself is on the skip list, but its classes
+    # are reused by other ontologies (OMCO hangs 8,799 cancers off C9292), and
+    # they arrive both as NCIT: CURIEs and under the EVS Thesaurus IRI -- see
+    # canonical_forms. Labels checked against BioPortal's NCIT on 2026-09-10.
+    "NCIT:C2991": "biolink:Disease",                 # Disease or Disorder
+    "NCIT:C3262": "biolink:Disease",                 # Neoplasm
+    "NCIT:C9292": "biolink:Disease",                 # Solid Neoplasm
+    "NCIT:C7057": "biolink:DiseaseOrPhenotypicFeature",  # Disease, Disorder or Finding
+    "NCIT:C12219": "biolink:AnatomicalEntity",       # Anatomic Structure, System, or Substance
+    "NCIT:C12508": "biolink:Cell",                   # Cell
+    "NCIT:C14250": "biolink:OrganismTaxon",          # Organism
+    "NCIT:C16612": "biolink:Gene",                   # Gene
+    "NCIT:C17021": "biolink:Protein",                # Protein
+    "NCIT:C17828": "biolink:BiologicalProcess",      # Biological Process
+    "NCIT:C25218": "biolink:Procedure",              # Clinical Intervention or Procedure
+    "NCIT:C20189": "biolink:Attribute",              # Property or Attribute
+    "NCIT:C43431": "biolink:Activity",               # Activity
+    "NCIT:C1909": "biolink:ChemicalEntity",          # Pharmacologic Substance
+    # Roots that carry no label, or whose label alone does not settle it, and
+    # that were placed by reading their subclasses -- OMIT, SIO, FMA, CCF, ITO,
+    # HOOM, RCTV2 -- are not here. They are judgements about one ontology, made
+    # with an AI agent's help, and live in reviewed_roots.yaml with that said.
 }
 
 # Upper-ontology terms, kept apart because they are a *last resort*. Nearly
@@ -187,6 +211,27 @@ UPPER_SEEDS: Dict[str, str] = {
     "http://www.ifomis.org/bfo/1.1/span#Process": "biolink:Activity",
     "http://www.ifomis.org/bfo/1.1/span#ProcessAggregate": "biolink:Activity",
     "http://www.ifomis.org/bfo/1.1/span#FiatProcessPart": "biolink:Activity",
+    # The same BFO 1.1 terms under the shorter ifomis.org/snap# and span#
+    # namespaces, which is how CSEO writes them (20,050 nodes under
+    # bfo/1.1#Entity and not one under the form above). Same terms, same
+    # categories; the namespace is the only difference.
+    "http://www.ifomis.org/snap#IndependentContinuant": "biolink:PhysicalEntity",
+    "http://www.ifomis.org/snap#MaterialEntity": "biolink:PhysicalEntity",
+    "http://www.ifomis.org/snap#Object": "biolink:PhysicalEntity",
+    "http://www.ifomis.org/snap#ObjectAggregate": "biolink:PhysicalEntity",
+    "http://www.ifomis.org/snap#FiatObjectPart": "biolink:PhysicalEntity",
+    "http://www.ifomis.org/snap#Quality": "biolink:Attribute",
+    "http://www.ifomis.org/snap#RealizableEntity": "biolink:Attribute",
+    "http://www.ifomis.org/snap#Role": "biolink:Attribute",
+    "http://www.ifomis.org/snap#Disposition": "biolink:Attribute",
+    "http://www.ifomis.org/snap#Function": "biolink:Attribute",
+    "http://www.ifomis.org/snap#GenericallyDependentContinuant":
+        "biolink:InformationContentEntity",
+    "http://www.ifomis.org/span#Occurrent": "biolink:Activity",
+    "http://www.ifomis.org/span#ProcessualEntity": "biolink:Activity",
+    "http://www.ifomis.org/span#Process": "biolink:Activity",
+    "http://www.ifomis.org/span#ProcessAggregate": "biolink:Activity",
+    "http://www.ifomis.org/span#FiatProcessPart": "biolink:Activity",
     # BioTop, in the bioonto.de namespace BIOMODELS is built on. Same shape as
     # the BFO seeds above -- an upper ontology whose top classes are the only
     # thing a large ontology shares with anything else.
@@ -218,6 +263,10 @@ ONTOLOGY_DEFAULTS: Dict[str, str] = {
     "LION": "biolink:ChemicalEntity",
     "ROR": "biolink:Agent",
     "FAST-TITLE": "biolink:InformationContentEntity",
+    # Mouse anatomy by Theiler stage: "TS23 liver right lobe", "TS19
+    # metencephalon alar plate". 19,455 nodes and 525 subclass edges, so the
+    # hierarchy reaches almost none of it; the labels reach all of it.
+    "EMAP": "biolink:AnatomicalEntity",
 }
 
 # Prefixes that are never an ontology's own subject matter: the structural
@@ -260,24 +309,136 @@ def ontology_default(ontology_name: str, node_id: str) -> Optional[str]:
 
 SPECIFIC, GENERAL = 0, 1
 
+# Where a seed came from: the tables above, or the reviewed-roots file. Carried
+# through the roll-up and across mappings so the report can say exactly how
+# many nodes owe their category to a review.
+TABLE, REVIEW = 0, 1
+
+# What a root has to show before it goes into reviewed_roots.yaml. The same bar
+# ONTOLOGY_DEFAULTS is held to, written down because the reviewer is an agent
+# and the bar is the whole of what makes its verdicts trustworthy.
+REVIEW_BAR = """A root is accepted only if its own label, or failing that the labels of its
+subclasses, show one Biolink class to be true of everything beneath it.
+  * Read the root's label and at least the first few of its children's labels.
+    A child that is itself a branch is judged by its children in turn.
+  * Children of mixed kinds mean refusal, recorded under `refused` with the
+    labels that showed the mix. No category is better than a wrong one.
+  * A root is seeded for what is beneath it, never for being the top.
+    owl:Thing, skos:Concept and BFO "entity" are never seeded, and neither is
+    a root whose children are chapters of different kinds. Seed the chapters.
+  * Obsolete, deprecated and "requiring curation" branches are never seeded.
+  * A category is chosen from Biolink's named-thing hierarchy, as specific as
+    the evidence supports and no more.
+Every entry records the graph it was read from, the reviewer, the date, the
+evidence read, the reach measured, and who has confirmed it, if anyone."""
+
+REVIEWED_ROOTS_FILE = os.path.join(os.path.dirname(__file__), "reviewed_roots.yaml")
+
+
+def load_reviewed_roots(path: str = REVIEWED_ROOTS_FILE) -> Dict[str, dict]:
+    """The reviewed-roots file, keyed by upper-cased ontology acronym.
+
+    Absent file: no reviews, which is a valid state and not an error.
+    ``also`` lists other ontologies the same roots apply to -- GEXO, REXO
+    and RETO all hang off SIO's three top classes -- and each of those gets
+    the entry under its own name, so a lookup by acronym is all a caller does.
+    """
+    if not os.path.exists(path):
+        return {}
+    with open(path, "r") as f:
+        loaded = yaml.safe_load(f) or {}
+    reviews: Dict[str, dict] = {}
+    for acronym, review in loaded.items():
+        review = review or {}
+        reviews[str(acronym).strip().upper()] = review
+        for other in review.get("also") or ():
+            reviews.setdefault(str(other).strip().upper(), review)
+    return reviews
+
+
+REVIEWED_ROOTS: Dict[str, dict] = load_reviewed_roots()
+
+
+def reviewed_index(ontology_name: str) -> Dict[str, Tuple[str, int]]:
+    """This ontology's reviewed roots, keyed by every id shape they can wear.
+
+    Scoped to the ontology the review was made in: a chapter of ICD9CM was read
+    as a chapter of ICD9CM, and the disclosure on the page is per ontology.
+    Same value shape as SEED_INDEX, and the specific tier -- a reviewed root is
+    a domain judgement, not an upper-ontology one.
+    """
+    review = REVIEWED_ROOTS.get(ontology_name.strip().upper())
+    if not review:
+        return {}
+    index: Dict[str, Tuple[str, int]] = {}
+    for root in review.get("roots") or ():
+        for form in canonical_forms(str(root["id"])):
+            index[form] = (root["category"], SPECIFIC)
+    return index
+
+
+def review_record(ontology_name: str) -> Dict[str, object]:
+    """What the index and the site say about this ontology's review, if any.
+
+    The provenance and nothing else: the roots themselves stay in the file.
+    ``roots`` is how many were accepted; ``refused`` how many were read and
+    turned down, which is part of the record too.
+    """
+    review = REVIEWED_ROOTS.get(ontology_name.strip().upper())
+    if not review:
+        return {}
+    return {
+        "reviewer": str(review.get("reviewer", "")),
+        "reviewed": str(review.get("reviewed", "")),
+        "confirmed_by": str(review.get("confirmed_by") or ""),
+        "graph": str(review.get("graph", "")),
+        "roots": len(review.get("roots") or ()),
+        "refused": len(review.get("refused") or ()),
+    }
+
 # Which of the categories above are ancestors of which others, in Biolink.
 # Written out rather than looked up so that assignment needs no model download
 # at transform time; tests/test_categories.py checks it still agrees with the
 # installed bmt, so it cannot drift silently.
 #
-# It is shorter than it looks because most of these sit directly under
-# NamedThing -- AnatomicalEntity is *not* under PhysicalEntity, which is why
-# that particular tie needs the tiers above rather than this table.
+# Written against the Biolink model version below, and checked against the
+# installed model by tests/test_categories.py; the versions disagree on small
+# things (4.2.2 puts EvidenceType under InformationContentEntity, 4.4.4 does
+# not), so the check runs only where the installed model is at least this one.
+#
+# Covers every category the seed tables and the reviewed-roots file use.
+# BiologicalEntity is on many lines because ARO's resistance determinants are
+# seeded with it (genes and proteins side by side); it is an ancestor of most
+# of the biology and of none of the chemistry. AnatomicalEntity is *not* under
+# PhysicalEntity, which is why that particular tie needs the tiers above
+# rather than this table.
+ANCESTORS_MODEL_VERSION = "4.4.4"
+
 CATEGORY_ANCESTORS: Dict[str, Tuple[str, ...]] = {
-    "biolink:Cell": ("biolink:AnatomicalEntity",),
-    "biolink:CellularComponent": ("biolink:AnatomicalEntity",),
+    "biolink:AnatomicalEntity": ("biolink:BiologicalEntity",),
+    "biolink:BiologicalProcess": ("biolink:BiologicalEntity", "biolink:BiologicalProcessOrActivity"),
+    "biolink:BiologicalProcessOrActivity": ("biolink:BiologicalEntity",),
+    "biolink:Cell": ("biolink:AnatomicalEntity", "biolink:BiologicalEntity"),
+    "biolink:CellLine": ("biolink:BiologicalEntity",),
+    "biolink:CellularComponent": ("biolink:AnatomicalEntity", "biolink:BiologicalEntity"),
+    "biolink:ClinicalFinding": ("biolink:BiologicalEntity", "biolink:DiseaseOrPhenotypicFeature", "biolink:PhenotypicFeature"),
+    "biolink:Disease": ("biolink:BiologicalEntity", "biolink:DiseaseOrPhenotypicFeature"),
+    "biolink:DiseaseOrPhenotypicFeature": ("biolink:BiologicalEntity",),
+    "biolink:Drug": ("biolink:ChemicalEntity",),
     "biolink:Food": ("biolink:ChemicalEntity",),
+    "biolink:Gene": ("biolink:BiologicalEntity",),
+    "biolink:GeneFamily": ("biolink:BiologicalEntity",),
+    "biolink:LifeStage": ("biolink:BiologicalEntity",),
+    "biolink:MacromolecularComplex": ("biolink:BiologicalEntity",),
     "biolink:MaterialSample": ("biolink:PhysicalEntity",),
     "biolink:MolecularEntity": ("biolink:ChemicalEntity",),
     "biolink:NucleicAcidEntity": ("biolink:ChemicalEntity", "biolink:MolecularEntity"),
-    "biolink:Pathway": ("biolink:BiologicalProcessOrActivity",),
-    "biolink:Protein": ("biolink:Polypeptide",),
+    "biolink:Pathway": ("biolink:BiologicalEntity", "biolink:BiologicalProcess", "biolink:BiologicalProcessOrActivity"),
+    "biolink:PhenotypicFeature": ("biolink:BiologicalEntity", "biolink:DiseaseOrPhenotypicFeature"),
+    "biolink:Polypeptide": ("biolink:BiologicalEntity",),
+    "biolink:Protein": ("biolink:BiologicalEntity", "biolink:Polypeptide"),
     "biolink:Publication": ("biolink:InformationContentEntity",),
+    "biolink:SequenceVariant": ("biolink:BiologicalEntity",),
 }
 
 
@@ -301,14 +462,28 @@ def most_specific(categories: Set[str]) -> Set[str]:
 # abbreviated to a CURIE.
 _OBO_IRI = "http://purl.obolibrary.org/obo/"
 
+# The stem OBO used before the obolibrary PURLs, in which BIOMODELS still
+# writes CL and PATO: http://purl.org/obo/owl/CL#CL_0000000. 2,799 of its
+# nodes sit under those two roots and matched nothing until this form was
+# recognised.
+_OLD_OBO_IRI = "http://purl.org/obo/owl/"
+
+# Prefixes whose terms also travel under a stem of their own. NCIt classes are
+# NCIT:C9292 in one graph and http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#C9292
+# in the next, and the EVS form cannot be derived from the OBO one.
+_EXTRA_STEMS: Dict[str, str] = {
+    "NCIT": "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#",
+}
+
 
 def canonical_forms(curie: str) -> Tuple[str, ...]:
     """Every id shape one seed term arrives in across our graphs.
 
     The same term is not written the same way twice across 1,200 ontologies.
     GO-PLUS abbreviates GO classes to ``GO:0008150``; VTO leaves its own to
-    ``OBO:VTO_0000001``; some sources never abbreviate at all. Rather than
-    guessing which an ontology uses, recognise all three.
+    ``OBO:VTO_0000001``; some sources never abbreviate at all, and a few still
+    use the purl.org/obo/owl stem that predates the obolibrary PURLs. Rather
+    than guessing which an ontology uses, recognise all four.
     """
     if "://" in curie:
         # Already an IRI -- BFO 1.1's terms arrive as one. There is no CURIE
@@ -318,7 +493,15 @@ def canonical_forms(curie: str) -> Tuple[str, ...]:
         return (curie,)
     prefix, _, local = curie.partition(":")
     underscored = f"{prefix}_{local}"
-    return (curie, f"OBO:{underscored}", f"{_OBO_IRI}{underscored}")
+    forms = [
+        curie,
+        f"OBO:{underscored}",
+        f"{_OBO_IRI}{underscored}",
+        f"{_OLD_OBO_IRI}{prefix}#{underscored}",
+    ]
+    if prefix in _EXTRA_STEMS:
+        forms.append(f"{_EXTRA_STEMS[prefix]}{local}")
+    return tuple(forms)
 
 
 def _expand() -> Dict[str, Tuple[str, int]]:
@@ -345,12 +528,28 @@ class CategoryReport(NamedTuple):
     inherited: int = 0      # nodes that got one from a subclass ancestor
     mapped: int = 0         # nodes that got one across a mapping edge
     defaulted: int = 0      # nodes that fell back to what the ontology is
+    reviewed: int = 0       # nodes whose category traces to a reviewed root
     ambiguous: int = 0      # nodes left holding more than one category
     uncategorized: int = 0  # nodes still NamedThing
 
     @property
     def assigned(self) -> int:
-        return self.seeded + self.inherited + self.mapped + self.defaulted
+        return self.seeded + self.inherited + self.mapped + self.defaulted + self.reviewed
+
+    def sources(self) -> Dict[str, int]:
+        """The assigned nodes by how they got there, for the index.
+
+        Only the routes that assigned anything: a thousand ``reviewed: 0``
+        lines would say nothing.
+        """
+        counts = {
+            "seeded": self.seeded,
+            "inherited": self.inherited,
+            "mapped": self.mapped,
+            "defaulted": self.defaulted,
+            "reviewed": self.reviewed,
+        }
+        return {k: v for k, v in counts.items() if v}
 
     def summary(self) -> str:
         if not self.total:
@@ -364,20 +563,23 @@ class CategoryReport(NamedTuple):
         ]
         if self.defaulted:
             parts.append(f"{self.defaulted:,} by the ontology default")
+        if self.reviewed:
+            parts.append(f"{self.reviewed:,} by reviewed roots")
         if self.ambiguous:
             parts.append(f"{self.ambiguous:,} ambiguous")
         return "; ".join(parts)
 
 
 def _edge_graph(
-    edge_file: str,
+    edge_file: str, index: Dict[str, Tuple[str, int]],
 ) -> Tuple[Dict[str, List[str]], Dict[str, List[str]], Set[str]]:
     """Read the edge file once into what assignment needs from it.
 
-    Returns ``(children, mates, present_seeds)``: parent -> subclasses, node ->
-    nodes it is asserted to be the same thing as, and which seed terms this
-    ontology actually mentions. All three are built from edges alone, so nothing
-    here is proportional to the node file.
+    Returns ``(children, mates, present_seeds)``: parent -> narrower terms
+    (by subclass_of or skos:broader, see HIERARCHY_PREDICATES), node -> nodes
+    it is asserted to be the same thing as, and which of ``index``'s seed
+    terms this ontology actually mentions. All three are built from edges
+    alone, so nothing here is proportional to the node file.
 
     ``present_seeds`` is collected here rather than derived from ``children``
     afterwards because a seed can appear only in a mapping edge, or only as
@@ -391,17 +593,20 @@ def _edge_graph(
     for subject, predicate, obj in _columns(
         edge_file, "subject", "predicate", "object"
     ):
-        if not subject or not obj:
+        if not subject or not obj or subject == obj:
             continue
-        if predicate == SUBCLASS_PREDICATE:
+        parent_end = HIERARCHY_PREDICATES.get(predicate)
+        if parent_end == "object":
             children[obj].append(subject)
+        elif parent_end == "subject":
+            children[subject].append(obj)
         elif predicate in MAPPING_PREDICATES:
             mates[subject].append(obj)
             mates[obj].append(subject)
         else:
             continue
         for node in (subject, obj):
-            if node in SEED_INDEX:
+            if node in index:
                 present.add(node)
     return children, mates, present
 
@@ -426,8 +631,11 @@ def _columns(path: str, *names: str) -> Iterable[Tuple[str, ...]]:
 
 
 def _roll_up(
-    children: Dict[str, List[str]], present_seeds: Set[str]
-) -> Tuple[Dict[str, Set[str]], Set[str]]:
+    children: Dict[str, List[str]],
+    present_seeds: Set[str],
+    index: Dict[str, Tuple[str, int]],
+    reviewed: Set[str],
+) -> Tuple[Dict[str, Set[str]], Set[str], Set[str]]:
     """Spread the seeds down the subclass hierarchy; the nearest seed wins.
 
     One breadth-first sweep from every seed at once, so a class takes the
@@ -440,12 +648,18 @@ def _roll_up(
     several, and a class that really is two things at once is a fact about the
     ontology worth being able to see in the tally.
 
-    Returns ``(categories, seeded_ids)``. A seed the ontology mentions in no
-    edge at all is not here -- it has nothing to propagate to -- and ``apply_to``
-    recognises those as it streams the node file.
+    ``reviewed`` names the seeds in ``index`` that came from the review file.
+    Each node remembers whether any seed that reached it was one of those, so
+    the count of nodes owing a category to a review is exact -- and errs, on a
+    tie, towards saying so.
+
+    Returns ``(categories, seeded_ids, from_review)``. A seed the ontology
+    mentions in no edge at all is not here -- it has nothing to propagate to --
+    and ``apply_to`` recognises those as it streams the node file.
     """
-    # node -> (tier of the nearest seed that reached it, its categories)
-    reached: Dict[str, Tuple[int, Set[str]]] = {}
+    # node -> [tier of the nearest seed that reached it, its categories,
+    #          whether a reviewed root is among the seeds that reached it]
+    reached: Dict[str, List] = {}
     seeded: Set[str] = set()
 
     # Every seed the ontology mentions starts at distance zero, so a seeded
@@ -454,13 +668,13 @@ def _roll_up(
     # further down.
     frontier = sorted(present_seeds)
     for node in frontier:
-        category, tier = SEED_INDEX[node]
-        reached[node] = (tier, {category})
+        category, tier = index[node]
+        reached[node] = [tier, {category}, node in reviewed]
         seeded.add(node)
     while frontier:
-        following: Dict[str, Tuple[int, Set[str]]] = {}
+        following: Dict[str, List] = {}
         for parent in frontier:
-            parent_tier, parent_cats = reached[parent]
+            parent_tier, parent_cats, parent_reviewed = reached[parent]
             for child in children.get(parent, ()):
                 # Already reached in an earlier sweep: that seed is nearer, and
                 # nearness outranks everything.
@@ -472,19 +686,23 @@ def _roll_up(
                 # order the seeds happened to be visited in.
                 equally_near = following.get(child)
                 if equally_near is None or parent_tier < equally_near[0]:
-                    following[child] = (parent_tier, set(parent_cats))
+                    following[child] = [parent_tier, set(parent_cats), parent_reviewed]
                 elif parent_tier == equally_near[0]:
                     equally_near[1].update(parent_cats)
+                    equally_near[2] = equally_near[2] or parent_reviewed
         for node, value in following.items():
             reached.setdefault(node, value)
         frontier = list(following)
 
-    return {node: most_specific(cats) for node, (_, cats) in reached.items()}, seeded
+    categories = {node: most_specific(cats) for node, (_, cats, _) in reached.items()}
+    from_review = {node for node, (_, _, flag) in reached.items() if flag}
+    return categories, seeded, from_review
 
 
 def _propagate_mappings(
     categories: Dict[str, Set[str]],
     mates: Dict[str, List[str]],
+    from_review: Set[str],
     rounds: int = 3,
 ) -> Set[str]:
     """Carry categories across exact-match edges to nodes that have none.
@@ -495,32 +713,56 @@ def _propagate_mappings(
     shallow in practice and an unbounded loop over a pathological graph is not
     worth the risk.
 
+    A category that came from a reviewed root is still one when it has crossed
+    a mapping, so ``from_review`` grows along with ``categories``.
+
     Returns the ids that gained a category this way.
     """
     gained: Set[str] = set()
     for _ in range(rounds):
         additions: Dict[str, Set[str]] = {}
+        reviewed_additions: Set[str] = set()
         for node, cats in categories.items():
             for mate in mates.get(node, ()):
                 if mate not in categories and mate not in additions:
                     additions[mate] = set(cats)
+                    if node in from_review:
+                        reviewed_additions.add(mate)
         if not additions:
             break
         categories.update(additions)
+        from_review |= reviewed_additions
         gained |= set(additions)
     return gained
 
 
-def assign(node_file: str, edge_file: str) -> Tuple[Dict[str, Set[str]], Set[str], Set[str]]:
-    """Work out a category for as many nodes as the evidence supports.
+class Assignment(NamedTuple):
+    """What ``assign`` worked out, keyed by node id.
 
-    Returns ``(categories, seeded, mapped)`` keyed by node id. Nodes with no
-    evidence are simply absent; the caller leaves those as they are.
+    Nodes with no evidence are simply absent from ``categories``; the caller
+    leaves those as they are. ``index`` is the seed index the assignment was
+    made against, so the caller can recognise a seed the edge file never
+    mentioned.
     """
-    children, mates, present_seeds = _edge_graph(edge_file)
-    categories, seeded = _roll_up(children, present_seeds)
-    mapped = _propagate_mappings(categories, mates)
-    return categories, seeded, mapped
+
+    categories: Dict[str, Set[str]]
+    seeded: Set[str]
+    mapped: Set[str]
+    from_review: Set[str]
+    index: Dict[str, Tuple[str, int]]
+
+
+def assign(node_file: str, edge_file: str, ontology_name: str = "") -> Assignment:
+    """Work out a category for as many nodes as the evidence supports."""
+    reviewed = reviewed_index(ontology_name)
+    index = dict(SEED_INDEX)
+    index.update(reviewed)
+    children, mates, present_seeds = _edge_graph(edge_file, index)
+    categories, seeded, from_review = _roll_up(
+        children, present_seeds, index, set(reviewed)
+    )
+    mapped = _propagate_mappings(categories, mates, from_review)
+    return Assignment(categories, seeded, mapped, from_review, index)
 
 
 def apply_to(node_file: str, edge_file: str, ontology_name: str = "") -> CategoryReport:
@@ -535,12 +777,14 @@ def apply_to(node_file: str, edge_file: str, ontology_name: str = "") -> Categor
     to ONTOLOGY_DEFAULTS, if this ontology has one; failing that it keeps
     whatever KGX wrote.
     """
-    categories, seeded, mapped = assign(node_file, edge_file)
+    categories, seeded, mapped, from_review, index = assign(
+        node_file, edge_file, ontology_name
+    )
     defaulted: Set[str] = set()
 
     temp_path = node_file + ".categorized"
     counts = dict(total=0, seeded=0, inherited=0, mapped=0, defaulted=0,
-                  ambiguous=0, uncategorized=0)
+                  reviewed=0, ambiguous=0, uncategorized=0)
     with open(node_file, "r") as src, open(temp_path, "w") as dest:
         header = src.readline()
         dest.write(header)
@@ -563,9 +807,11 @@ def apply_to(node_file: str, edge_file: str, ontology_name: str = "") -> Categor
             # A seed with no edges at all never entered the graph built from the
             # edge file, so recognise it here too.
             assigned = categories.get(node_id)
-            if assigned is None and node_id in SEED_INDEX:
-                assigned = {SEED_INDEX[node_id][0]}
+            if assigned is None and node_id in index:
+                assigned = {index[node_id][0]}
                 seeded.add(node_id)
+                if node_id not in SEED_INDEX:
+                    from_review.add(node_id)
             # Last resort, and only for the few ontologies that have one: what
             # this whole ontology is. Never overrules evidence from the file.
             if not assigned:
@@ -576,7 +822,12 @@ def apply_to(node_file: str, edge_file: str, ontology_name: str = "") -> Categor
             if assigned:
                 if len(assigned) > 1:
                     counts["ambiguous"] += 1
-                if node_id in seeded:
+                # A reviewed root, and everything that owes its category to
+                # one, is counted under the review whichever route carried it:
+                # that is the number the disclosure on the page is made of.
+                if node_id in from_review:
+                    counts["reviewed"] += 1
+                elif node_id in seeded:
                     counts["seeded"] += 1
                 elif node_id in mapped:
                     counts["mapped"] += 1

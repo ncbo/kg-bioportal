@@ -132,6 +132,45 @@ Summary page and each ontology's page now spell out:
 repeat whatever they import. `kgbioportal transform --no_full` builds base
 graphs only.
 
+## Biolink categories, and how they are decided
+
+KGX writes `biolink:NamedThing` on every node, because an OWL file says
+nothing about Biolink. The transform then assigns a more specific class to as
+many nodes as the graph's own evidence supports, by four routes, in order:
+
+| Route | What it does | Recorded as |
+|---|---|---|
+| Seeds | A table in `src/kg_bioportal/categories.py` of terms whose Biolink class is not in doubt (GO's `biological_process`, MONDO's `disease`, BFO's `material entity`). | `seeded` |
+| Inheritance | Every class beneath a seed, by `subclass_of` or `skos:broader`, takes its category. The nearest seed wins; a domain seed beats an upper-ontology one at the same distance. | `inherited` |
+| Mappings | An `exact_match` edge asserts the same referent, so a category crosses it to a node that has none. | `mapped` |
+| Reviewed roots | Roots whose meaning is a fact about one ontology (an ICD chapter, an HGNC locus group) were placed by reading them and their subclasses in the published graph, **with the assistance of an AI agent**, and recorded in `src/kg_bioportal/reviewed_roots.yaml`. | `reviewed` |
+
+A few ontologies that are one kind of thing end to end (GNO, LION, ROR,
+FAST-TITLE, EMAP) take that one category as a whole (`defaulted`). Nothing
+else is guessed: a node with no evidence stays `NamedThing`.
+
+Every entry in `reviewed_roots.yaml` records the graph release that was read,
+the reviewer, the date, the subclass labels that were the evidence, the reach
+measured, and a `confirmed_by` field that stays blank until a maintainer has
+checked it. Roots that were read and refused are listed with the reason, so
+the same root is not re-read later. The bar a root has to clear is
+`REVIEW_BAR` in `categories.py`: the labels have to show one Biolink class to
+be true of everything beneath, children of mixed kinds mean refusal, and the
+top of anything is never seeded for being the top.
+
+To lay out a graph's roots for review:
+
+```bash
+kgbioportal roots AGRO.tar.gz --ontology AGRO --output AGRO_roots.yaml
+```
+
+The index carries the tally of routes per ontology as `category_sources`
+(and `full_category_sources`), and, wherever a reviewed root did any work,
+`category_review` with the reviewer, date, graph and confirmation. The site
+shows both under *How they were assigned* on the ontology's Nodes tab, with
+the disclosure that an AI agent assisted, and the About page describes the
+four routes.
+
 ## What gets skipped, and why
 
 GitHub-hosted runners are bounded (~16 GB RAM, 6 h per job), so the largest and

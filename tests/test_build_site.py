@@ -617,3 +617,70 @@ class TestImportsSection(TestCase):
         it = item("X", "OK", import_iris=["http://e/a"], ontology_iri="http://e/x")
         self.assertEqual(it["import_iris"], ["http://e/a"])
         self.assertEqual(it["ontology_iri"], "http://e/x")
+
+
+class TestCategoryProvenance(TestCase):
+    """Where a category came from is shown beside the tally, and a review says so (#169)."""
+
+    SOURCES = {"seeded": 3, "inherited": 21000, "mapped": 900, "reviewed": 4000}
+    REVIEW = {"reviewer": "Claude Fable 5.1 (claude-fable-5-1)", "reviewed": "2026-09-10",
+              "confirmed_by": "", "graph": "data-2026.09.09-27", "roots": 2, "refused": 4}
+
+    def page(self, **kw):
+        it = item("ICD9CM", "OK", nodecount=22546, edgecount=22531,
+                  node_categories={"biolink:Disease": 14869, "biolink:NamedThing": 7677}, **kw)
+        html = bs.render_ontology_resource(it)
+        start = html.index('data-panel="nodes"')
+        return html[start:html.index('data-panel="edges"', start)]
+
+    def test_the_sources_are_carried_onto_the_item(self):
+        it = item("X", "OK", category_sources=self.SOURCES, category_review=self.REVIEW)
+        self.assertEqual(it["category_sources"], self.SOURCES)
+        self.assertEqual(it["category_review"], self.REVIEW)
+
+    def test_an_old_entry_gets_empty_dicts_and_no_provenance_block(self):
+        it = item("X", "OK")
+        self.assertEqual(it["category_sources"], {})
+        self.assertNotIn("How they were assigned", self.page())
+
+    def test_each_route_is_listed_with_its_count(self):
+        panel = self.page(category_sources=self.SOURCES, category_review=self.REVIEW)
+        self.assertIn("How they were assigned", panel)
+        self.assertIn("21,000", panel)
+        self.assertIn("inherits from a seed term", panel)
+        self.assertIn("exact match", panel)
+        self.assertNotIn("whole ontology is", panel)  # no defaulted count, no row
+
+    def test_a_review_is_disclosed_with_who_and_when(self):
+        panel = self.page(category_sources=self.SOURCES, category_review=self.REVIEW)
+        self.assertIn("4,000", panel)
+        self.assertIn("2 root classes", panel)
+        self.assertIn("Claude Fable 5.1", panel)
+        self.assertIn("2026-09-10", panel)
+        self.assertIn("assistance of an AI agent", panel)
+        self.assertIn("Not yet confirmed by a maintainer", panel)
+        self.assertIn("reviewed_roots.yaml", panel)
+
+    def test_a_confirmed_review_says_who_confirmed_it(self):
+        review = dict(self.REVIEW, confirmed_by="caufieldjh")
+        panel = self.page(category_sources=self.SOURCES, category_review=review)
+        self.assertIn("Confirmed by caufieldjh", panel)
+        self.assertNotIn("Not yet confirmed", panel)
+
+    def test_no_review_means_no_disclosure(self):
+        panel = self.page(category_sources={"seeded": 3, "inherited": 21000})
+        self.assertIn("How they were assigned", panel)
+        self.assertNotIn("AI agent", panel)
+
+    def test_the_reviewer_is_escaped(self):
+        review = dict(self.REVIEW, reviewer="<b>x</b>")
+        panel = self.page(category_sources=self.SOURCES, category_review=review)
+        self.assertNotIn("<b>x</b>", panel)
+
+    def test_the_about_page_explains_the_routes_and_the_review(self):
+        html = bs.render_about()
+        self.assertIn('id="categories"', html)
+        self.assertIn("with the assistance of an AI agent", html)
+        self.assertIn("reviewed_roots.yaml", html)
+        for route in ("Seed terms", "Inheritance", "Mappings", "Reviewed roots"):
+            self.assertIn(route, html)

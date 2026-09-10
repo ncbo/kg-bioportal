@@ -24,7 +24,7 @@ from kg_bioportal.config import (
     NO_IMPORTS_REASON,
     PER_ONTOLOGY_TIMEOUT_MIN,
 )
-from kg_bioportal.categories import categorize
+from kg_bioportal.categories import categorize, review_record
 from kg_bioportal.downloader import DOWNLOAD_REPORT_NAME, ONTOLOGY_LIST_NAME
 from kg_bioportal.kgx_patches import (
     patch_missing_edge_categories,
@@ -1203,6 +1203,13 @@ class TransformOutcome(NamedTuple):
     # nothing here mutates a tally after it is built.
     node_categories: Dict[str, int] = {}
     edge_categories: Dict[str, int] = {}
+    # How the node categories were arrived at -- seeded, inherited, mapped,
+    # defaulted, reviewed -- and, when any came by review, the review's
+    # provenance (#169). The site puts both beside the tally, because a
+    # category decided with an AI agent's help has to say so wherever it is
+    # shown. Shared empty defaults, never mutated.
+    category_sources: Dict[str, int] = {}
+    category_review: Dict[str, object] = {}
     # Import declarations in the source, filled in whenever the source was
     # read, so the caller can decide whether a full graph is worth attempting
     # (#177). A success carries reason=import_only when the base graph is
@@ -1725,6 +1732,13 @@ class Transformer:
                 entry["node_categories"] = dict(base.node_categories)
             if base.edge_categories:
                 entry["edge_categories"] = dict(base.edge_categories)
+            # How those categories were decided, and by whom where an AI
+            # agent's review was part of it (#169). Only where there is
+            # something to say.
+            if base.category_sources:
+                entry["category_sources"] = dict(base.category_sources)
+            if base.category_review:
+                entry["category_review"] = dict(base.category_review)
 
             # A full graph is only ever attempted on top of a working base
             # graph: whatever stopped the base (a size gate, a parse error)
@@ -1758,6 +1772,10 @@ class Transformer:
                     entry["full_node_categories"] = dict(full.node_categories)
                 if full.edge_categories:
                     entry["full_edge_categories"] = dict(full.edge_categories)
+                if full.category_sources:
+                    entry["full_category_sources"] = dict(full.category_sources)
+                if full.category_review:
+                    entry["full_category_review"] = dict(full.category_review)
 
             onto_log[ontology_name] = entry
 
@@ -2187,7 +2205,12 @@ class Transformer:
             # them (#169). This runs on the finished files rather than inside
             # the KGX stream because it needs the whole subclass hierarchy at
             # once, which a streaming source cannot offer.
-            categorize(nodefilename, edgefilename, ontology_name)
+            category_report = categorize(nodefilename, edgefilename, ontology_name)
+            category_sources = category_report.sources() if category_report else {}
+            category_review = (
+                review_record(ontology_name)
+                if category_sources.get("reviewed") else {}
+            )
             # Size and composition of what we just wrote, in one pass over each
             # file. The categories are logged here as well as recorded, so a
             # shard log says what came out of an ontology and not just how much
@@ -2256,6 +2279,8 @@ class Transformer:
             malformed_literals=literals.count,
             node_categories=node_categories,
             edge_categories=edge_categories,
+            category_sources=category_sources,
+            category_review=category_review,
             imports=imports,
             import_iris=source.import_iris,
             ontology_iri=source.ontology_iri,

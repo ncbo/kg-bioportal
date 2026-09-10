@@ -26,8 +26,10 @@ from unittest import TestCase, mock
 
 from kg_bioportal import categories
 from kg_bioportal.categories import (
+    ANCESTORS_MODEL_VERSION,
     CATEGORY_ANCESTORS,
     ONTOLOGY_DEFAULTS,
+    REVIEWED_ROOTS,
     STRUCTURAL_PREFIXES,
     GENERAL,
     NAMED_THING,
@@ -41,6 +43,7 @@ from kg_bioportal.categories import (
     categorize,
     most_specific,
     ontology_default,
+    reviewed_index,
 )
 
 NODE_HEADER = ["id", "category", "name"]
@@ -68,8 +71,8 @@ class Graph:
                 f.write("\t".join(row) + "\n")
         return path
 
-    def categories(self):
-        apply_to(self.nodes, self.edges)
+    def categories(self, ontology=""):
+        apply_to(self.nodes, self.edges, ontology)
         out = {}
         with open(self.nodes) as f:
             f.readline()
@@ -81,6 +84,10 @@ class Graph:
 
 def sub(child, parent):
     return (child, "biolink:subclass_of", parent)
+
+
+def version_tuple(version):
+    return tuple(int(p) for p in re.findall(r"\d+", str(version))[:3])
 
 
 def same(a, b):
@@ -167,46 +174,51 @@ class TestTheSeedsMatchIdsThatOccur(TestCase):
     MEASURED = [
         ("GNO:00000001", "OBO:GNO_00000001", 191529),
         ("CAT:0000000", "OBO:CAT_0000000", 63306),
-        ("NCRO:0000025", "OBO:NCRO_0000025", 59874),
         ("MONDO:0000001", "MONDO:0000001", 31550),
         ("VTO:0000001", "OBO:VTO_0000001", 106998),
-        # SIO's real top level. Its own root, SIO:000000 "entity", is useless as
-        # a seed, but these three sit directly under it and carry most of the
-        # SIO-built ontologies between them.
-        ("SIO:000776", "SIO:000776", 0),
-        ("SIO:000614", "SIO:000614", 0),
-        ("SIO:000006", "SIO:000006", 0),
+        ("TTO:0", "OBO:TTO_0", 38639),
+        ("FBbt:10000000", "OBO:FBbt_10000000", 27140),
+        ("ZP:0000000", "ZP:0000000", 43521),
+        ("ZFA:0100000", "OBO:ZFA_0100000", 3091),
     ]
 
-    # Roots that arrive only as a full IRI, so no CURIE form is derived.
-    IRI_SEEDS = [
-        "http://purl.org/obo/owlapi/fma#FMA_62955",
-        "http://purl.org/ccf/AnatomicalStructure",
-        "http://purl.org/ccf/CellType",
-        "https://identifiers.org/ito:Process",
-        "http://www.semanticweb.org/ontology/HOOM#HPO_id",
-        "http://www.semanticweb.org/ontology/HOOM#OrphaCode",
-        "http://purl.bioontology.org/ontology/RCTV2/7....00",
+    # Roots that were once in the seed table and now live in the reviewed
+    # file, under the ontology they were read in. They carry no label in the
+    # graph that uses them, so the exact string is the whole of what makes
+    # them work -- and the id shape must still be recognised verbatim.
+    REVIEWED_IRIS = [
+        ("OMIT", "OBO:NCRO_0000025"),
+        ("FMA", "http://purl.org/obo/owlapi/fma#FMA_62955"),
+        ("HRA", "http://purl.org/ccf/AnatomicalStructure"),
+        ("HRA", "http://purl.org/ccf/CellType"),
+        ("ITO", "https://identifiers.org/ito:Process"),
+        ("HOOM", "http://www.semanticweb.org/ontology/HOOM#HPO_id"),
+        ("HOOM", "http://www.semanticweb.org/ontology/HOOM#OrphaCode"),
+        ("RCTV2", "http://purl.bioontology.org/ontology/RCTV2/7....00"),
+        ("SIO", "SIO:000776"),
+        ("GEXO", "SIO:000776"),
     ]
 
-    def test_the_iri_roots_are_seeded_verbatim(self):
-        # These carry no label in the graph that uses them; each was identified
-        # from another published graph or from its own subclasses, so the exact
-        # string is the whole of what makes them work.
-        for iri in self.IRI_SEEDS:
+    def test_the_moved_roots_are_reviewed_not_seeded(self):
+        # A judgement about one ontology is not a fact about a term. These
+        # left the seed table for the reviewed file, and must not be in both.
+        for ontology, iri in self.REVIEWED_IRIS:
             with self.subTest(iri=iri):
-                self.assertIn(iri, SEED_INDEX)
-                self.assertEqual(canonical_forms(iri), (iri,))
+                self.assertNotIn(iri, SEED_INDEX)
+                self.assertIn(iri, reviewed_index(ontology))
 
     def test_the_ambiguous_roots_stayed_out(self):
         # Rejected on evidence, and each would have been wrong:
         #   ccf/Biomarker      subclasses mix gene symbols with peptides
         #   RCTV2 chapter T    subclasses are accidents, not diseases
         #   SIO:000000         "entity" -- seeding the top re-derives NamedThing
-        for rejected in ("http://purl.org/ccf/Biomarker",
-                         "http://purl.bioontology.org/ontology/RCTV2/T....00",
-                         "SIO:000000"):
+        for ontology, rejected in (("HRA", "http://purl.org/ccf/Biomarker"),
+                                   ("RCTV2", "http://purl.bioontology.org/ontology/RCTV2/T....00"),
+                                   ("SIO", "SIO:000000")):
             self.assertNotIn(rejected, SEED_INDEX, rejected)
+            self.assertNotIn(rejected, reviewed_index(ontology), rejected)
+            refused = {r["id"] for r in REVIEWED_ROOTS[ontology].get("refused", ())}
+            self.assertIn(rejected, refused, f"{rejected} refused but not recorded as such")
 
     def test_each_measured_root_is_recognised_as_written(self):
         for curie, as_published, _ in self.MEASURED:
@@ -249,7 +261,17 @@ class TestNarrowingAnOverlappingPair(TestCase):
             toolkit = Toolkit()
         except Exception as e:  # noqa: BLE001 -- bmt absent, or it cannot fetch
             self.skipTest(f"biolink model toolkit unavailable: {e}")
-        used = set(SEEDS.values()) | set(UPPER_SEEDS.values())
+        # The table follows one model version. An older installed model is
+        # allowed to disagree with it; a newer one is not, so drift is still
+        # caught as the model moves on.
+        installed = toolkit.get_model_version()
+        if version_tuple(installed) < version_tuple(ANCESTORS_MODEL_VERSION):
+            self.skipTest(
+                f"installed Biolink model {installed} predates the "
+                f"{ANCESTORS_MODEL_VERSION} the table was written against")
+        used = set(SEEDS.values()) | set(UPPER_SEEDS.values()) | set(ONTOLOGY_DEFAULTS.values())
+        for review in REVIEWED_ROOTS.values():
+            used |= {root["category"] for root in review.get("roots", ())}
         for category in used:
             element = toolkit.get_element(category)
             self.assertIsNotNone(element, f"{category} is not a Biolink class")
@@ -703,3 +725,43 @@ class TestTheTransformActuallyRunsIt(TestCase):
 
         self.assertTrue(outcome.success)
         self.assertEqual(outcome.node_categories, {"biolink:Disease": 2})
+
+
+def broader(narrow, broad):
+    return (narrow, "skos:broader", broad)
+
+
+class TestTheHierarchyPredicates(TestCase):
+    def test_skos_broader_is_a_hierarchy(self):
+        # NLMVS has 119,942 skos:broader edges and no subclass_of at all.
+        g = Graph(self, ["MONDO:0000001", "n1", "n2"],
+                  [broader("n1", "MONDO:0000001"), broader("n2", "n1")])
+        self.assertEqual(g.categories()["n2"], "biolink:Disease")
+
+    def test_skos_narrower_reads_from_the_other_end(self):
+        g = Graph(self, ["MONDO:0000001", "n1"],
+                  [("MONDO:0000001", "skos:narrower", "n1")])
+        self.assertEqual(g.categories()["n1"], "biolink:Disease")
+
+    def test_a_self_loop_is_ignored(self):
+        g = Graph(self, ["MONDO:0000001"], [sub("MONDO:0000001", "MONDO:0000001")])
+        self.assertEqual(g.categories()["MONDO:0000001"], "biolink:Disease")
+
+
+class TestTheOtherIdShapes(TestCase):
+    def test_the_old_obo_owl_stem_is_recognised(self):
+        # BIOMODELS writes CL as http://purl.org/obo/owl/CL#CL_0000000.
+        self.assertIn("http://purl.org/obo/owl/CL#CL_0000000", canonical_forms("CL:0000000"))
+        self.assertIn("http://purl.org/obo/owl/CL#CL_0000000", SEED_INDEX)
+
+    def test_ncit_is_recognised_under_the_evs_stem(self):
+        self.assertIn("http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#C3262",
+                      canonical_forms("NCIT:C3262"))
+        self.assertEqual(SEED_INDEX["NCIT:C3262"][0], "biolink:Disease")
+
+    def test_an_unrelated_prefix_gets_no_extra_stem(self):
+        self.assertEqual(len(canonical_forms("GO:0008150")), 4)
+
+    def test_cseo_style_bfo_1_1_is_seeded(self):
+        self.assertIn("http://www.ifomis.org/snap#MaterialEntity", SEED_INDEX)
+        self.assertIn("http://www.ifomis.org/span#Process", SEED_INDEX)
