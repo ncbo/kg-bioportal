@@ -56,6 +56,18 @@ ASSOCIATION_NOTE = (
 
 SUBCLASS_PREDICATE = "biolink:subclass_of"
 
+# Predicates that put one term beneath another, and which end is the parent.
+# SKOS vocabularies have no subclass axioms at all; their whole hierarchy is
+# skos:broader (NLMVS carries 119,942 of them and not one subclass_of), so a
+# roll-up that reads only subclass_of sees a flat file. narrower is broader
+# written from the other end; both are read so a vocabulary that asserts only
+# one of them is not missed.
+HIERARCHY_PREDICATES: Dict[str, str] = {
+    SUBCLASS_PREDICATE: "object",   # subject subclass_of object: object is the parent
+    "skos:broader": "object",       # subject broader object: object is the parent
+    "skos:narrower": "subject",     # subject narrower object: subject is the parent
+}
+
 # Predicates that assert the same referent, so a category is true of both ends.
 # close_match is deliberately absent: "close" is not "same", and treating it as
 # such would push categories across boundaries the source was careful about.
@@ -75,7 +87,13 @@ SEEDS: Dict[str, str] = {
     "CL:0000000": "biolink:Cell",                    # cell
     "NCBITaxon:1": "biolink:OrganismTaxon",          # root
     "VTO:0000001": "biolink:OrganismTaxon",          # Chordata (VTO's root)
+    "TTO:0": "biolink:OrganismTaxon",                # Chordata (TTO's root)  38,639
     "UBERON:0000105": "biolink:LifeStage",           # life cycle stage
+    # Species anatomy ontologies, each rooted at its own "anatomical entity".
+    # Reach measured on data-2026.09.09.
+    "ZFA:0100000": "biolink:AnatomicalEntity",       # zebrafish anatomical entity
+    "XAO:0000000": "biolink:AnatomicalEntity",       # Xenopus anatomical entity
+    "FBbt:10000000": "biolink:AnatomicalEntity",     # anatomical entity (fly)  27,140
     # -- function, process, component
     "GO:0008150": "biolink:BiologicalProcessOrActivity",   # biological_process
     "GO:0003674": "biolink:BiologicalProcessOrActivity",   # molecular_function
@@ -87,6 +105,12 @@ SEEDS: Dict[str, str] = {
     "HP:0000118": "biolink:PhenotypicFeature",       # phenotypic abnormality
     "MP:0000001": "biolink:PhenotypicFeature",
     "UPHENO:0001001": "biolink:PhenotypicFeature",
+    # Species phenotype ontologies, each rooted at its own "phenotype". Their
+    # base graphs do not reach UPHENO's root because the imports are stripped.
+    "ZP:0000000": "biolink:PhenotypicFeature",       # Zebrafish Phenotype   43,521
+    "XPO:0000000": "biolink:PhenotypicFeature",      # Xenopus phenotype     21,196
+    "FLOPO:0000000": "biolink:PhenotypicFeature",    # flora phenotype       11,680
+    "FYPO:0000001": "biolink:PhenotypicFeature",     # phenotype (yeast)      8,311
     # -- chemistry and molecules
     "CHEBI:24431": "biolink:ChemicalEntity",         # chemical entity
     "PR:000018263": "biolink:Polypeptide",           # amino acid chain (PR's root)
@@ -114,6 +138,24 @@ SEEDS: Dict[str, str] = {
     "CLO:0000031": "biolink:CellLine",               # cell line
     "CHEBI:23367": "biolink:MolecularEntity",        # molecular entity
     "NCBITaxon:131567": "biolink:OrganismTaxon",     # cellular organisms
+    # NCIt's top-level kinds. NCIt itself is on the skip list, but its classes
+    # are reused by other ontologies (OMCO hangs 8,799 cancers off C9292), and
+    # they arrive both as NCIT: CURIEs and under the EVS Thesaurus IRI -- see
+    # canonical_forms. Labels checked against BioPortal's NCIT on 2026-09-10.
+    "NCIT:C2991": "biolink:Disease",                 # Disease or Disorder
+    "NCIT:C3262": "biolink:Disease",                 # Neoplasm
+    "NCIT:C9292": "biolink:Disease",                 # Solid Neoplasm
+    "NCIT:C7057": "biolink:DiseaseOrPhenotypicFeature",  # Disease, Disorder or Finding
+    "NCIT:C12219": "biolink:AnatomicalEntity",       # Anatomic Structure, System, or Substance
+    "NCIT:C12508": "biolink:Cell",                   # Cell
+    "NCIT:C14250": "biolink:OrganismTaxon",          # Organism
+    "NCIT:C16612": "biolink:Gene",                   # Gene
+    "NCIT:C17021": "biolink:Protein",                # Protein
+    "NCIT:C17828": "biolink:BiologicalProcess",      # Biological Process
+    "NCIT:C25218": "biolink:Procedure",              # Clinical Intervention or Procedure
+    "NCIT:C20189": "biolink:Attribute",              # Property or Attribute
+    "NCIT:C43431": "biolink:Activity",               # Activity
+    "NCIT:C1909": "biolink:ChemicalEntity",          # Pharmacologic Substance
     # OMIT's root carries no label of its own; its subclasses are gene symbols
     # (A1BG, A2M, NAT1, NAT2 ...), which is what identifies it.
     "NCRO:0000025": "biolink:Gene",                  #                    59,874
@@ -187,6 +229,27 @@ UPPER_SEEDS: Dict[str, str] = {
     "http://www.ifomis.org/bfo/1.1/span#Process": "biolink:Activity",
     "http://www.ifomis.org/bfo/1.1/span#ProcessAggregate": "biolink:Activity",
     "http://www.ifomis.org/bfo/1.1/span#FiatProcessPart": "biolink:Activity",
+    # The same BFO 1.1 terms under the shorter ifomis.org/snap# and span#
+    # namespaces, which is how CSEO writes them (20,050 nodes under
+    # bfo/1.1#Entity and not one under the form above). Same terms, same
+    # categories; the namespace is the only difference.
+    "http://www.ifomis.org/snap#IndependentContinuant": "biolink:PhysicalEntity",
+    "http://www.ifomis.org/snap#MaterialEntity": "biolink:PhysicalEntity",
+    "http://www.ifomis.org/snap#Object": "biolink:PhysicalEntity",
+    "http://www.ifomis.org/snap#ObjectAggregate": "biolink:PhysicalEntity",
+    "http://www.ifomis.org/snap#FiatObjectPart": "biolink:PhysicalEntity",
+    "http://www.ifomis.org/snap#Quality": "biolink:Attribute",
+    "http://www.ifomis.org/snap#RealizableEntity": "biolink:Attribute",
+    "http://www.ifomis.org/snap#Role": "biolink:Attribute",
+    "http://www.ifomis.org/snap#Disposition": "biolink:Attribute",
+    "http://www.ifomis.org/snap#Function": "biolink:Attribute",
+    "http://www.ifomis.org/snap#GenericallyDependentContinuant":
+        "biolink:InformationContentEntity",
+    "http://www.ifomis.org/span#Occurrent": "biolink:Activity",
+    "http://www.ifomis.org/span#ProcessualEntity": "biolink:Activity",
+    "http://www.ifomis.org/span#Process": "biolink:Activity",
+    "http://www.ifomis.org/span#ProcessAggregate": "biolink:Activity",
+    "http://www.ifomis.org/span#FiatProcessPart": "biolink:Activity",
     # BioTop, in the bioonto.de namespace BIOMODELS is built on. Same shape as
     # the BFO seeds above -- an upper ontology whose top classes are the only
     # thing a large ontology shares with anything else.
@@ -218,6 +281,10 @@ ONTOLOGY_DEFAULTS: Dict[str, str] = {
     "LION": "biolink:ChemicalEntity",
     "ROR": "biolink:Agent",
     "FAST-TITLE": "biolink:InformationContentEntity",
+    # Mouse anatomy by Theiler stage: "TS23 liver right lobe", "TS19
+    # metencephalon alar plate". 19,455 nodes and 525 subclass edges, so the
+    # hierarchy reaches almost none of it; the labels reach all of it.
+    "EMAP": "biolink:AnatomicalEntity",
 }
 
 # Prefixes that are never an ontology's own subject matter: the structural
@@ -265,19 +332,37 @@ SPECIFIC, GENERAL = 0, 1
 # at transform time; tests/test_categories.py checks it still agrees with the
 # installed bmt, so it cannot drift silently.
 #
-# It is shorter than it looks because most of these sit directly under
-# NamedThing -- AnatomicalEntity is *not* under PhysicalEntity, which is why
-# that particular tie needs the tiers above rather than this table.
+# Covers every category the seed tables use, and the ones the reviewed roots
+# will (#169). BiologicalEntity is on many lines because it is an ancestor of
+# most of the biology and of none of the chemistry. AnatomicalEntity is *not*
+# under PhysicalEntity, which is why that particular tie needs the tiers above
+# rather than this table.
 CATEGORY_ANCESTORS: Dict[str, Tuple[str, ...]] = {
-    "biolink:Cell": ("biolink:AnatomicalEntity",),
-    "biolink:CellularComponent": ("biolink:AnatomicalEntity",),
+    "biolink:AnatomicalEntity": ("biolink:BiologicalEntity",),
+    "biolink:BiologicalProcess": ("biolink:BiologicalEntity", "biolink:BiologicalProcessOrActivity"),
+    "biolink:BiologicalProcessOrActivity": ("biolink:BiologicalEntity",),
+    "biolink:Cell": ("biolink:AnatomicalEntity", "biolink:BiologicalEntity"),
+    "biolink:CellLine": ("biolink:BiologicalEntity",),
+    "biolink:CellularComponent": ("biolink:AnatomicalEntity", "biolink:BiologicalEntity"),
+    "biolink:ClinicalFinding": ("biolink:BiologicalEntity", "biolink:DiseaseOrPhenotypicFeature", "biolink:PhenotypicFeature"),
+    "biolink:Disease": ("biolink:BiologicalEntity", "biolink:DiseaseOrPhenotypicFeature"),
+    "biolink:DiseaseOrPhenotypicFeature": ("biolink:BiologicalEntity",),
+    "biolink:Drug": ("biolink:ChemicalEntity",),
+    "biolink:EvidenceType": ("biolink:InformationContentEntity",),
     "biolink:Food": ("biolink:ChemicalEntity",),
+    "biolink:Gene": ("biolink:BiologicalEntity",),
+    "biolink:GeneFamily": ("biolink:BiologicalEntity",),
+    "biolink:LifeStage": ("biolink:BiologicalEntity",),
+    "biolink:MacromolecularComplex": ("biolink:BiologicalEntity",),
     "biolink:MaterialSample": ("biolink:PhysicalEntity",),
     "biolink:MolecularEntity": ("biolink:ChemicalEntity",),
     "biolink:NucleicAcidEntity": ("biolink:ChemicalEntity", "biolink:MolecularEntity"),
-    "biolink:Pathway": ("biolink:BiologicalProcessOrActivity",),
-    "biolink:Protein": ("biolink:Polypeptide",),
+    "biolink:Pathway": ("biolink:BiologicalEntity", "biolink:BiologicalProcess", "biolink:BiologicalProcessOrActivity"),
+    "biolink:PhenotypicFeature": ("biolink:BiologicalEntity", "biolink:DiseaseOrPhenotypicFeature"),
+    "biolink:Polypeptide": ("biolink:BiologicalEntity",),
+    "biolink:Protein": ("biolink:BiologicalEntity", "biolink:Polypeptide"),
     "biolink:Publication": ("biolink:InformationContentEntity",),
+    "biolink:SequenceVariant": ("biolink:BiologicalEntity",),
 }
 
 
@@ -301,14 +386,28 @@ def most_specific(categories: Set[str]) -> Set[str]:
 # abbreviated to a CURIE.
 _OBO_IRI = "http://purl.obolibrary.org/obo/"
 
+# The stem OBO used before the obolibrary PURLs, in which BIOMODELS still
+# writes CL and PATO: http://purl.org/obo/owl/CL#CL_0000000. 2,799 of its
+# nodes sit under those two roots and matched nothing until this form was
+# recognised.
+_OLD_OBO_IRI = "http://purl.org/obo/owl/"
+
+# Prefixes whose terms also travel under a stem of their own. NCIt classes are
+# NCIT:C9292 in one graph and http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#C9292
+# in the next, and the EVS form cannot be derived from the OBO one.
+_EXTRA_STEMS: Dict[str, str] = {
+    "NCIT": "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#",
+}
+
 
 def canonical_forms(curie: str) -> Tuple[str, ...]:
     """Every id shape one seed term arrives in across our graphs.
 
     The same term is not written the same way twice across 1,200 ontologies.
     GO-PLUS abbreviates GO classes to ``GO:0008150``; VTO leaves its own to
-    ``OBO:VTO_0000001``; some sources never abbreviate at all. Rather than
-    guessing which an ontology uses, recognise all three.
+    ``OBO:VTO_0000001``; some sources never abbreviate at all, and a few still
+    use the purl.org/obo/owl stem that predates the obolibrary PURLs. Rather
+    than guessing which an ontology uses, recognise all four.
     """
     if "://" in curie:
         # Already an IRI -- BFO 1.1's terms arrive as one. There is no CURIE
@@ -318,7 +417,15 @@ def canonical_forms(curie: str) -> Tuple[str, ...]:
         return (curie,)
     prefix, _, local = curie.partition(":")
     underscored = f"{prefix}_{local}"
-    return (curie, f"OBO:{underscored}", f"{_OBO_IRI}{underscored}")
+    forms = [
+        curie,
+        f"OBO:{underscored}",
+        f"{_OBO_IRI}{underscored}",
+        f"{_OLD_OBO_IRI}{prefix}#{underscored}",
+    ]
+    if prefix in _EXTRA_STEMS:
+        forms.append(f"{_EXTRA_STEMS[prefix]}{local}")
+    return tuple(forms)
 
 
 def _expand() -> Dict[str, Tuple[str, int]]:
@@ -374,10 +481,11 @@ def _edge_graph(
 ) -> Tuple[Dict[str, List[str]], Dict[str, List[str]], Set[str]]:
     """Read the edge file once into what assignment needs from it.
 
-    Returns ``(children, mates, present_seeds)``: parent -> subclasses, node ->
-    nodes it is asserted to be the same thing as, and which seed terms this
-    ontology actually mentions. All three are built from edges alone, so nothing
-    here is proportional to the node file.
+    Returns ``(children, mates, present_seeds)``: parent -> narrower terms
+    (by subclass_of or skos:broader, see HIERARCHY_PREDICATES), node -> nodes
+    it is asserted to be the same thing as, and which seed terms this ontology
+    actually mentions. All three are built from edges alone, so nothing here is
+    proportional to the node file.
 
     ``present_seeds`` is collected here rather than derived from ``children``
     afterwards because a seed can appear only in a mapping edge, or only as
@@ -391,10 +499,13 @@ def _edge_graph(
     for subject, predicate, obj in _columns(
         edge_file, "subject", "predicate", "object"
     ):
-        if not subject or not obj:
+        if not subject or not obj or subject == obj:
             continue
-        if predicate == SUBCLASS_PREDICATE:
+        parent_end = HIERARCHY_PREDICATES.get(predicate)
+        if parent_end == "object":
             children[obj].append(subject)
+        elif parent_end == "subject":
+            children[subject].append(obj)
         elif predicate in MAPPING_PREDICATES:
             mates[subject].append(obj)
             mates[obj].append(subject)

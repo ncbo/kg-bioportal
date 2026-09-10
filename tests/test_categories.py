@@ -170,6 +170,10 @@ class TestTheSeedsMatchIdsThatOccur(TestCase):
         ("NCRO:0000025", "OBO:NCRO_0000025", 59874),
         ("MONDO:0000001", "MONDO:0000001", 31550),
         ("VTO:0000001", "OBO:VTO_0000001", 106998),
+        ("TTO:0", "OBO:TTO_0", 38639),
+        ("FBbt:10000000", "OBO:FBbt_10000000", 27140),
+        ("ZP:0000000", "ZP:0000000", 43521),
+        ("ZFA:0100000", "OBO:ZFA_0100000", 3091),
         # SIO's real top level. Its own root, SIO:000000 "entity", is useless as
         # a seed, but these three sit directly under it and carry most of the
         # SIO-built ontologies between them.
@@ -249,7 +253,7 @@ class TestNarrowingAnOverlappingPair(TestCase):
             toolkit = Toolkit()
         except Exception as e:  # noqa: BLE001 -- bmt absent, or it cannot fetch
             self.skipTest(f"biolink model toolkit unavailable: {e}")
-        used = set(SEEDS.values()) | set(UPPER_SEEDS.values())
+        used = set(SEEDS.values()) | set(UPPER_SEEDS.values()) | set(ONTOLOGY_DEFAULTS.values())
         for category in used:
             element = toolkit.get_element(category)
             self.assertIsNotNone(element, f"{category} is not a Biolink class")
@@ -703,3 +707,43 @@ class TestTheTransformActuallyRunsIt(TestCase):
 
         self.assertTrue(outcome.success)
         self.assertEqual(outcome.node_categories, {"biolink:Disease": 2})
+
+
+def broader(narrow, broad):
+    return (narrow, "skos:broader", broad)
+
+
+class TestTheHierarchyPredicates(TestCase):
+    def test_skos_broader_is_a_hierarchy(self):
+        # NLMVS has 119,942 skos:broader edges and no subclass_of at all.
+        g = Graph(self, ["MONDO:0000001", "n1", "n2"],
+                  [broader("n1", "MONDO:0000001"), broader("n2", "n1")])
+        self.assertEqual(g.categories()["n2"], "biolink:Disease")
+
+    def test_skos_narrower_reads_from_the_other_end(self):
+        g = Graph(self, ["MONDO:0000001", "n1"],
+                  [("MONDO:0000001", "skos:narrower", "n1")])
+        self.assertEqual(g.categories()["n1"], "biolink:Disease")
+
+    def test_a_self_loop_is_ignored(self):
+        g = Graph(self, ["MONDO:0000001"], [sub("MONDO:0000001", "MONDO:0000001")])
+        self.assertEqual(g.categories()["MONDO:0000001"], "biolink:Disease")
+
+
+class TestTheOtherIdShapes(TestCase):
+    def test_the_old_obo_owl_stem_is_recognised(self):
+        # BIOMODELS writes CL as http://purl.org/obo/owl/CL#CL_0000000.
+        self.assertIn("http://purl.org/obo/owl/CL#CL_0000000", canonical_forms("CL:0000000"))
+        self.assertIn("http://purl.org/obo/owl/CL#CL_0000000", SEED_INDEX)
+
+    def test_ncit_is_recognised_under_the_evs_stem(self):
+        self.assertIn("http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#C3262",
+                      canonical_forms("NCIT:C3262"))
+        self.assertEqual(SEED_INDEX["NCIT:C3262"][0], "biolink:Disease")
+
+    def test_an_unrelated_prefix_gets_no_extra_stem(self):
+        self.assertEqual(len(canonical_forms("GO:0008150")), 4)
+
+    def test_cseo_style_bfo_1_1_is_seeded(self):
+        self.assertIn("http://www.ifomis.org/snap#MaterialEntity", SEED_INDEX)
+        self.assertIn("http://www.ifomis.org/span#Process", SEED_INDEX)
