@@ -359,3 +359,47 @@ class TestItReachesTheStats(TestCase):
         output = "\n".join(logs.output)
         self.assertIn("ONTO: node categories: biolink:Disease 1", output)
         self.assertIn(f"ONTO: edge categories: {ROOT_ASSOCIATION} 2", output)
+
+
+class TestTheSourcesReachTheStats(TestItReachesTheStats):
+    """How the categories were decided has to travel with the tally (#169)."""
+
+    # A seed term with one subclass: one seeded, one inherited.
+    SEEDED_NODES = (["id", "category"], ["MONDO:0000001", "biolink:NamedThing"],
+                    ["MONDO:0000002", "biolink:NamedThing"], ["loose", "biolink:NamedThing"])
+    SEEDED_EDGES = (["id", "subject", "predicate", "object", "category"],
+                    ["e1", "MONDO:0000002", "biolink:subclass_of", "MONDO:0000001", ROOT_ASSOCIATION])
+
+    def test_the_sources_reach_the_outcome(self):
+        outcome = self.run_transform(self.SEEDED_NODES, self.SEEDED_EDGES)
+        self.assertEqual(outcome.category_sources, {"seeded": 1, "inherited": 1})
+        self.assertEqual(outcome.category_review, {})
+
+    def test_the_sources_reach_onto_stats(self):
+        self.run_transform(self.SEEDED_NODES, self.SEEDED_EDGES, all_at_once=True)
+        self.assertEqual(self.stats()["category_sources"], {"seeded": 1, "inherited": 1})
+        self.assertNotIn("category_review", self.stats())
+
+    def test_nothing_assigned_records_no_sources(self):
+        self.run_transform(self.NODES, self.EDGES, all_at_once=True)
+        self.assertNotIn("category_sources", self.stats())
+
+    def test_a_review_reaches_onto_stats_with_its_provenance(self):
+        from kg_bioportal import categories
+        reviews = {"ONTO": {
+            "graph": "data-x", "reviewed": "2026-09-10", "reviewer": "a test",
+            "confirmed_by": "", "roots": [
+                {"id": "R", "label": "r", "category": "biolink:Gene", "reach": 1, "evidence": ["g"]}],
+            "refused": [],
+        }}
+        nodes = (["id", "category"], ["R", "biolink:NamedThing"], ["R1", "biolink:NamedThing"])
+        edges = (["id", "subject", "predicate", "object", "category"],
+                 ["e1", "R1", "biolink:subclass_of", "R", ROOT_ASSOCIATION])
+        with mock.patch.object(categories, "REVIEWED_ROOTS", reviews):
+            self.run_transform(nodes, edges, all_at_once=True)
+        entry = self.stats()
+        self.assertEqual(entry["category_sources"], {"reviewed": 2})
+        self.assertEqual(entry["category_review"], {
+            "reviewer": "a test", "reviewed": "2026-09-10", "confirmed_by": "",
+            "graph": "data-x", "roots": 1, "refused": 0})
+        self.assertEqual(entry["node_categories"], {"biolink:Gene": 2})
