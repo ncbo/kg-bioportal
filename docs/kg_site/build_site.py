@@ -208,6 +208,10 @@ def onto_to_item(o, transform_date):
         # recorded them; the page then says so rather than showing an empty chart.
         "node_categories": o.get("node_categories") or {},
         "edge_categories": o.get("edge_categories") or {},
+        # How the node categories were decided, and the review's provenance
+        # where an AI agent's reading of the roots was part of it (#169).
+        "category_sources": o.get("category_sources") or {},
+        "category_review": o.get("category_review") or {},
         "transform_date": transform_date or "",
     }
 
@@ -595,15 +599,78 @@ def category_chart(counts, kind, unit):
 MULTI_CAT_NOTE = ("An item carrying more than one category is counted under each, so these "
                   "counts can add up to more than the total.")
 
-def category_panel(counts, total, kind, unit, absent_html):
-    """The Nodes/Edges tab body for one ontology: its category tally, or why there isn't one."""
+def category_panel(counts, total, kind, unit, absent_html, sources=None, review=None):
+    """The Nodes/Edges tab body for one ontology: its category tally, or why there isn't one.
+
+    ``sources`` and ``review`` are the node side's provenance; the edge side
+    passes neither, because edges are not categorized here.
+    """
     if not counts:
         return absent_html
     n = len(counts)
     head = (f'<p class="eyebrow">Biolink categories <span class="eb-count">'
             f'{commafy(n)} {"category" if n == 1 else "categories"} across '
             f'{commafy(total)} {unit}</span></p>')
-    return head + category_chart(counts, kind, unit) + f'<p class="muted mt">{MULTI_CAT_NOTE}</p>'
+    return (head + category_chart(counts, kind, unit)
+            + f'<p class="muted mt">{MULTI_CAT_NOTE}</p>'
+            + category_provenance(sources, review, total))
+
+# The routes a node category can arrive by, in the order the transform tries
+# them, with the words the page uses for each.
+SOURCE_LABELS = (
+    ("seeded", "is a seed term whose Biolink class is not in doubt"),
+    ("inherited", "inherits from a seed term above it in the hierarchy"),
+    ("mapped", "takes the category of a term it is mapped to by exact match"),
+    ("defaulted", "takes the one category the whole ontology is"),
+    ("reviewed", "inherits from a root class placed by review"),
+)
+
+# Said on every page where a reviewed root did any work. The wording is the
+# point: a category decided with an AI agent's help must say so where it is
+# shown, not in a footnote elsewhere (#169).
+REVIEW_DISCLOSURE = (
+    "These root classes were placed by reading them and their subclasses in the "
+    "published graph, with the assistance of an AI agent. The reading, the "
+    "evidence, and the refusals are recorded in "
+    '<a href="https://github.com/ncbo/kg-bioportal/blob/main/src/kg_bioportal/reviewed_roots.yaml" '
+    'target="_blank" rel="noopener">reviewed_roots.yaml</a>. '
+    "See <a href=\"../../about/#categories\">how categories are assigned</a>."
+)
+
+def category_provenance(sources, review, total):
+    """How the node categories were decided, and by whom where a review was part of it.
+
+    Empty for an index entry recorded before the sources were, so an old
+    page keeps its tally and says nothing it cannot back.
+    """
+    if not sources:
+        return ""
+    assigned = sum(v for k, v in sources.items() if k in dict(SOURCE_LABELS))
+    share = f" ({assigned / total * 100:.1f}%)" if total else ""
+    rows = "".join(
+        f'<div class="row"><span class="lab">{commafy(sources[key])}</span>'
+        f'<span class="val">{esc(text)}</span></div>'
+        for key, text in SOURCE_LABELS if sources.get(key)
+    )
+    html = (f'<p class="eyebrow mt">How they were assigned '
+            f'<span class="eb-count">{commafy(assigned)} of {commafy(total)} nodes{share}</span></p>'
+            f'<div class="provenance">{rows}</div>')
+    reviewed = sources.get("reviewed")
+    if reviewed:
+        review = review or {}
+        who = review.get("reviewer") or "an AI agent"
+        when = review.get("reviewed") or ""
+        n_roots = review.get("roots")
+        confirmed = review.get("confirmed_by") or ""
+        roots_txt = (f'{commafy(n_roots)} root {"class" if n_roots == 1 else "classes"}'
+                     if isinstance(n_roots, int) and n_roots else "root classes")
+        status = (f"Confirmed by {esc(confirmed)}." if confirmed
+                  else "Not yet confirmed by a maintainer.")
+        html += (f'<p class="muted mt review-note"><b>{commafy(reviewed)}</b> of these nodes '
+                 f'{"inherit" if reviewed != 1 else "inherits"} a category from {roots_txt} '
+                 f'reviewed by {esc(who)}{(" on " + esc(when)) if when else ""}. '
+                 f'{status} {REVIEW_DISCLOSURE}</p>')
+    return html
 
 def render_summary(totals, kg_count, onto_items):
     """Site-wide summary: headline counts, transform status, and top-10 charts."""
@@ -813,6 +880,42 @@ def render_about():
           to nodes and edges. The
           <a href="../summary/">Summary</a> page reports how many ontologies came through the most
           recent run, and how large the resulting graphs are.</p>
+
+        <h2 id="categories">How are categories assigned?</h2>
+        <p>An OWL file says nothing about Biolink, so every node arrives from the KGX conversion as
+          <span class="mono">biolink:NamedThing</span>. KG&#8209;Bioportal then decides a more
+          specific class for as many nodes as the evidence in the graph supports, by four routes,
+          tried in this order:</p>
+        <ol>
+          <li><b>Seed terms.</b> A short table of classes whose Biolink meaning is not in doubt:
+            GO's <i>biological_process</i>, MONDO's <i>disease</i>, CHEBI's <i>chemical entity</i>,
+            NCBITaxon's root, and the upper-ontology terms of BFO. A node that is one of these takes
+            its category.</li>
+          <li><b>Inheritance.</b> Every class beneath a seed, by <span class="mono">subclass_of</span>
+            or <span class="mono">skos:broader</span>, inherits its category. The nearest seed wins,
+            and a domain seed beats an upper-ontology one at the same distance.</li>
+          <li><b>Mappings.</b> An <span class="mono">exact_match</span> edge asserts the same referent,
+            so a category crosses it to a node that has none. This is what reaches the UMLS, ICD and
+            SNOMED identifiers an ontology maps to, which have no hierarchy of their own.</li>
+          <li><b>Reviewed roots.</b> Many ontologies hang off roots whose meaning is a fact about that
+            ontology rather than about the term: an ICD chapter, an HGNC locus group, one axis of
+            SNOMED International. Those roots were placed by reading each one and its subclasses in
+            the published graph, <b>with the assistance of an AI agent</b>, one ontology at a time.
+            Each placement is recorded in
+            <a href="https://github.com/ncbo/kg-bioportal/blob/main/src/kg_bioportal/reviewed_roots.yaml"
+               target="_blank" rel="noopener">reviewed_roots.yaml</a> with the reviewer, the date, the
+            graph read, the subclass labels that were the evidence, and whether a maintainer has since
+            confirmed it. Roots that were read and turned down are recorded there too, with the
+            reason. A node that owes its category to a reviewed root is counted apart on its
+            ontology's page, under <i>How they were assigned</i>, so the provenance travels with the
+            number.</li>
+        </ol>
+        <p>A few ontologies are one kind of thing end to end and say so nowhere a machine can read
+          (GNO is glycans; ROR is research organisations). Those take one category as a whole, and
+          the page says so. Nothing else is guessed: a node the evidence says nothing about stays
+          <span class="mono">NamedThing</span>. Edges keep the general
+          <span class="mono">biolink:Association</span>, because Biolink's association classes
+          cannot be resolved from a category pair alone.</p>
 
         <h2>How is it useful?</h2>
         <p>KG&#8209;Bioportal supports a holistic examination of a broad collection of hierarchical
@@ -1409,6 +1512,7 @@ def render_ontology_resource(it, resolve=None):
         + (f' — each node carries a <span class="mono">category</span> column in the KGX download. '
            f'Total nodes: <span class="num">{commafy(nodes)}</span>.' if ok and nodes else ".")
         + "</p>",
+        sources=it.get("category_sources"), review=it.get("category_review"),
     )
     ont_edges_panel = category_panel(
         it.get("edge_categories"), edges, "edge", "edges",
@@ -1743,6 +1847,11 @@ padding:3px 5px;border-radius:7px;color:var(--ink)}
 .bar-fill{display:block;height:100%;border-radius:0 4px 4px 0;min-width:2px}
 .bar-fill.node{background:var(--node)}.bar-fill.edge{background:var(--edge)}
 .bar-val{font-size:12px;color:var(--ink-soft);text-align:right}
+/* how categories were assigned: count, then the route */
+.provenance .row{display:flex;gap:12px;align-items:baseline;padding:4px 0;border-bottom:1px solid var(--line)}
+.provenance .row .lab{min-width:6em;text-align:right;font-variant-numeric:tabular-nums}
+.provenance .row:last-child{border:0}
+.review-note{border-left:3px solid var(--accent, #888);padding-left:10px}
 /* category tallies: longer labels, exact counts */
 .bar-row.wide{grid-template-columns:190px minmax(0,1fr) 76px}
 @media(max-width:520px){.bar-row{grid-template-columns:88px minmax(0,1fr) 46px;gap:8px}
