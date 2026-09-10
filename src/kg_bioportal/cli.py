@@ -390,6 +390,52 @@ def download(
 
 
 @main.command()
+@click.argument("graph", type=click.Path(exists=True))
+@click.option(
+    "--ontology", "-n", default="",
+    help="The ontology's acronym, recorded in the packet.",
+)
+@click.option(
+    "--output", "-o", default="",
+    help="Write the packet here instead of standard output.",
+)
+@click.option("--top_roots", default=8, type=int, show_default=True)
+@click.option("--top_children", default=12, type=int, show_default=True)
+def roots(graph, ontology, output, top_roots, top_children) -> None:
+    """Lay out the top of a graph's hierarchy for category review.
+
+    GRAPH is a published <ACRONYM>.tar.gz, or a directory holding the
+    _nodes.tsv and _edges.tsv. The packet lists the roots and their children,
+    ranked by the uncategorized nodes beneath each, with a sample of labels
+    from beneath every child: what a reviewer reads before adding an entry to
+    reviewed_roots.yaml. See categories.REVIEW_BAR for the bar.
+    """
+    import tempfile
+
+    from kg_bioportal.roots import format_packet, open_graph, review_packet
+
+    with tempfile.TemporaryDirectory() as workdir:
+        node_file, edge_file = open_graph(graph, workdir)
+        if not ontology:
+            ontology = os.path.basename(node_file).split("_nodes.tsv")[0].split("_full")[0]
+        packet = review_packet(
+            node_file, edge_file, ontology,
+            top_roots=top_roots, top_children=top_children,
+        )
+    text = format_packet(packet)
+    if output:
+        with open(output, "w") as f:
+            f.write(text)
+        logging.info(
+            f"{ontology}: {packet['nodes']:,} nodes, {packet['uncategorized']:,} "
+            f"uncategorized, {packet['reachable_from_roots']:,} beneath the "
+            f"{len(packet['roots'])} roots listed; packet written to {output}"
+        )
+    else:
+        click.echo(text)
+
+
+@main.command()
 @click.option("--input_dir", "-i", default="data/raw", type=click.Path(exists=True))
 @click.option("--output_dir", "-o", default="data/transformed")
 @click.option(
