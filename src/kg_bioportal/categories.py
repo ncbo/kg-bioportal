@@ -401,12 +401,19 @@ def review_record(ontology_name: str) -> Dict[str, object]:
 # at transform time; tests/test_categories.py checks it still agrees with the
 # installed bmt, so it cannot drift silently.
 #
+# Written against the Biolink model version below, and checked against the
+# installed model by tests/test_categories.py; the versions disagree on small
+# things (4.2.2 puts EvidenceType under InformationContentEntity, 4.4.4 does
+# not), so the check runs only where the installed model is at least this one.
+#
 # Covers every category the seed tables and the reviewed-roots file use.
 # BiologicalEntity is on many lines because ARO's resistance determinants are
 # seeded with it (genes and proteins side by side); it is an ancestor of most
 # of the biology and of none of the chemistry. AnatomicalEntity is *not* under
 # PhysicalEntity, which is why that particular tie needs the tiers above
 # rather than this table.
+ANCESTORS_MODEL_VERSION = "4.4.4"
+
 CATEGORY_ANCESTORS: Dict[str, Tuple[str, ...]] = {
     "biolink:AnatomicalEntity": ("biolink:BiologicalEntity",),
     "biolink:BiologicalProcess": ("biolink:BiologicalEntity", "biolink:BiologicalProcessOrActivity"),
@@ -418,7 +425,6 @@ CATEGORY_ANCESTORS: Dict[str, Tuple[str, ...]] = {
     "biolink:Disease": ("biolink:BiologicalEntity", "biolink:DiseaseOrPhenotypicFeature"),
     "biolink:DiseaseOrPhenotypicFeature": ("biolink:BiologicalEntity",),
     "biolink:Drug": ("biolink:ChemicalEntity",),
-    "biolink:EvidenceType": ("biolink:InformationContentEntity",),
     "biolink:Food": ("biolink:ChemicalEntity",),
     "biolink:Gene": ("biolink:BiologicalEntity",),
     "biolink:GeneFamily": ("biolink:BiologicalEntity",),

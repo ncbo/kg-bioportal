@@ -26,6 +26,7 @@ from unittest import TestCase, mock
 
 from kg_bioportal import categories
 from kg_bioportal.categories import (
+    ANCESTORS_MODEL_VERSION,
     CATEGORY_ANCESTORS,
     ONTOLOGY_DEFAULTS,
     REVIEWED_ROOTS,
@@ -83,6 +84,10 @@ class Graph:
 
 def sub(child, parent):
     return (child, "biolink:subclass_of", parent)
+
+
+def version_tuple(version):
+    return tuple(int(p) for p in re.findall(r"\d+", str(version))[:3])
 
 
 def same(a, b):
@@ -256,6 +261,14 @@ class TestNarrowingAnOverlappingPair(TestCase):
             toolkit = Toolkit()
         except Exception as e:  # noqa: BLE001 -- bmt absent, or it cannot fetch
             self.skipTest(f"biolink model toolkit unavailable: {e}")
+        # The table follows one model version. An older installed model is
+        # allowed to disagree with it; a newer one is not, so drift is still
+        # caught as the model moves on.
+        installed = toolkit.get_model_version()
+        if version_tuple(installed) < version_tuple(ANCESTORS_MODEL_VERSION):
+            self.skipTest(
+                f"installed Biolink model {installed} predates the "
+                f"{ANCESTORS_MODEL_VERSION} the table was written against")
         used = set(SEEDS.values()) | set(UPPER_SEEDS.values()) | set(ONTOLOGY_DEFAULTS.values())
         for review in REVIEWED_ROOTS.values():
             used |= {root["category"] for root in review.get("roots", ())}
