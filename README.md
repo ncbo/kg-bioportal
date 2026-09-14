@@ -290,6 +290,18 @@ API key). Use the **ontologies** input (e.g. `AGRO SEPIO PO`) to test a handful
 without running the full set, and **full_graphs** to switch full graphs off for
 a run.
 
+A run of the full list only retransforms what changed on BioPortal since the
+index was built (version-skip). To retransform everything, tick
+**rebuild_all**. Everything does not fit in one release (1,000 assets, about
+1.1 per ontology), so a rebuild-all runs as a chain: each run takes the next
+**batch_size** acronyms (330 by default, four batches of about 25 minutes)
+after the previous batch's last one, and dispatches the run after it once its
+index is latest. One click starts the chain; the last batch dispatches nothing.
+
+```bash
+gh workflow run transform.yml -f rebuild_all=true
+```
+
 ## Running locally
 
 ```bash

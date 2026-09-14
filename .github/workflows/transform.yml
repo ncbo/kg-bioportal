@@ -36,6 +36,19 @@ on:
         required: false
         type: boolean
         default: true
+      rebuild_all:
+        description: "Retransform every ontology, ignoring version-skip, in batches run one after another (each batch is its own release, under the 1000-asset cap). Leave ontologies blank."
+        required: false
+        type: boolean
+        default: false
+      batch_size:
+        description: "Ontologies per batch of a rebuild-all"
+        required: false
+        default: "330"
+      rebuild_after:
+        description: "Internal: the last acronym of the previous batch of a rebuild-all. Set by the chain; leave blank."
+        required: false
+        default: ""
   # Monthly. Version-skip (in prepare) means a scheduled run only (re)transforms
   # ontologies whose BioPortal submission changed since the last index, so each
   # run's release stays well under the 1000-asset cap; a month with no changes is
@@ -45,6 +58,7 @@ on:
 
 permissions:
   contents: write
+  actions: write  # a rebuild-all batch dispatches the batch after it
 
 concurrency:
   group: transform-${{ github.ref }}
@@ -56,6 +70,8 @@ env:
   NUM_SHARDS: ${{ github.event.inputs.num_shards || '20' }}
   # A scheduled run has no inputs; full graphs are on unless a dispatch turns them off.
   FULL_FLAG: ${{ github.event.inputs.full_graphs == 'false' && '--no_full' || '--full' }}
+  REBUILD_ALL: ${{ github.event.inputs.rebuild_all == 'true' && 'true' || 'false' }}
+  BATCH_SIZE: ${{ github.event.inputs.batch_size || '330' }}
 
 jobs:
   prepare:
@@ -63,6 +79,8 @@ jobs:
     outputs:
       shards: ${{ steps.shard.outputs.shards }}
       tag: ${{ steps.rel.outputs.tag }}
+      batch_last: ${{ steps.batch.outputs.last }}
+      batch_more: ${{ steps.batch.outputs.more }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -82,13 +100,24 @@ jobs:
         run: gh release download -p onto_stats.yaml -D prev || echo "No index yet; will transform all."
         env:
           GH_TOKEN: ${{ github.token }}
+      - name: Cut this run's batch of a rebuild-all
+        id: batch
+        # A rebuild-all retransforms everything, and everything does not fit in
+        # one release (1,000 assets; about 1.1 per ontology). So it runs as a
+        # chain: each run takes the next batch_size acronyms after the previous
+        # batch's last one, in sorted order, and finalize dispatches the run
+        # after it. The batch is handed to shard-list as an explicit list, which
+        # is never version-skipped.
+        if: ${{ env.REBUILD_ALL == 'true' && github.event.inputs.ontologies == '' }}
+        run: kgbioportal rebuild-batch -f data/raw/ontologylist.tsv --after "${{ github.event.inputs.rebuild_after }}" --size "$BATCH_SIZE" | tee -a "$GITHUB_OUTPUT"
       - name: Compute shards
         id: shard
         # Explicit ontologies input: transform exactly those (no version-skip).
         # Full list: version-skip against the current index — only new/changed
         # BioPortal submissions are (re)transformed; unchanged graphs carry forward.
+        # Rebuild-all: this run's batch, as an explicit list.
         #
-        # Both pass --index: it carries the source sizes the shards are balanced
+        # All pass --index: it carries the source sizes the shards are balanced
         # by, and version-skip applies only to the full list, so an explicit list
         # is still transformed exactly as given.
         #
@@ -99,6 +128,8 @@ jobs:
         run: |
           if [ -n "${{ github.event.inputs.ontologies }}" ]; then
             SHARDS=$(kgbioportal shard-list -d "${{ github.event.inputs.ontologies }}" -n "$NUM_SHARDS" --index prev/onto_stats.yaml --max_source_mb "$MAX_SOURCE_MB")
+          elif [ "$REBUILD_ALL" = "true" ]; then
+            SHARDS=$(kgbioportal shard-list -d "${{ steps.batch.outputs.ontologies }}" -n "$NUM_SHARDS" --index prev/onto_stats.yaml --max_source_mb "$MAX_SOURCE_MB")
           else
             SHARDS=$(kgbioportal shard-list -f data/raw/ontologylist.tsv -n "$NUM_SHARDS" --index prev/onto_stats.yaml --max_source_mb "$MAX_SOURCE_MB")
           fi
@@ -212,5 +243,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
       - name: Mark this run's release as latest
         run: gh release edit "${{ needs.prepare.outputs.tag }}" --latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Dispatch the next batch of the rebuild-all
+        # Only once this run's index is latest, so the next batch seeds from
+        # it. Same ref and same settings, cursor moved to this batch's last
+        # acronym. Dispatching one at a time is deliberate: the concurrency
+        # group keeps one pending run and cancels older pending ones, so
+        # dispatching every batch at once would lose all but two.
+        if: ${{ needs.prepare.outputs.batch_more == 'true' }}
+        run: |
+          gh workflow run transform.yml --ref "${{ github.ref_name }}" \
+            -f rebuild_all=true \
+            -f rebuild_after="${{ needs.prepare.outputs.batch_last }}" \
+            -f batch_size="$BATCH_SIZE" \
+            -f num_shards="$NUM_SHARDS" \
+            -f max_source_mb="$MAX_SOURCE_MB" \
+            -f timeout_min="$TIMEOUT_MIN" \
+            -f full_graphs="${{ github.event.inputs.full_graphs != 'false' }}"
         env:
           GH_TOKEN: ${{ github.token }}
