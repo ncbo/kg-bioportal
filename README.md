@@ -81,6 +81,10 @@ so. `license` is the license as an IRI (or, rarely, a phrase), and
   explicit annotation counts: a license stated in a comment is not found.
 
 An entry with neither field has no license on record, and the site says so.
+Runs skip unchanged ontologies, so an index built before the field existed
+fills in one rebuild at a time; `kgbioportal backfill-licenses --index
+onto_stats.yaml --api_key <key>` writes the BioPortal half onto every entry
+in one request, with the same precedence. The header half needs a transform.
 The license is the ontology's, not the transform's: KG-Bioportal passes it
 through and grants nothing.
 
