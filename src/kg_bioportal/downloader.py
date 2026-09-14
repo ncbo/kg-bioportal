@@ -55,6 +55,32 @@ def submission_license(submission: dict) -> str:
     return " ".join(str(value or "").split())
 
 
+def bioportal_licenses(api_key: str, session=None) -> dict:
+    """{acronym: license IRI} for every BioPortal ontology whose latest
+    submission records one (``hasLicense``), in one request.
+
+    Backs the ``backfill-licenses`` command, which writes BioPortal's record
+    into an index built before the downloader carried it. The transform
+    records the same field at download time; this is for the entries no run
+    has rebuilt since.
+    """
+    session = session or requests.Session()
+    response = session.get(
+        "https://data.bioontology.org/submissions",
+        params={"display": "hasLicense,ontology"},
+        headers={"Authorization": f"apikey token={api_key}"},
+        timeout=_TIMEOUT,
+    )
+    response.raise_for_status()
+    found = {}
+    for submission in response.json():
+        acronym = (submission.get("ontology") or {}).get("acronym")
+        license = submission_license(submission)
+        if acronym and license:
+            found[acronym] = license
+    return found
+
+
 class Downloader:
 
     def __init__(

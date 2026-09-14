@@ -13,8 +13,8 @@ from kg_bioportal.config import (
     PER_ONTOLOGY_TIMEOUT_MIN,
     is_skiplisted,
 )
-from kg_bioportal.downloader import Downloader, ONTOLOGY_LIST_NAME
-from kg_bioportal.transformer import Transformer
+from kg_bioportal.downloader import Downloader, ONTOLOGY_LIST_NAME, bioportal_licenses
+from kg_bioportal.transformer import Transformer, backfill_licenses
 
 __all__ = [
     "main",
@@ -433,6 +433,41 @@ def roots(graph, ontology, output, top_roots, top_children) -> None:
         )
     else:
         click.echo(text)
+
+
+@main.command("backfill-licenses")
+@click.option(
+    "--index", "-x", required=True, type=click.Path(exists=True),
+    help="onto_stats.yaml to update in place.",
+)
+@click.option("--api_key", "-k", required=True, type=str, help="API key for BioPortal")
+def backfill_licenses_cmd(index, api_key) -> None:
+    """Write BioPortal's license record into an existing index, in place.
+
+    The transform records each ontology's license at download time, but runs
+    skip unchanged ontologies, so an index built before the field existed
+    fills in one rebuild at a time. This fetches every latest submission's
+    hasLicense in one request and writes it onto the matching entries, with
+    the same precedence the transform uses: BioPortal's record wins, and an
+    entry BioPortal has no license for is left alone. Only the bioportal half
+    is backfilled; the ontology-header half needs the source, so it needs a
+    transform.
+    """
+    import yaml
+
+    with open(index) as f:
+        data = yaml.safe_load(f) or {}
+    entries = data.get("ontologies", [])
+    licenses = bioportal_licenses(api_key)
+    changed = backfill_licenses(entries, licenses)
+    with open(index, "w") as f:
+        yaml.dump(data, f, sort_keys=False)
+    with_license = sum(1 for e in entries if e.get("license"))
+    logging.info(
+        f"BioPortal records a license for {len(licenses)} ontologies; "
+        f"{changed} entries changed; {with_license} of {len(entries)} entries now carry one."
+    )
+    click.echo(f"{changed} entries changed; {with_license}/{len(entries)} carry a license.")
 
 
 @main.command()

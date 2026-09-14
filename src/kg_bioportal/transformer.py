@@ -779,6 +779,27 @@ def license_fields(bioportal_license: str, header_license: str) -> Dict[str, str
     return {}
 
 
+def backfill_licenses(entries: list, licenses: dict) -> int:
+    """Write BioPortal's license onto index entries that lack it. Returns how many changed.
+
+    Same precedence as ``license_fields``: BioPortal's record wins, so an
+    entry whose license came from the ontology header is replaced where
+    BioPortal now has one. An entry BioPortal has no license for is left as
+    it is, header license and all.
+    """
+    changed = 0
+    for entry in entries:
+        license = licenses.get(entry.get("id", ""))
+        if not license:
+            continue
+        fields = license_fields(license, "")
+        if all(entry.get(k) == v for k, v in fields.items()):
+            continue
+        entry.update(fields)
+        changed += 1
+    return changed
+
+
 def is_import_only(imports: int, nodecount: int, edgecount: int) -> bool:
     """Is a base graph nothing but the ontology's header?
 

@@ -382,3 +382,54 @@ class TestLicenseOnThePage(TestCase):
         self.assertEqual(html.count('class="chip sm lic"'), 1)
         self.assertIn(f'title="{CC_BY_4}">CC BY 4.0</span>', html)
         self.assertRegex(html, r'data-search="[^"]*cc by 4\.0')
+
+
+class _Listing:
+    """A response for the submissions listing, with a payload and no error."""
+
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self._payload
+
+
+class TestBackfill(TestCase):
+    """The backfill writes BioPortal's record onto an existing index, same precedence."""
+
+    def test_fills_missing_replaces_header_leaves_the_rest(self):
+        from kg_bioportal.transformer import backfill_licenses
+        entries = [
+            {"id": "NEW", "status": "OK"},
+            {"id": "HDR", "status": "OK", "license": CC0, "license_from": "ontology"},
+            {"id": "SAME", "status": "OK", "license": CC_BY_4, "license_from": "bioportal"},
+            {"id": "NONE", "status": "OK", "license": CC0, "license_from": "ontology"},
+            {"id": "BARE", "status": "Skipped", "reason": "skiplist"},
+        ]
+        changed = backfill_licenses(entries, {"NEW": CC_BY_4, "HDR": CC_BY_4, "SAME": CC_BY_4,
+                                              "ELSEWHERE": CC0})
+        self.assertEqual(changed, 2)
+        by_id = {e["id"]: e for e in entries}
+        self.assertEqual(by_id["NEW"], {"id": "NEW", "status": "OK", "license": CC_BY_4,
+                                        "license_from": "bioportal"})
+        self.assertEqual(by_id["HDR"]["license_from"], "bioportal")
+        self.assertEqual(by_id["NONE"]["license_from"], "ontology")
+        self.assertNotIn("license", by_id["BARE"])
+
+    def test_bioportal_licenses_reads_the_submissions_listing(self):
+        from kg_bioportal.downloader import bioportal_licenses
+
+        class Session:
+            def get(self, url, **kw):
+                assert url.endswith("/submissions")
+                assert kw["params"]["display"].startswith("hasLicense")
+                return _Listing([
+                    {"ontology": {"acronym": "A"}, "hasLicense": CC_BY_4},
+                    {"ontology": {"acronym": "B"}, "hasLicense": None},
+                    {"ontology": {}, "hasLicense": CC0},
+                ])
+
+        self.assertEqual(bioportal_licenses("k", session=Session()), {"A": CC_BY_4})
