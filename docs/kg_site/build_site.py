@@ -18,7 +18,8 @@ Usage:
     python build_site.py IN.jsonld OUT   # explicit paths
     python build_site.py --fetch         # download the JSON-LD first
 """
-import json, os, re, sys, html, shutil, urllib.request
+import json
+import os, re, sys, html, shutil, urllib.request
 
 REGISTRY_URL = "https://kghub.org/kg-registry/registry/kgs.jsonld"
 
@@ -111,6 +112,44 @@ def fmt_class(f):
 # hand out a link we know is broken.
 RELEASES_PAGE = "https://github.com/ncbo/kg-bioportal/releases"
 
+# Short names for the license IRIs BioPortal and ontology headers actually
+# carry. Matched on the path after the scheme and host, so http and https,
+# and a trailing slash or none, all read the same. Anything else is shown as
+# the IRI itself, host and path, so nothing is hidden behind a name.
+LICENSE_LABELS = [
+    ("creativecommons.org/publicdomain/zero/1.0", "CC0 1.0"),
+    ("creativecommons.org/public-domain/cc0", "CC0"),
+    ("creativecommons.org/licenses/by-nc-sa/", "CC BY-NC-SA"),
+    ("creativecommons.org/licenses/by-nc-nd/", "CC BY-NC-ND"),
+    ("creativecommons.org/licenses/by-nc/", "CC BY-NC"),
+    ("creativecommons.org/licenses/by-sa/", "CC BY-SA"),
+    ("creativecommons.org/licenses/by-nd/", "CC BY-ND"),
+    ("creativecommons.org/licenses/by/", "CC BY"),
+    ("creativecommons.org/licenses/unspecified", "Unspecified"),
+    ("spdx.org/licenses/CC-BY-4.0", "CC BY 4.0"),
+    ("purl.org/NET/rdflicense/cc-by4.0", "CC BY 4.0"),
+    ("gnu.org/licenses/gpl-3.0", "GPL 3.0"),
+    ("opensource.org/licenses/MIT", "MIT"),
+    ("apache.org/licenses/LICENSE-2.0", "Apache 2.0"),
+]
+_CC_VERSION = re.compile(r"creativecommons\.org/licenses/[a-z-]+/(\d+\.\d+)")
+
+def license_label(iri):
+    """A short name for a license IRI ("CC BY 4.0"), or the IRI itself trimmed."""
+    iri = (iri or "").strip()
+    if not iri:
+        return ""
+    key = re.sub(r"^https?://(www\.)?", "", iri)
+    for prefix, label in LICENSE_LABELS:
+        if key.startswith(prefix):
+            m = _CC_VERSION.search(key)
+            if m and label.startswith("CC BY"):
+                label = f"{label} {m.group(1)}"
+            return label
+    if not re.match(r"^[a-z][a-z0-9+.-]*://", iri):
+        return iri  # a phrase, not an address: shown as written
+    return key.rstrip("/")
+
 def kg_to_item(r):
     """Normalize a KG-Registry knowledge graph into a browse item."""
     nodes, edges, *_ = kg_metrics(r)
@@ -187,6 +226,12 @@ def onto_to_item(o, transform_date):
         # What the source imports, by IRI, and what it calls itself (#185).
         "import_iris": [str(i) for i in (o.get("import_iris") or [])],
         "ontology_iri": str(o.get("ontology_iri") or ""),
+        # What the graph may be reused under, and whether that came from
+        # BioPortal's record of the submission or the ontology's own header.
+        # Absent where neither says: the page then says "not recorded".
+        "license": str(o.get("license") or ""),
+        "license_from": str(o.get("license_from") or ""),
+        "license_label": license_label(o.get("license")),
         "full_status": full_status, "full_ok": full_ok,
         "full_reason": o.get("full_reason") or "",
         "full_nodes": full_nodes, "full_edges": full_edges,
@@ -446,7 +491,12 @@ def render_browse(items, kg_count, onto_count):
         chips += "".join(f'<span class="chip sm">{esc(d)}</span>' for d in it["domains"][:3])
         if it["version"]:
             chips += f'<span class="chip sm ver">v{esc(it["version"])}</span>'
-        search_blob = esc(" ".join([name, acr, it["id"], it["source_label"]] + it["domains"] + it["fmts"]).lower())
+        if it.get("license_label"):
+            chips += (f'<span class="chip sm lic" title="{esc(it["license"])}">'
+                      f'{esc(it["license_label"])}</span>')
+        search_blob = esc(" ".join(
+            [name, acr, it["id"], it["source_label"], it.get("license_label", "")]
+            + it["domains"] + it["fmts"]).lower())
         acr_html = (f'<a class="acr-link" href="{esc(href)}">{esc(acr)}</a>'
                     if href else f'<span class="acr-link muted">{esc(acr)}</span>')
         click = f"onclick=\"location.href='{esc(href)}'\"" if href else ""
@@ -1289,6 +1339,34 @@ def render_imports(it, resolve):
 # --------------------------------------------------------------------------- #
 #  ontology resource page (transformed BioPortal ontology)
 # --------------------------------------------------------------------------- #
+LICENSE_FROM_NOTE = {
+    "bioportal": "as recorded on BioPortal",
+    "ontology": "as declared in the ontology's own header; BioPortal records none",
+}
+
+def license_row(it):
+    """The License row of an ontology page: a link, and where the license came from.
+
+    The license is what the graph may be reused under. It is not the
+    transform's to grant, so the row says whose statement it is: BioPortal's
+    record of the submission, or the ontology header's where BioPortal has
+    none. Where neither says, the row says so rather than guessing.
+    """
+    iri, label = it.get("license", ""), it.get("license_label", "")
+    if not iri:
+        # The header is only read once a source is downloaded and unpacked,
+        # so for an ontology with no graph the only record consulted was
+        # BioPortal's.
+        why = ("neither BioPortal nor the ontology header states one" if it.get("ok")
+               else "BioPortal records none, and the source was not read")
+        return f'<span class="muted">Not recorded</span> <span class="muted sm">({why})</span>'
+    note = LICENSE_FROM_NOTE.get(it.get("license_from", ""), "")
+    if re.match(r"^[a-z][a-z0-9+.-]*://", iri):
+        shown = f'<a href="{esc(iri)}" target="_blank" rel="noopener">{esc(label)}</a>'
+    else:
+        shown = esc(label)
+    return shown + (f' <span class="muted sm">({esc(note)})</span>' if note else "")
+
 def render_ontology_resource(it, resolve=None):
     """Summary page for a transformed BioPortal ontology (OK or not) from onto_stats.
 
@@ -1333,6 +1411,8 @@ def render_ontology_resource(it, resolve=None):
              if ok else '<span class="chip">BioPortal ontology</span>')
     if ver:
         chips += f'<span class="chip">v{esc(ver)}</span>'
+    if it.get("license_label"):
+        chips += f'<span class="chip" title="{esc(it["license"])}">{esc(it["license_label"])}</span>'
 
     # header call-to-action
     dl_svg = ('<svg width=16 height=16 viewBox="0 0 24 24" fill=none stroke=currentColor '
@@ -1494,6 +1574,7 @@ def render_ontology_resource(it, resolve=None):
             full_label = "Not yet attempted"
         detail_rows.append(drow("Full graph", full_label))
     detail_rows += [
+        drow("License", license_row(it)),
         drow("Version", esc(ver or "—")),
         drow("Submission", f'<span class="mono">{esc(sub)}</span>'),
         drow("Transformed", esc(date or "—") if ok else "—"),
@@ -1783,6 +1864,8 @@ text-transform:uppercase;color:var(--ink-soft);font-weight:700;padding:9px 10px;
 .row-chips{margin-top:7px;display:flex;gap:5px;flex-wrap:wrap;align-items:center}
 .chip.sm{font-size:10.5px;padding:2px 8px}
 .chip.sm.ver{font-family:var(--mono);text-transform:none}
+.chip.sm.lic{background:color-mix(in srgb,var(--accent) 18%,var(--panel));border-color:color-mix(in srgb,var(--accent) 55%,transparent);color:var(--ink)}
+.muted.sm{font-size:11px}
 .src-chip{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;padding:2px 8px;border-radius:999px;border:1px solid transparent;white-space:nowrap}
 .src-chip.kgreg{background:color-mix(in srgb,var(--c-chem) 15%,transparent);color:var(--c-chem);border-color:color-mix(in srgb,var(--c-chem) 30%,transparent)}
 .src-chip.bp{background:color-mix(in srgb,var(--primary) 14%,transparent);color:var(--primary);border-color:color-mix(in srgb,var(--primary) 32%,transparent)}
