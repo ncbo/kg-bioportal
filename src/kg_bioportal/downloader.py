@@ -18,6 +18,11 @@ from kg_bioportal.config import (
 
 ONTOLOGY_LIST_NAME = "ontologylist.tsv"
 
+# What the downloader asks BioPortal for on a submission. Named because the
+# endpoint's default view omits hasLicense, and a field not asked for is
+# silently null.
+SUBMISSION_FIELDS = "submissionId,version,released,hasLicense,ontology"
+
 # Per-ontology download outcomes are written here so later stages (transform,
 # finalize) can account for ontologies that were never downloaded.
 DOWNLOAD_REPORT_NAME = "download_report.tsv"
@@ -304,9 +309,14 @@ class Downloader:
             metadata = metadata_resp.json()
             onto_name = str(metadata.get("name") or ontology)
             logging.info(f"Name: {onto_name}")
+            # The fields to ask for. BioPortal's default view of a submission
+            # leaves hasLicense out, so without this list every ontology looks
+            # unlicensed on BioPortal's side and the header is all the index
+            # ever gets (the 2026-09-14 rebuild recorded 3 of 157).
             try:
                 latest_submission = self.requests_session.get(
-                    latest_submission_url, headers=headers, timeout=_TIMEOUT
+                    latest_submission_url, headers=headers, timeout=_TIMEOUT,
+                    params={"display": SUBMISSION_FIELDS},
                 ).json()
             except (requests.RequestException, ValueError) as e:
                 logging.error(f"Failed to fetch the latest submission for {ontology}: {e}")

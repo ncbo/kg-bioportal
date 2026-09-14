@@ -201,6 +201,30 @@ class TestDownloaderRecordsBioportalLicense(TestCase):
         self.assertEqual(result["reason"], "license_restricted")
         self.assertEqual(result["license"], "http://example.org/umls-terms")
 
+    def test_downloader_asks_bioportal_for_the_license(self):
+        """The default view of a submission omits hasLicense; it has to be asked for.
+
+        The 2026-09-14 rebuild ran without this and recorded 3 BioPortal
+        licenses of the 157 BioPortal holds.
+        """
+        from kg_bioportal.downloader import SUBMISSION_FIELDS
+        asked = {}
+
+        class Session(FakeSession):
+            def get(self, url, **kwargs):
+                if url.endswith("/latest_submission"):
+                    asked.update(kwargs.get("params") or {})
+                return super().get(url, **kwargs)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dl = Downloader(output_dir=tmpdir, api_key="fake-key")
+            dl.requests_session = Session(FakeResponse(status_code=403))
+            dl.download(["TESTONTO"])
+        self.assertIn("hasLicense", asked.get("display", "").split(","))
+        self.assertIn("hasLicense", SUBMISSION_FIELDS.split(","))
+        for field in ("submissionId", "version", "released"):
+            self.assertIn(field, SUBMISSION_FIELDS.split(","))
+
     def test_submission_license_shapes(self):
         self.assertEqual(submission_license({}), "")
         self.assertEqual(submission_license({"hasLicense": None}), "")
