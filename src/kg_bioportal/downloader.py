@@ -40,6 +40,21 @@ _STREAM_ATTEMPTS = 3
 _STREAM_BACKOFF_S = 15
 
 
+def submission_license(submission: dict) -> str:
+    """The license IRI a BioPortal submission records, or "".
+
+    BioPortal keeps it as ``hasLicense`` on the submission, an IRI string
+    where the submitter filled it in and null where they did not. Most did
+    not: on 2026-09-14, 157 of 1,261 latest submissions carried one. The
+    transformer falls back to the license the ontology's own header declares
+    (see ``source_license``), and the index says which of the two it got.
+    """
+    value = submission.get("hasLicense")
+    if isinstance(value, list):
+        value = value[0] if value else ""
+    return " ".join(str(value or "").split())
+
+
 class Downloader:
 
     def __init__(
@@ -93,6 +108,7 @@ class Downloader:
     def _record(
         self, acronym, submission_id, source_bytes, path, status, reason,
         name="", version="", http_status: Union[int, str] = "", detail: str = "",
+        license: str = "",
     ):
         """Append a per-ontology outcome to the results list.
 
@@ -100,12 +116,16 @@ class Downloader:
         outcomes that hinge on it so the reason can be audited later without
         re-running the download. ``detail`` is the error text for an outcome
         that has one, on one line, the way the transformer records its own.
+        ``license`` is the license IRI BioPortal holds for the submission
+        (``hasLicense``), "" where it holds none; it rides along to the index
+        so the site can say what a graph may be reused under.
         """
         self.results.append(
             {
                 "id": acronym,
                 "name": name,
                 "version": version,
+                "license": license,
                 "submission_id": submission_id,
                 "source_bytes": source_bytes,
                 "path": path,
@@ -270,6 +290,7 @@ class Downloader:
             if len(latest_submission) > 0:
                 submission_id = latest_submission["submissionId"]
                 onto_version = str(latest_submission.get("version") or "NA")
+                onto_license = submission_license(latest_submission)
             else:
                 logging.warning(f"No submission found for {ontology}.")
                 self._record(ontology, "NA", 0, "", "error", "no_submission", name=onto_name)
@@ -289,7 +310,7 @@ class Downloader:
                 logging.warning(f"Could not download {ontology}: {e}")
                 self._record(ontology, submission_id, 0, "", "error", "download_error",
                              name=onto_name, version=onto_version,
-                             detail=f"{type(e).__name__}: {e}")
+                             detail=f"{type(e).__name__}: {e}", license=onto_license)
                 continue
 
             # Why we didn't get a file matters, and the status code is the only
@@ -313,7 +334,8 @@ class Downloader:
                 )
                 download_onto.close()
                 self._record(ontology, submission_id, 0, "", "error", reason,
-                             name=onto_name, version=onto_version, http_status=code)
+                             name=onto_name, version=onto_version, http_status=code,
+                             license=onto_license)
                 continue
 
             try:
@@ -330,7 +352,8 @@ class Downloader:
                 )
                 download_onto.close()
                 self._record(ontology, submission_id, 0, "", "error", "not_downloadable",
-                             name=onto_name, version=onto_version, http_status=code)
+                             name=onto_name, version=onto_version, http_status=code,
+                             license=onto_license)
                 continue
 
             # Size gate 1: trust Content-Length if present.
@@ -343,7 +366,7 @@ class Downloader:
                 download_onto.close()
                 self._record(
                     ontology, submission_id, int(content_length), "", "skipped", "too_large",
-                    name=onto_name, version=onto_version,
+                    name=onto_name, version=onto_version, license=onto_license,
                 )
                 continue
 
@@ -362,7 +385,8 @@ class Downloader:
             if error:
                 logging.error(f"Could not download {ontology}: {error}")
                 self._record(ontology, submission_id, 0, "", "error", "download_error",
-                             name=onto_name, version=onto_version, detail=error)
+                             name=onto_name, version=onto_version, detail=error,
+                             license=onto_license)
                 continue
 
             if too_large:
@@ -375,14 +399,14 @@ class Downloader:
                     pass
                 self._record(
                     ontology, submission_id, bytes_written, "", "skipped", "too_large",
-                    name=onto_name, version=onto_version,
+                    name=onto_name, version=onto_version, license=onto_license,
                 )
                 continue
 
             logging.info(f"Downloaded {ontology} ({bytes_written/1024/1024:.2f} MB).")
             self._record(
                 ontology, submission_id, bytes_written, outpath, "downloaded", "",
-                name=onto_name, version=onto_version,
+                name=onto_name, version=onto_version, license=onto_license,
             )
 
         self._write_report()
@@ -409,8 +433,8 @@ class Downloader:
     def _write_report(self) -> None:
         """Write per-ontology download outcomes to a TSV in the output dir."""
         report_path = os.path.join(self.output_dir, DOWNLOAD_REPORT_NAME)
-        fieldnames = ["id", "name", "version", "submission_id", "source_bytes", "status", "reason",
-                      "http_status", "detail", "path"]
+        fieldnames = ["id", "name", "version", "license", "submission_id", "source_bytes",
+                      "status", "reason", "http_status", "detail", "path"]
         with open(report_path, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter="\t")
             writer.writeheader()

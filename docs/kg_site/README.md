@@ -41,6 +41,10 @@ No third-party dependencies (Python standard library only).
 - **Metrics** (nodes, edges, node categories, predicate types) come from each graph's
   `GraphProduct` records. Only ~21 of 154 graphs report counts today; the rest degrade
   gracefully to "—".
+- **Licenses** on ontology rows and pages come from the index's `license` and `license_from`
+  fields (BioPortal's `hasLicense`, or the ontology header's `dcterms:license` where BioPortal
+  has none). Known IRIs get a short name ("CC BY 4.0"); the page links the IRI and says whose
+  statement it is. An entry with no license says "Not recorded".
 - **Colors** match the live BioPortal theme (`theme-variables.scss.erb`): primary `#234979`,
   hover `#2B5892`, gold accent `#C58612`.
 - **Tool links** (Search / Mappings / Recommender / Annotator) point at the live

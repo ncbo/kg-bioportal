@@ -663,6 +663,75 @@ def ontology_iri(text: str, kind: Optional[str]) -> str:
     return ""
 
 
+# Where the ontology header declares its license, per serialization. The
+# predicate is dcterms:license under whatever prefix the file binds it to
+# (terms:, dcterms:, dc:), or spelled out, bracketed in Turtle and bare in
+# OBO. Only the header is read: a term
+# may carry its own license annotation, and that is not the ontology's.
+_LICENSE_PREDICATE = r"(?:(?:[A-Za-z_][\w.\-]*:)?license|<?https?://purl\.org/dc/(?:terms|elements/1\.1)/license>?)"
+_RDFXML_ONTOLOGY_END = re.compile(r"</(?:[A-Za-z_][\w.\-]*:)?Ontology\s*>")
+_XML_LICENSE_RESOURCE = re.compile(
+    r"""<(?:[A-Za-z_][\w.\-]*:)?license\b[^>]*?\brdf:resource\s*=\s*(["'])(.*?)\1""", re.S
+)
+_XML_LICENSE_TEXT = re.compile(
+    r"""<(?:[A-Za-z_][\w.\-]*:)?license\b[^>]*>\s*([^<]+?)\s*</""", re.S
+)
+_TTL_LICENSE = re.compile(
+    r"(?:^|[\s;])" + _LICENSE_PREDICATE + r"[ \t]+(<[^>]*>|\"[^\"]*\"|[A-Za-z_][\w.\-]*:[\w.\-%/]+)",
+    re.M,
+)
+_OBO_LICENSE = re.compile(
+    r"^property_value:[ \t]+" + _LICENSE_PREDICATE + r"[ \t]+(<[^>]*>|\"[^\"]*\"|\S+)", re.M
+)
+
+
+def _rdfxml_header(text: str) -> str:
+    """The text of the owl:Ontology element, or "" if there is none.
+
+    A self-closing ``<owl:Ontology .../>`` has no annotations to read.
+    """
+    m = _RDFXML_ONTOLOGY_IRI.search(text) or re.search(r"<(?:[A-Za-z_][\w.\-]*:)?Ontology\b", text)
+    if not m:
+        return ""
+    tag_end = text.find(">", m.start())
+    if tag_end < 0:
+        return ""
+    if text[tag_end - 1] == "/":
+        return text[m.start():tag_end + 1]
+    close = _RDFXML_ONTOLOGY_END.search(text, tag_end)
+    return text[m.start():close.end()] if close else text[m.start():]
+
+
+def source_license(text: str, kind: Optional[str]) -> str:
+    """The license the ontology header declares, as an IRI or a phrase, or "".
+
+    BioPortal's own record of the license is filled in for about one
+    submission in eight, so the index takes it from the source when BioPortal
+    has none. Best effort, as ``list_imports`` is: the header's
+    ``dcterms:license``, read as the first such annotation on the ontology
+    itself. A license written only as prose in a comment is not found.
+    """
+    head = text[:_SNIFF_CHARS]
+    value = ""
+    if kind == "xml":
+        header = _rdfxml_header(head)
+        m = _XML_LICENSE_RESOURCE.search(header) or _XML_LICENSE_TEXT.search(header)
+        if m:
+            value = _expand_xml_entities(m.group(m.lastindex), head)
+    elif kind == "turtle":
+        m = _TTL_LICENSE.search(head)
+        if m:
+            value = _expand_turtle_term(m.group(1).strip('"'), _turtle_prefixes(head))
+    elif kind == "obo":
+        m = _OBO_LICENSE.search(head)
+        if m:
+            value = m.group(1)
+            if value.startswith("<") and value.endswith(">"):
+                value = value[1:-1]
+            value = value.strip('"')
+    return " ".join(value.split())
+
+
 class SourceInfo(NamedTuple):
     """What ``_prepare_source`` learned about a downloaded source."""
 
@@ -670,10 +739,11 @@ class SourceInfo(NamedTuple):
     imports: int = 0             # import declarations, see count_imports
     import_iris: List[str] = []  # their targets, as far as list_imports reads them
     ontology_iri: str = ""       # the ontology's own IRI, see ontology_iri
+    license: str = ""            # what the header says it is licensed under, see source_license
 
 
 def describe_source(path: str) -> SourceInfo:
-    """Read a source once for its import count, import IRIs and own IRI."""
+    """Read a source once for its import count, import IRIs, own IRI and license."""
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
             text = f.read()
@@ -681,7 +751,32 @@ def describe_source(path: str) -> SourceInfo:
         logging.warning(f"Could not read {path} to describe its imports: {e}")
         return SourceInfo(path)
     kind = _sniff_serialization(text)
-    return SourceInfo(path, count_imports(path), list_imports(text, kind), ontology_iri(text, kind))
+    return SourceInfo(
+        path, count_imports(path), list_imports(text, kind), ontology_iri(text, kind),
+        source_license(text, kind),
+    )
+
+
+# Where an index entry's license came from. BioPortal's record is the
+# submitter's statement and comes first; the source header is the ontology's
+# own statement, read when BioPortal has none.
+LICENSE_FROM_BIOPORTAL = "bioportal"
+LICENSE_FROM_ONTOLOGY = "ontology"
+
+
+def license_fields(bioportal_license: str, header_license: str) -> Dict[str, str]:
+    """The ``license`` and ``license_from`` fields of an index entry, or {}.
+
+    BioPortal's ``hasLicense`` wins where it is set. Otherwise the license the
+    source's header declares. An ontology with neither gets no fields at all,
+    the way an entry without imports gets no ``import_iris``: the site reads
+    an absent field as "not recorded".
+    """
+    if bioportal_license:
+        return {"license": bioportal_license, "license_from": LICENSE_FROM_BIOPORTAL}
+    if header_license:
+        return {"license": header_license, "license_from": LICENSE_FROM_ONTOLOGY}
+    return {}
 
 
 def is_import_only(imports: int, nodecount: int, edgecount: int) -> bool:
@@ -1219,6 +1314,9 @@ class TransformOutcome(NamedTuple):
     # the imports (#185). Shared empty defaults, never mutated.
     import_iris: List[str] = []
     ontology_iri: str = ""
+    # The license the source's header declares, for the index to fall back
+    # on when BioPortal records none. "" where the header declares none.
+    license: str = ""
 
     @classmethod
     def failed(
@@ -1683,6 +1781,11 @@ class Transformer:
                 # a transform failure carries the stage's message.
                 if row.get("detail"):
                     entry["detail"] = row["detail"]
+                # BioPortal's license, where it records one, so the site can
+                # say what a graph could be reused under even when there is
+                # no graph. Nothing was read from the source: it was never
+                # downloaded, and there is no fallback.
+                entry.update(license_fields(row.get("license", ""), ""))
                 onto_log[onto_id] = entry
 
         filepaths = []
@@ -1719,6 +1822,10 @@ class Transformer:
                 entry["ontology_iri"] = base.ontology_iri
             if base.import_iris:
                 entry["import_iris"] = list(base.import_iris)
+            # What the graph may be reused under: BioPortal's record of the
+            # license first, the source header's where BioPortal has none,
+            # and which of the two it was. Recorded only where there is one.
+            entry.update(license_fields(report_row.get("license", ""), base.license))
             # Only failures have anything to explain; an empty field on every OK
             # entry would be a thousand lines of noise in the index.
             if detail:
@@ -2284,6 +2391,7 @@ class Transformer:
             imports=imports,
             import_iris=source.import_iris,
             ontology_iri=source.ontology_iri,
+            license=source.license,
         )
 
     def decompress(self, ontology_path: str, ontology_name: str) -> str:

@@ -33,7 +33,7 @@ makes `releases/latest/download/<that file>` a stable entry point:
 | File | What it is |
 |---|---|
 | `graph_urls.tsv` | `<ACRONYM>` → base graph URL → full graph URL (blank where none). Three columns, one header line. |
-| `onto_stats.yaml` | Full per-ontology index: status, reason, node/edge counts, `download_url`, and the same again as `full_*` for the full graph. |
+| `onto_stats.yaml` | Full per-ontology index: status, reason, node/edge counts, `license`, `download_url`, and the same again as `full_*` for the full graph. |
 | `total_stats.yaml` | Site-wide totals. |
 
 To fetch one ontology:
@@ -62,6 +62,34 @@ entry you want in `onto_stats.yaml`.
 > **Note:** `releases/latest/download/<ACRONYM>.tar.gz` does *not* work, despite
 > looking like it should. `latest` is just the most recent run's release, which
 > holds only that run's handful of artifacts.
+
+## Licenses
+
+Each entry says what its ontology may be reused under, where anything says
+so. `license` is the license as an IRI (or, rarely, a phrase), and
+`license_from` says whose statement it is:
+
+- **`bioportal`**: the `hasLicense` field of the ontology's latest BioPortal
+  submission, as the submitter filled it in. This is taken first wherever it
+  is set, and it is the only record consulted for an ontology that was never
+  downloaded (a license-restricted terminology, a skipped giant).
+- **`ontology`**: the `dcterms:license` annotation in the ontology's own
+  header, read from the downloaded source when BioPortal records none. Most
+  BioPortal submissions leave `hasLicense` empty (157 of 1,261 latest
+  submissions had one on 2026-09-14), so this is where most licenses come
+  from. Only the header is read, in RDF/XML, Turtle and OBO, and only an
+  explicit annotation counts: a license stated in a comment is not found.
+
+An entry with neither field has no license on record, and the site says so.
+The license is the ontology's, not the transform's: KG-Bioportal passes it
+through and grants nothing.
+
+```yaml
+- id: AGRO
+  status: OK
+  license: https://creativecommons.org/licenses/by/4.0/
+  license_from: ontology
+```
 
 ## Base and full graphs
 
