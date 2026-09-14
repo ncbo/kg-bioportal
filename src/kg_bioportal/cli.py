@@ -535,6 +535,64 @@ def transform(input_dir, output_dir, compress, timeout_min, max_source_mb, full_
     return None
 
 
+# How many ontologies one batch of a rebuild-all takes. A release holds at
+# most 1,000 assets and a full rebuild makes about 1.1 per ontology (a base
+# graph each, a full graph for one in eight), so the whole list cannot go in
+# one release. 330 is what the 2026-09-09 rebuild ran, four batches of about
+# 335 assets and 25 minutes each.
+DEFAULT_BATCH_SIZE: int = 330
+
+
+def rebuild_batch(acronyms: list, after: str = "", size: int = DEFAULT_BATCH_SIZE) -> dict:
+    """The next ``size`` acronyms after ``after`` in sorted order, for a rebuild-all.
+
+    Batches are cut from the sorted list by the last acronym of the previous
+    batch rather than by position, so an ontology BioPortal adds while the
+    chain runs shifts nothing: every acronym after ``after`` is still reached
+    once. Returns ``ontologies`` (space-separated), ``last`` (the cursor for
+    the next batch) and ``more`` (whether anything follows).
+    """
+    ordered = sorted(set(a for a in acronyms if a), key=str.upper)
+    remaining = [a for a in ordered if a.upper() > after.upper()] if after else ordered
+    batch = remaining[:size]
+    return {
+        "ontologies": " ".join(batch),
+        "last": batch[-1] if batch else "",
+        "more": len(remaining) > len(batch),
+    }
+
+
+@main.command("rebuild-batch")
+@click.option(
+    "--ontology_file", "-f", required=True, type=click.Path(exists=True),
+    help="TSV list of ontologies (e.g. data/raw/ontologylist.tsv).",
+)
+@click.option(
+    "--after", default="", show_default=True,
+    help="Last acronym of the previous batch; blank starts at the top.",
+)
+@click.option("--size", default=DEFAULT_BATCH_SIZE, show_default=True, type=int)
+@click.option(
+    "--use_skiplist/--no_skiplist", default=True, show_default=True,
+    help="Drop the static known-giants skiplist before cutting the batch, so a batch is full.",
+)
+def rebuild_batch_cmd(ontology_file, after, size, use_skiplist) -> None:
+    """Cut the next batch of a rebuild-all from the ontology list.
+
+    Prints ``ontologies=``, ``last=`` and ``more=`` lines, in the form
+    $GITHUB_OUTPUT takes, so the workflow can hand the batch to shard-list as
+    an explicit list (which is never version-skipped) and, when the run ends,
+    dispatch the batch after it.
+    """
+    acronyms = _read_acronyms(ontology_file)
+    if use_skiplist:
+        acronyms = [a for a in acronyms if not is_skiplisted(a)]
+    batch = rebuild_batch(acronyms, after, size)
+    click.echo(f"ontologies={batch['ontologies']}")
+    click.echo(f"last={batch['last']}")
+    click.echo(f"more={'true' if batch['more'] else 'false'}")
+
+
 @main.command()
 @click.option(
     "--ontology_file",
