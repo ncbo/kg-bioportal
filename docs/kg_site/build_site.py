@@ -1781,7 +1781,7 @@ CSS = r"""
    light #F0F5F6 · panel #f5fafa · section #e2ebf0 · table line #c1dad7 */
 :root{--page:#ffffff;--panel:#f5fafa;--panel-2:#e2ebf0;--ink:#1f2d3d;--ink-soft:#4f4f4f;
 --ink-faint:#888888;--border:#cdd9dd;--border-strong:#b7c6cb;--nav:#234979;--nav-ink:#ffffff;
---nav-ink-soft:#b9cbe0;--primary:#234979;--primary-hover:#2b5892;--link:#234979;--node:#3875d7;
+--nav-ink-soft:#b9cbe0;--nav-accent:#8cbcf0;--primary:#234979;--primary-hover:#2b5892;--link:#234979;--node:#3875d7;
 --edge:#c58612;--accent:#c58612;--chip:#e2ebf0;--chip-ink:#234979;--prod:#2f8f4e;--warn:#9a6a00;
 --shadow:0 1px 2px rgba(31,45,61,.07),0 2px 8px rgba(31,45,61,.06);
 --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
@@ -1809,7 +1809,7 @@ a{color:var(--link);text-decoration:none}a:hover{text-decoration:underline}
 .nav{background:var(--nav);color:var(--nav-ink);border-bottom:1px solid rgba(255,255,255,.06)}
 .nav-in{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:22px;padding:0 22px;height:54px}
 .brand{display:flex;align-items:baseline;gap:2px;font-weight:700;font-size:18px;letter-spacing:-.2px;color:#fff}
-.brand:hover{text-decoration:none}.brand .kg{color:var(--primary);font-weight:800}
+.brand:hover{text-decoration:none}.brand .kg{color:var(--nav-accent);font-weight:800}
 .navlinks{display:flex;gap:2px;margin-left:6px}
 .navlinks a{color:var(--nav-ink-soft);padding:6px 10px;border-radius:6px;font-size:13.5px;font-weight:500}
 .navlinks a:hover{color:#fff;background:rgba(255,255,255,.07);text-decoration:none}
